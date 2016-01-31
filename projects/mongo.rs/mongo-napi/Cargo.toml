@@ -1,0 +1,19 @@
+[package]
+name = "mongo-napi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Node bindings for the Mongo command primitives"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mongo-core = { path = "../mongo-core" }
+napi = { workspace = true }
+napi-derive = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }

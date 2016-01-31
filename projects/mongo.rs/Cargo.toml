@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "mongo-core",
+    "mongo-napi",
+    "mongo-pyo3",
+    "mongo-wasm",
+]
+default-members = ["mongo-core"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+authors = ["Yggdrasill Team <192607617@qq.com>"]
+license = "MPL-2.0"
+repository = "https://github.com/yy-database/MongoDB"
+
+[workspace.dependencies]
+# Sole database.rs dependency: the `yyds` facade (.yykv shard storage).
+# Pin the full 40-char rev. Local path overrides belong in `.cargo/config.toml`.
+yyds = { git = "https://github.com/oovm/database.rs.git", rev = "5cae6652413f98bb32371178ac7dc8ece1c95587" }
+serde_json = "1"
+
+napi = { version = "3.14.2", default-features = false, features = ["napi4"] }
+napi-derive = "3.6.12"
+napi-build = "2.6"
+pyo3 = { version = "0.30.1", features = ["extension-module"] }
+wasm-bindgen = "0.2"
+
+[profile.release]
+lto = true

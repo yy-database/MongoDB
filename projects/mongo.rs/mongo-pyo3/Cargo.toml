@@ -1,0 +1,16 @@
+[package]
+name = "mongo-pyo3"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Python bindings for the Mongo command primitives"
+publish = false
+
+[lib]
+name = "mongo_pyo3"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mongo-core = { path = "../mongo-core" }
+pyo3 = { workspace = true }

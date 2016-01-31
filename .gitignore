@@ -1,0 +1,40 @@
+# OS
+.DS_Store/
+thumbs.db
+
+# IDE
+.vscode/
+.vs/
+.idea/
+*.iml
+
+# Rust
+projects/mongo.rs/target/
+projects/mongo.rs/Cargo.lock
+**/target/
+**/*.rs.bk
+
+# Local dependency overrides (CI resolves pinned git revs only)
+.cargo/config.toml
+
+# Node
+node_modules/
+dist/
+.turbo/
+*.tgz
+projects/mongo.ts/platforms/*/lib/
+projects/mongo.ts/platforms/*/README.md
+projects/mongo.ts/homepage/site/
+
+# Python
+projects/mongo.py/packages/mongo/.venv/
+projects/mongo.py/packages/mongo/build/
+**/__pycache__/
+**/*.pyc
+*.egg-info/
+dist/python/
+
+# Runtime data
+data/
+*.yykv
+.tmp/

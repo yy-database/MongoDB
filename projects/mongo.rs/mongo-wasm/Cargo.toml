@@ -1,0 +1,15 @@
+[package]
+name = "mongo-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "WASM codec exports for the Mongo protocol primitives"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mongo-core = { path = "../mongo-core", default-features = false }
+wasm-bindgen = { workspace = true }

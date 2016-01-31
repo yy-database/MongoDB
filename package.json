@@ -1,0 +1,24 @@
+{
+    "name": "mongo-workspace",
+    "private": true,
+    "type": "module",
+    "version": "0.0.0",
+    "scripts": {
+        "check": "cargo check --manifest-path projects/mongo.rs/Cargo.toml --workspace",
+        "build:napi": "node scripts/build-napi.mjs",
+        "test:rust": "cargo test --manifest-path projects/mongo.rs/Cargo.toml --release --workspace",
+        "test:ts": "node projects/mongo.ts/packages/mongo/tests/run.mjs",
+        "test:py": "python projects/mongo.py/packages/mongo/tests/run.py",
+        "gate:test-count": "node scripts/gate-test-count.mjs",
+        "test": "npm run test:rust && npm run test:ts && npm run test:py && npm run gate:test-count"
+    },
+    "packageManager": "pnpm@10.18.3",
+    "engines": {
+        "node": ">=20"
+    },
+    "devDependencies": {
+        "@types/node": "^22.15.0",
+        "mongodb": "^6.12.0",
+        "typescript": "^5.9.2"
+    }
+}

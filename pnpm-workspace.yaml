@@ -1,0 +1,5 @@
+packages:
+  - "projects/mongo.ts/packages/*"
+  - "projects/mongo.ts/platforms/*"
+  - "projects/mongo.ts/examples"
+  - "projects/mongo.ts/homepage"
