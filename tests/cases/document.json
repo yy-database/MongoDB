@@ -1,0 +1,444 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "doc.insert.autoid",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "name": "a" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/writeErrors", "absent": true },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id/$oid", "matches": "^[0-9a-f]{24}$" },
+                { "at": "/r2/cursor/firstBatch/0/name", "equals": "a" }
+            ]
+        },
+        {
+            "id": "doc.insert.explicit_int_id",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "one" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": "one" }
+            ]
+        },
+        {
+            "id": "doc.insert.duplicate_ordered",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "first" }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "second" }], "as": "r2" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/writeErrors/#", "equals": 1 },
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: 1 }" },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "first" }
+            ]
+        },
+        {
+            "id": "doc.insert.ordered_stops_batch",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1 }, { "_id": 2, "v": "two" }],
+                    "as": "r2"
+                },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/writeErrors/#", "equals": 1 },
+                { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "doc.insert.unordered_continues",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1 }, { "_id": 2, "v": "two" }],
+                    "ordered": false,
+                    "as": "r2"
+                },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/writeErrors/#", "equals": 1 },
+                { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+            ]
+        },
+        {
+            "id": "doc.insert.many",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r2" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "doc.insert.type_specific_ids",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": "k1", "v": 1 }, { "_id": { "$oid": "00112233445566778899aabb" }, "v": 2 }, { "_id": { "$numberLong": "5" }, "v": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": "k1" }, "as": "r2" },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$oid": "00112233445566778899aabb" } }, "as": "r3" },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberLong": "5" } }, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/v", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "doc.insert.duplicate_string_id",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": "k1" }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": "k1" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: \"k1\" }" }
+            ]
+        },
+        {
+            "id": "doc.insert.duplicate_objectid",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$oid": "00112233445566778899aabb" } }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$oid": "00112233445566778899aabb" } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: ObjectId('00112233445566778899aabb') }" }
+            ]
+        },
+        {
+            "id": "doc.insert.duplicate_null_id",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": null }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": null }], "as": "r2" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "doc.isolation.collections",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "i" }], "as": "r1" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1, "v": "o" }], "as": "r2" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r3" },
+                { "op": "find", "collection": "others", "filter": {}, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "i" },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/v", "equals": "o" }
+            ]
+        },
+        {
+            "id": "doc.isolation.databases",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "app" }], "db": "app", "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "other" }], "db": "other", "as": "r2" },
+                { "op": "find", "collection": "items", "filter": {}, "db": "app", "as": "r3" },
+                { "op": "find", "collection": "items", "filter": {}, "db": "other", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "app" },
+                { "at": "/r4/cursor/firstBatch/0/v", "equals": "other" }
+            ]
+        },
+        {
+            "id": "doc.find.string_and_bool",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "name": "a", "flag": true }, { "_id": 2, "name": "b", "flag": false }, { "_id": 3, "name": "a", "flag": true }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "name": "a" }, "sort": { "_id": 1 }, "as": "r2" },
+                { "op": "find", "collection": "items", "filter": { "flag": true }, "sort": { "_id": 1 }, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r3/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "doc.find.null_matches_missing",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "nil": null }, { "_id": 2 }, { "_id": 3, "nil": "x" }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "nil": null }, "sort": { "_id": 1 }, "as": "r2" },
+                { "op": "find", "collection": "items", "filter": { "nil": { "$ne": null } }, "sort": { "_id": 1 }, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "doc.find.dotted_nested",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "a": { "b": 5 } }, { "_id": 2, "a": { "b": 6 } }, { "_id": 3, "a": "flat" }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "a.b": 5 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.find.array_equality",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "tags": [1, 2] }, { "_id": 2, "tags": [2, 1] }, { "_id": 3, "tags": [1, 2, 3] }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "tags": [1, 2] }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.aggregate.project_inclusion",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "a": 1 } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/b", "absent": true },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.aggregate.project_exclusion",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "b": 0 } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/b", "absent": true },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.aggregate.project_remove_id",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "a": 1, "_id": 0 } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/_id", "absent": true }
+            ]
+        },
+        {
+            "id": "doc.aggregate.match_then_project",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "kind": "a", "v": 10 },
+                        { "_id": 2, "kind": "b", "v": 20 },
+                        { "_id": 3, "kind": "b", "v": 30 }
+                    ],
+                    "as": "r1"
+                },
+                {
+                    "op": "aggregate",
+                    "collection": "items",
+                    "pipeline": [{ "$match": { "kind": "b" } }, { "$project": { "v": 1, "_id": 0 } }],
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/v", "equals": [{ "$numberInt": "20" }, { "$numberInt": "30" }] }
+            ]
+        },
+        {
+            "id": "doc.delete.by_id",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "_id": 2 }, "limit": 1 }], "as": "r2" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/deletedCount", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+            ]
+        },
+        {
+            "id": "doc.delete.limit_one",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "kind": "b" }, { "_id": 2, "kind": "b" }, { "_id": 3, "kind": "a" }],
+                    "as": "r1"
+                },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "kind": "b" }, "limit": 1 }], "as": "r2" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" },
+                { "op": "count", "collection": "items", "query": { "kind": "b" }, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "doc.delete.all",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": {}, "limit": 0 }], "as": "r2" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "doc.delete.multiple_specs",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "kind": "x" }, { "_id": 2, "kind": "x" }, { "_id": 3, "kind": "y" }, { "_id": 4, "kind": "y" }],
+                    "as": "r1"
+                },
+                {
+                    "op": "delete",
+                    "collection": "items",
+                    "deletes": [{ "q": { "kind": "x" }, "limit": 0 }, { "q": { "kind": "y" }, "limit": 1 }],
+                    "as": "r2"
+                },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "doc.delete.no_match",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "_id": 9 }, "limit": 1 }], "as": "r2" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+            ]
+        }
+    ]
+}

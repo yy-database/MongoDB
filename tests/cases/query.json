@@ -1,0 +1,520 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "query.eq.int",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": 20 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "query.eq.double_matches_int",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "score": 1 }, { "_id": 2, "score": { "$numberDouble": "1.0" } }, { "_id": 3, "score": 2 }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "score": 1 }, "sort": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "query.eq.explicit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$eq": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "query.gt",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$gt": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "query.gte",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$gte": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.lt",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$lt": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "query.lte",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$lte": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "query.range",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$gte": 20, "$lte": 30 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.ne",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 20 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$ne": 20 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "query.ne.missing_field",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 20 }, { "_id": 2, "score": 10 }, { "_id": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$ne": 20 } }, "sort": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.multi_field",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "kind": "a", "score": 10 }, { "_id": 2, "kind": "b", "score": 20 }, { "_id": 3, "kind": "b", "score": 10 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "kind": "b", "score": 20 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "query.nested_dotted",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "rank": { "n": 1 } }, { "_id": 2, "rank": { "n": 2 } }, { "_id": 3, "rank": { "n": 2 } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "rank.n": 2 }, "sort": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.sort.asc",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 30 }, { "_id": 2, "score": 10 }, { "_id": 3, "score": 20 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "score": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "1" }] },
+                { "at": "/r2/cursor/firstBatch/*/score", "equals": [{ "$numberInt": "10" }, { "$numberInt": "20" }, { "$numberInt": "30" }] }
+            ]
+        },
+        {
+            "id": "query.sort.desc",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 30 }, { "_id": 2, "score": 10 }, { "_id": 3, "score": 20 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "score": -1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "query.sort.two_fields",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1, "kind": "a", "score": 10 }, { "_id": 2, "kind": "a", "score": 30 }, { "_id": 3, "kind": "b", "score": 20 }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "kind": 1, "score": -1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.sort.numeric_types",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "score": 10 },
+                        { "_id": 2, "score": { "$numberLong": "5" } },
+                        { "_id": 3, "score": { "$numberDouble": "7.5" } }
+                    ],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "score": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "1" }] }
+            ]
+        },
+        {
+            "id": "query.sort.strings",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "name": "b" }, { "_id": 2, "name": "a" }, { "_id": 3, "name": "c" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "name": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.sort.null_first",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": null }, { "_id": 3, "score": 5 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "score": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "1" }] }
+            ]
+        },
+        {
+            "id": "query.sort.dotted",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "rank": { "n": 3 } }, { "_id": 2, "rank": { "n": 1 } }, { "_id": 3, "rank": { "n": 2 } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "rank.n": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "1" }] }
+            ]
+        },
+        {
+            "id": "query.skip",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "skip": 2, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "4" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
+            "id": "query.limit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "limit": 2, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "query.skip_limit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "skip": 1, "limit": 2, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.limit_beyond",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "limit": 10, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/cursor/firstBatch/#", "equals": 3 }]
+        },
+        {
+            "id": "query.skip_beyond",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "skip": 10, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "query.paging.batch2",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }, { "_id": 6 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 2, "as": "r2" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "batchSize": 2, "as": "r3" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "batchSize": 2, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] },
+                { "at": "/r2/cursor/id/$numberLong", "matches": "^[1-9][0-9]*$" },
+                { "at": "/r3/cursor/nextBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "4" }] },
+                { "at": "/r4/cursor/nextBatch/*/_id", "equals": [{ "$numberInt": "5" }, { "$numberInt": "6" }] },
+                { "at": "/r4/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "query.paging.batch_exact",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 4, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 4 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "query.paging.batch_zero",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 0, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 4 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "query.paging.batch_default",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "query.sort_skip_limit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 50 }, { "_id": 2, "score": 10 }, { "_id": 3, "score": 30 }, { "_id": 4, "score": 20 }, { "_id": 5, "score": 40 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "score": -1 }, "skip": 1, "limit": 2, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "5" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.filter_sort_limit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "kind": "a", "score": 10 }, { "_id": 2, "kind": "b", "score": 20 }, { "_id": 3, "kind": "b", "score": 30 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "kind": "b" }, "sort": { "score": 1 }, "limit": 1, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "query.count.query",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "kind": "a" }, { "_id": 2, "kind": "a" }, { "_id": 3, "kind": "b" }], "as": "r1" },
+                { "op": "count", "collection": "items", "query": { "kind": "a" }, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "2" } }]
+        },
+        {
+            "id": "query.count.skip",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }], "as": "r1" },
+                { "op": "count", "collection": "items", "query": {}, "skip": 2, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "3" } }]
+        },
+        {
+            "id": "query.count.limit",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "count", "collection": "items", "query": {}, "limit": 2, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "2" } }]
+        },
+        {
+            "id": "query.count.empty_collection",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "count", "collection": "missing", "query": {}, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "query.id_operator_scan",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$gte": 2 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }] }
+            ]
+        },
+        {
+            "id": "query.array_compare",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": [1, 2] }, { "_id": 2, "tags": [1, 3] }, { "_id": 3, "tags": [2, 1] }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$gt": [1, 2] } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "query.document_equality",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "obj": { "b": 1 } }, { "_id": 2, "obj": { "b": 2 } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "obj": { "b": 1 } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "query.empty_result_namespace",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "_id": 99 }, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r1/cursor/ns", "equals": "app.items" }
+            ]
+        },
+        {
+            "id": "query.paging.seven_batch_three",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }, { "_id": 6 }, { "_id": 7 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 3, "as": "r2" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "batchSize": 3, "as": "r3" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "batchSize": 3, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }, { "$numberInt": "3" }] },
+                { "at": "/r3/cursor/nextBatch/*/_id", "equals": [{ "$numberInt": "4" }, { "$numberInt": "5" }, { "$numberInt": "6" }] },
+                { "at": "/r4/cursor/nextBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/nextBatch/0/_id", "equals": { "$numberInt": "7" } },
+                { "at": "/r4/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        }
+    ]
+}

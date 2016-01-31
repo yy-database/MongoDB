@@ -1,0 +1,369 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "err.bson.empty_input",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.length_too_short",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "01000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.length_exceeds_input",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0c00000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.missing_terminator",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "05000000ff", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.unknown_element_type",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "080000000b610000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.string_length_zero",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0c0000000261000000000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.binary_truncated",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0f000000056100020000000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.object_id_truncated",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0d000000076100001122334400", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.invalid_utf8_key",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0c00000010ff000500000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.subdocument_too_short",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "0c0000000361000100000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.invalid_text",
+            "surface": "error",
+            "program": [{ "op": "commandNameRaw", "text": "{", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.not_an_object",
+            "surface": "error",
+            "program": [{ "op": "commandNameRaw", "text": "[]", "as": "r" }],
+            "checks": [{ "at": "/r", "errorContains": "a JSON object is required" }]
+        },
+        {
+            "id": "err.json.object_id_hex",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$oid": "zzzzzzzzzzzzzzzzzzzzzzzz" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.object_id_length",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$oid": "001122334455" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.object_id_not_string",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$oid": 1 } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.int32_overflow",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$numberInt": "2147483648" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.int64_overflow",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$numberLong": "9223372036854775808" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.double_invalid",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$numberDouble": "abc" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.binary_base64",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$binary": { "base64": "!!!!", "subType": "00" } } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.binary_missing_base64",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$binary": { "subType": "00" } } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.binary_not_object",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$binary": "AQID" } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.json.number_int_not_string",
+            "surface": "error",
+            "program": [{ "op": "encodeDocument", "document": { "a": { "$numberInt": 5 } }, "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.too_short",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "0000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.no_body",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "00000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.unsupported_section",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "0000000002", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.two_body_sections",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "00000000000500000000000500000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.checksum_truncated",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "01000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.sequence_size_too_small",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "000000000101000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opmsg.body_length_exceeds",
+            "surface": "error",
+            "program": [{ "op": "decodeOpMsg", "hex": "000000000005000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opquery.too_short",
+            "surface": "error",
+            "program": [{ "op": "decodeOpQuery", "hex": "00000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.opquery.no_query_document",
+            "surface": "error",
+            "program": [{ "op": "decodeOpQuery", "hex": "000000006170702e6974656d73000000000000000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.cmd.namespace_dollar",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "bad$name", "filter": {}, "as": "r" }],
+            "checks": [
+                { "at": "/r/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r/code", "equals": { "$numberInt": "73" } }
+            ]
+        },
+        {
+            "id": "err.cmd.namespace_empty",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "", "filter": {}, "as": "r" }],
+            "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
+        },
+        {
+            "id": "err.cmd.namespace_leading_dot",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": ".items", "filter": {}, "as": "r" }],
+            "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
+        },
+        {
+            "id": "err.cmd.namespace_trailing_dot",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items.", "filter": {}, "as": "r" }],
+            "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
+        },
+        {
+            "id": "err.cmd.namespace_double_dot",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "a..b", "filter": {}, "as": "r" }],
+            "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
+        },
+        {
+            "id": "err.cmd.unknown_stage_limit",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$limit": 1 }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r2/errmsg", "equals": "$limit" }
+            ]
+        },
+        {
+            "id": "err.cmd.unknown_stage_sort",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "a": 1 } }], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.group_missing_id",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "total": { "$sum": 1 } } }], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.group_id_must_be_constant",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": { "k": 1 }, "total": { "$sum": 1 } } }], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.group_accumulator_only_sum_one",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": "$a" } } }], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.group_no_accumulator",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null } }], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.group_empty_stage",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{}], "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+        },
+        {
+            "id": "err.cmd.pipeline_not_array",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": "x", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "err.cmd.insert_without_documents",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "omitDocuments": true, "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "2" } }]
+        },
+        {
+            "id": "err.cmd.get_more_without_id",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "getMore", "collection": "items", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "2" } }]
+        },
+        {
+            "id": "err.cmd.get_more_unknown_cursor",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "getMore", "id": { "$numberLong": "99" }, "collection": "items", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "43" } }
+            ]
+        },
+        {
+            "id": "err.import.namespace_without_dot",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "items", "hex": "0500000000", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1", "throws": true }]
+        },
+        {
+            "id": "err.import.namespace_empty",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "", "hex": "0500000000", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1", "throws": true }]
+        },
+        {
+            "id": "err.import.truncated_stream",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "app.items", "hex": "05000000", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1", "throws": true }]
+        },
+        {
+            "id": "err.import.zero_length_document",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "app.items", "hex": "00000000", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1", "throws": true }]
+        }
+    ]
+}
