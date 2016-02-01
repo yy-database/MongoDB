@@ -4,7 +4,7 @@
 //! MongoDB extended-JSON forms: `{"$oid": ...}`, `{"$numberInt": ...}`,
 //! `{"$numberLong": ...}`, `{"$numberDouble": ...}`, `{"$binary": {...}}`.
 
-use crate::bson::{BsonDocument, BsonValue};
+use crate::bson::{BinaryData, BsonDocument, BsonValue};
 use serde_json::{Map, Value};
 
 /// Converts a BSON value into its extended-JSON form.
@@ -19,10 +19,10 @@ pub fn to_json(value: &BsonValue) -> Value {
         BsonValue::Bool(flag) => Value::Bool(*flag),
         BsonValue::Null => Value::Null,
         BsonValue::ObjectId(bytes) => tagged("$oid", hex_encode(bytes)),
-        BsonValue::Binary(bytes) => {
+        BsonValue::Binary(binary) => {
             let mut payload = Map::new();
-            payload.insert("base64".to_string(), Value::String(base64_encode(bytes)));
-            payload.insert("subType".to_string(), Value::String("00".to_string()));
+            payload.insert("base64".to_string(), Value::String(base64_encode(&binary.bytes)));
+            payload.insert("subType".to_string(), Value::String(format!("{:02x}", binary.subtype)));
             let mut wrapper = Map::new();
             wrapper.insert("$binary".to_string(), Value::Object(payload));
             Value::Object(wrapper)
@@ -137,7 +137,10 @@ fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String>
             let object = payload.as_object().ok_or_else(|| "`$binary` must be an object".to_string())?;
             let encoded =
                 object.get("base64").and_then(Value::as_str).ok_or_else(|| "`$binary.base64` is required".to_string())?;
-            Ok(Some(BsonValue::Binary(base64_decode(encoded)?)))
+            let subtype = object.get("subType").and_then(Value::as_str).ok_or_else(|| "`$binary.subType` is required".to_string())?;
+            let subtype = u8::from_str_radix(subtype, 16)
+                .map_err(|_| format!("invalid `$binary.subType` value `{subtype}`"))?;
+            Ok(Some(BsonValue::Binary(BinaryData::new(subtype, base64_decode(encoded)?))))
         }
         _ => Ok(None),
     }
