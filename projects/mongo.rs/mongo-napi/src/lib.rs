@@ -158,6 +158,12 @@ pub fn delete(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::delete(&decode_command(&command)?, store_of(store))))
 }
 
+/// `update` reply.
+#[napi]
+pub fn update(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::update(&decode_command(&command)?, store_of(store))))
+}
+
 /// `getMore` reply.
 #[napi]
 pub fn get_more(cursors: &mut MongoCursors, command: String) -> Result<String> {

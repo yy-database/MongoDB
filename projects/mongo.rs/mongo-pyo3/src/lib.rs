@@ -155,6 +155,12 @@ fn delete(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
     Ok(command_reply(commands::delete(&decode_command(command)?, &store.inner)))
 }
 
+/// `update` reply.
+#[pyfunction]
+fn update(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::update(&decode_command(command)?, &store.inner)))
+}
+
 /// `getMore` reply.
 #[pyfunction]
 fn get_more(cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<String> {
@@ -211,6 +217,7 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(count, module)?)?;
     module.add_function(wrap_pyfunction!(aggregate, module)?)?;
     module.add_function(wrap_pyfunction!(delete, module)?)?;
+    module.add_function(wrap_pyfunction!(update, module)?)?;
     module.add_function(wrap_pyfunction!(get_more, module)?)?;
     module.add_function(wrap_pyfunction!(kill_cursors, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
