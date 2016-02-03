@@ -33,6 +33,11 @@ const documents = [
     ['binary_one', { a: { $binary: { base64: 'AQ==', subType: '00' } } }],
     ['binary_three', { a: { $binary: { base64: 'AQID', subType: '00' } } }],
     ['binary_five', { a: { $binary: { base64: 'AAECAwQ=', subType: '00' } } }],
+    // Every common subtype must survive a decode/encode round trip.
+    ['binary_legacy_02', { a: { $binary: { base64: 'AQID', subType: '02' } } }],
+    ['binary_legacy_02_long', { a: { $binary: { base64: 'AAECAwQ=', subType: '02' } } }],
+    ['binary_subtype_05', { a: { $binary: { base64: 'AQID', subType: '05' } } }],
+    ['binary_subtype_80', { a: { $binary: { base64: 'AQID', subType: '80' } } }],
     ['string_empty', { a: '' }],
     ['string_ascii', { a: 'hello' }],
     ['string_utf8', { a: '中文' }],
