@@ -271,6 +271,30 @@
             ]
         },
         {
+            "id": "update.unset_operand_not_document",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$unset": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "update operator $unset requires a document" }
+            ]
+        },
+        {
+            "id": "update.inc_operand_not_document",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$inc": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "update operator $inc requires a document" }
+            ]
+        },
+        {
             "id": "update.persist_reopen",
             "surface": "update",
             "program": [
