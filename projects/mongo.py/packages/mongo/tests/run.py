@@ -96,6 +96,312 @@ def command_of(case, step, command):
     return enriched
 
 
+# ---------------------------------------------------------------------------
+# Semantic-equivalence runner for the `cli` surface.
+#
+# The CLI itself is `projects/mongo.ts/packages/mongo/bin/mongo.mjs` and only
+# the TypeScript runner executes that process. This side re-implements the same
+# line grammar on top of the pyo3 primitives so both bindings must agree on the
+# resulting documents. It is *not* the same entry point: it proves that the
+# primitives compose to the same observable behaviour, not that Python hosts a
+# shell.
+# ---------------------------------------------------------------------------
+CLI_NAMES = [
+    "use",
+    "show dbs",
+    "show collections",
+    "insertOne",
+    "insertMany",
+    "find",
+    "updateOne",
+    "updateMany",
+    "deleteOne",
+    "deleteMany",
+    "countDocuments",
+    "exit",
+    "quit",
+]
+
+
+class CliError(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def cli_unknown(label):
+    return f"unknown command: {label} (supported: {', '.join(CLI_NAMES)})"
+
+
+def cli_argument(piece):
+    token = piece.strip()
+    if not token:
+        raise CliError(2, "empty argument")
+    if token in ("true", "false", "null"):
+        return json.loads(token)
+    if re.match(r"^[A-Za-z_$][A-Za-z0-9_$-]*$", token):
+        return token
+    try:
+        return json.loads(token)
+    except ValueError:
+        raise CliError(2, f"invalid JSON argument: {token}") from None
+
+
+def cli_arguments(text):
+    if not text.strip():
+        return []
+    pieces = []
+    depth = 0
+    start = 0
+    in_string = False
+    escaped = False
+    for index, character in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+            continue
+        if character in "{[(":
+            depth += 1
+        elif character in "}])":
+            depth -= 1
+        elif character == "," and depth == 0:
+            pieces.append(text[start:index])
+            start = index + 1
+    if in_string or depth != 0:
+        raise CliError(2, "unbalanced argument list")
+    pieces.append(text[start:])
+    return [cli_argument(piece) for piece in pieces]
+
+
+def cli_group(text, start):
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        character = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+            continue
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index], index + 1
+    raise CliError(2, "unbalanced parentheses")
+
+
+def cli_call(text, start):
+    match = re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*", text[start:])
+    if not match:
+        return None
+    name = match.group(0)
+    index = start + len(name)
+    while index < len(text) and text[index] == " ":
+        index += 1
+    if index >= len(text) or text[index] != "(":
+        return None
+    content, next_index = cli_group(text, index)
+    return {"name": name, "args": cli_arguments(content), "next": next_index}
+
+
+def cli_call_form(text):
+    head = cli_call(text, 0)
+    if not head:
+        return None
+    calls = []
+    index = head["next"]
+    while True:
+        while index < len(text) and text[index] == " ":
+            index += 1
+        if index >= len(text):
+            break
+        if text[index] != ".":
+            raise CliError(2, f"unexpected input: {text[index:]}")
+        index += 1
+        while index < len(text) and text[index] == " ":
+            index += 1
+        call = cli_call(text, index)
+        if not call:
+            raise CliError(2, f"invalid find method: {text[index:]}")
+        calls.append(call)
+        index = call["next"]
+    return {"name": head["name"], "args": head["args"], "calls": calls}
+
+
+def cli_document(value):
+    return isinstance(value, dict)
+
+
+def cli_collection(args, index, command):
+    if index >= len(args) or not isinstance(args[index], str) or args[index] == "":
+        raise CliError(2, f"{command} requires a collection name as argument {index + 1}")
+    return args[index]
+
+
+def cli_document_arg(args, index, command, label):
+    if index >= len(args) or not cli_document(args[index]):
+        raise CliError(2, f"{command} requires a {label} as argument {index + 1}")
+    return args[index]
+
+
+def cli_count(args, minimum, maximum, command):
+    if len(args) < minimum or len(args) > maximum:
+        expected = str(minimum) if minimum == maximum else f"{minimum}..{maximum}"
+        raise CliError(2, f"{command} expects {expected} argument(s), got {len(args)}")
+
+
+def cli_no_chain(call):
+    if call["calls"]:
+        raise CliError(2, f"{call['name']} does not accept chained methods")
+
+
+class CliSession:
+    """Port of `Session` in `bin/mongo.mjs`, over the pyo3 primitives."""
+
+    def __init__(self, store, database):
+        self.store = store
+        self.database = database
+        self.cursors = mongo.MongoCursors()
+
+    def run(self, line):
+        text = line.strip()
+        if not text or text.startswith("//") or text.startswith("#"):
+            return None
+        if text in ("exit", "quit"):
+            return {"ok": {"$numberInt": "1"}, "bye": True}, True
+        if text == "show dbs":
+            return json.loads(mongo.list_databases(self.store)), False
+        if text == "show collections":
+            command = {"listCollections": 1, "$db": self.database}
+            return json.loads(mongo.list_collections(self.store, json.dumps(command))), False
+        if text == "show" or text.startswith("show "):
+            raise CliError(59, cli_unknown(text))
+        if text == "use" or text.startswith("use "):
+            name = text[3:].strip()
+            if re.match(r"^[A-Za-z0-9_-]+$", name) is None:
+                raise CliError(2, "use expects a single database name")
+            self.database = name
+            return {"ok": {"$numberInt": "1"}, "db": name}, False
+        call = cli_call_form(text)
+        if not call:
+            raise CliError(59, cli_unknown(text))
+        return self.dispatch(call), False
+
+    def dispatch(self, call):
+        name = call["name"]
+        args = call["args"]
+        database = self.database
+        if name == "insertOne":
+            cli_no_chain(call)
+            cli_count(args, 2, 2, name)
+            collection = cli_collection(args, 0, name)
+            document = cli_document_arg(args, 1, name, "document")
+            command = {"insert": collection, "documents": [document], "$db": database}
+            return json.loads(mongo.insert(self.store, json.dumps(command)))
+        if name == "insertMany":
+            cli_no_chain(call)
+            if len(args) < 2:
+                raise CliError(2, "insertMany expects a collection name and at least one document")
+            collection = cli_collection(args, 0, name)
+            documents = args[1] if len(args) == 2 and isinstance(args[1], list) else args[1:]
+            if not documents:
+                raise CliError(2, "insertMany requires at least one document")
+            for document in documents:
+                if not cli_document(document):
+                    raise CliError(2, "insertMany documents must be objects")
+            command = {"insert": collection, "documents": documents, "$db": database}
+            return json.loads(mongo.insert(self.store, json.dumps(command)))
+        if name == "find":
+            return self.find(call)
+        if name in ("updateOne", "updateMany"):
+            cli_no_chain(call)
+            cli_count(args, 3, 3, name)
+            collection = cli_collection(args, 0, name)
+            filter_value = cli_document_arg(args, 1, name, "filter")
+            update_value = cli_document_arg(args, 2, name, "update")
+            updates = [{"q": filter_value, "u": update_value, "multi": name == "updateMany"}]
+            command = {"update": collection, "updates": updates, "$db": database}
+            return json.loads(mongo.update(self.store, json.dumps(command)))
+        if name in ("deleteOne", "deleteMany"):
+            cli_no_chain(call)
+            cli_count(args, 1, 2, name)
+            collection = cli_collection(args, 0, name)
+            filter_value = cli_document_arg(args, 1, name, "filter") if len(args) > 1 else {}
+            deletes = [{"q": filter_value, "limit": 1 if name == "deleteOne" else 0}]
+            command = {"delete": collection, "deletes": deletes, "$db": database}
+            return json.loads(mongo.delete(self.store, json.dumps(command)))
+        if name == "countDocuments":
+            cli_no_chain(call)
+            cli_count(args, 1, 2, name)
+            collection = cli_collection(args, 0, name)
+            query = cli_document_arg(args, 1, name, "filter") if len(args) > 1 else {}
+            command = {"count": collection, "query": query, "$db": database}
+            return json.loads(mongo.count(self.store, json.dumps(command)))
+        raise CliError(59, cli_unknown(name))
+
+    def find(self, call):
+        args = call["args"]
+        cli_count(args, 1, 3, "find")
+        collection = cli_collection(args, 0, "find")
+        filter_value = cli_document_arg(args, 1, "find", "filter") if len(args) > 1 else {}
+        command = {"find": collection, "filter": filter_value, "$db": self.database}
+        if len(args) > 2:
+            command["projection"] = cli_document_arg(args, 2, "find", "projection")
+        seen = set()
+        for method in call["calls"]:
+            if method["name"] in seen:
+                raise CliError(2, f"find method {method['name']} used twice")
+            seen.add(method["name"])
+            if method["name"] == "sort":
+                cli_count(method["args"], 1, 1, "sort")
+                command["sort"] = cli_document_arg(method["args"], 0, "sort", "sort")
+            elif method["name"] in ("skip", "limit"):
+                cli_count(method["args"], 1, 1, method["name"])
+                value = method["args"][0]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0 or int(value) != value:
+                    raise CliError(2, f"{method['name']} expects a non-negative integer")
+                command[method["name"]] = int(value)
+            else:
+                raise CliError(2, f"unknown find method: {method['name']}")
+        return json.loads(mongo.find(self.store, self.cursors, json.dumps(command)))
+
+
+def run_cli(directory, step):
+    data_dir = os.path.join(directory, step.get("dir", "data"))
+    os.makedirs(data_dir, exist_ok=True)
+    session = CliSession(mongo.MongoStore(os.path.join(data_dir, "mongo.yykv")), step.get("db", "app"))
+    lines = []
+    for line in step["commands"]:
+        try:
+            outcome = session.run(line)
+        except CliError as error:
+            lines.append({"ok": {"$numberInt": "0"}, "code": {"$numberInt": str(error.code)}, "errmsg": str(error)})
+            continue
+        if outcome is None:
+            continue
+        result, stop = outcome
+        lines.append(result)
+        if stop:
+            break
+    return {"exitCode": 0, "lines": lines}
+
+
 def run_case(case):
     directory = tempfile.mkdtemp(prefix=f"mongo-py-{re.sub(r'[^\\w.-]+', '-', case['id'])}-")
     stores = {}
@@ -151,7 +457,7 @@ def run_case(case):
             return json.loads(mongo.insert(store_of(step.get("store")), json.dumps(command_of(case, step, command))))
         if op == "find":
             command = {"find": step["collection"]}
-            for key in ("filter", "sort", "skip", "limit", "batchSize"):
+            for key in ("filter", "projection", "sort", "skip", "limit", "batchSize"):
                 if key in step:
                     command[key] = step[key]
             reply = mongo.find(store_of(step.get("store")), cursor_table(), json.dumps(command_of(case, step, command)))
@@ -224,6 +530,8 @@ def run_case(case):
             return mongo.import_bson_file(store_of(step.get("store")), step["namespace"], path)
         if op == "cursorsLen":
             return len(cursor_table())
+        if op == "cli":
+            return run_cli(directory, step)
         raise ValueError(f"unknown case op {op}")
 
     outputs = {}
