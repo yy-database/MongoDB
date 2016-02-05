@@ -245,13 +245,25 @@ pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) ->
     let skip = parse_count(command.get("skip"));
     let limit = parse_count(command.get("limit"));
     let batch_size = parse_count(command.get("batchSize"));
+    let projection = match command.get("projection") {
+        Some(BsonValue::Document(projection)) => Some(projection.clone()),
+        _ => None,
+    };
 
     let mut documents = collect_matching(store, &namespace, &filter)?;
     sort_documents(&mut documents, &sort);
 
     let start = skip.min(documents.len());
     let end = if limit > 0 { (start + limit).min(documents.len()) } else { documents.len() };
-    let window: Vec<BsonValue> = documents.into_iter().skip(start).take(end - start).map(BsonValue::Document).collect();
+    let window: Vec<BsonValue> = documents
+        .into_iter()
+        .skip(start)
+        .take(end - start)
+        .map(|document| match &projection {
+            Some(projection) => BsonValue::Document(project_document(&document, projection)),
+            None => BsonValue::Document(document),
+        })
+        .collect();
 
     let (cursor_id, first_batch) = cursors.open(&namespace, window, batch_size);
     Ok(cursor_reply(&namespace, "firstBatch", first_batch, cursor_id))

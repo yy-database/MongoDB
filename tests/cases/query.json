@@ -98,6 +98,21 @@
             ]
         },
         {
+            "id": "query.projection",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2, "c": 3 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "projection": { "a": 1, "_id": 0 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/b", "absent": true },
+                { "at": "/r2/cursor/firstBatch/0/_id", "absent": true }
+            ]
+        },
+        {
             "id": "query.range",
             "surface": "query",
             "program": [
