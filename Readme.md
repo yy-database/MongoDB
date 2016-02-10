@@ -9,7 +9,7 @@
 | 项 | 口径 |
 |----|------|
 | 协议 | MongoDB wire protocol，`OP_MSG` 为主，兼容驱动的首个 `OP_QUERY` handshake 探测 |
-| 存储 | YYDS `.yykv` 分片（`yyds::kv::FileShard`），命名空间 = `<database>.<collection>` |
+| 存储 | YYDS `.yyds` catalog + `.yykv` 分片（`yyds::kv::FileShard`），命名空间 = `<database>.<collection>` |
 | 验收 | 同一批 case 同时驱动 TypeScript 与 Python 绑定，逐 case 比对两侧输出 |
 | 命令行 | JS/TS 最小入口 `projects/mongo.ts/packages/mongo/bin/mongo.mjs`，只组合 napi 原语；管道模式逐行读命令、逐行输出 JSON |
 | 发布 | 当前阶段**不发布**：所有包 `private: true`，未配置 Trusted Publisher |
@@ -21,6 +21,23 @@
 | 产品 | 本仓承担 | 说明 |
 |------|----------|------|
 | MongoDB | 读取 / 导入真库数据形态 | `mongodump` 产出的 `.bson` 文档流可导入；**不回写** MongoDB 原生数据文件（WiredTiger）。运行时数据落在 `.yykv`。 |
+
+## `.yyds` 目录
+
+一次打开对应一个目录，两个文件成对出现：
+
+| 文件 | 角色 | 内容 |
+|------|------|------|
+| `<stem>.yyds` | catalog | 魔法 `YYDS\x01`、格式版本 `0`、小端 `u32` 字段；schema 槽存 `{"version":1,"namespaces":["<db>.<collection>",…]}`，shard 注册表恰好一个 `ShardId`，指向 `<stem>.yykv` |
+| `<stem>.yykv` | 数据分片 | 由 `yyds::kv::FileShard` 读写；`!catalog` 命名空间只保存命名空间标签，用于 catalog 缺失时重建 |
+
+catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` + 小端 `u32` 版本 `0` + 可选 schema / routing / contract / owners 段），字段顺序照抄，不自造。该格式**没有校验和字段**，完整性由魔法、版本、长度与尾部多余字节检查承担。
+
+打开行为：
+
+- **catalog 存在**：解析；要求恰好注册 1 个 shard、schema 版本为 `1`、文档是含 `namespaces` 数组的 JSON，且它指向的 shard 文件存在。任一不满足即结构化拒绝（`StoreError::Catalog`），不静默修复、不猜测。
+- **catalog 缺失**：新建一个单 shard 的 catalog，并用 `.yykv` 里的 `!catalog` 标签补齐命名空间后照常打开；已写入的数据不受影响。
+- **写入**：新命名空间出现时把注册表回写进 catalog；shard 路径始终由 catalog 的 `ShardId` 决定。
 
 ## 能力矩阵
 
@@ -49,11 +66,11 @@
 projects/mongo.rs/   Rust 库原语（mongo-core）与绑定（mongo-napi / mongo-pyo3 / mongo-wasm）
 projects/mongo.ts/   TypeScript 绑定、安装态验收 runner 与最小命令行 `packages/mongo/bin/mongo.mjs`
 projects/mongo.py/   Python 包与同一批 case 的验收 runner
-scripts/             构建、BSON case 生成与跨语言门禁脚本
+scripts/             构建、BSON case 生成、跨语言门禁与独立 `.yyds` 字节校验脚本 `scripts/verify-yyds.mjs`
 tests/cases/         两种语言共用的声明式 case 语料
 ```
 
-Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yykv` 文档存储、游标表、每条命令一个函数。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
+Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
 
 平台包目录 = `mongo-<os>-<arch>`，包名与目录同构：`mongo-win32-x64` → `@yydb/mongo-win32-x64`；WASM 为 `mongo-unknown-wasm32`。所有包 `private: true`，到产品级之前不发布。
 
@@ -104,6 +121,8 @@ printf 'use app\ninsertMany(items, [{"_id":1},{"_id":2}])\nfind(items, {}).sort(
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
+- `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
+- `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 
 ### 本地 `yyds` 联调（可选）
 
