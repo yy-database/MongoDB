@@ -199,6 +199,12 @@ fn import_bson_file(store: PyRef<'_, MongoStore>, namespace: &str, path: &str) -
     mongo_core::import_bson_file(&store.inner, namespace, path).map_err(PyValueError::new_err)
 }
 
+/// Creates the empty shard a catalog names when only the catalog survived.
+#[pyfunction]
+fn repair_shard(path: &str) -> PyResult<String> {
+    Store::repair_shard(path).map(|report| report.to_json()).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 #[pymodule]
 fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<MongoStore>()?;
@@ -224,5 +230,6 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson_file, module)?)?;
+    module.add_function(wrap_pyfunction!(repair_shard, module)?)?;
     Ok(())
 }

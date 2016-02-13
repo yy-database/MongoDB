@@ -557,6 +557,8 @@ def run_case(case):
             if run.returncode != 0:
                 raise RuntimeError(f"yyds verifier exited with {run.returncode}: {run.stderr}")
             return json.loads(run.stdout)
+        if op == "repairShard":
+            return json.loads(mongo.repair_shard(os.path.join(directory, f"{step.get('store', 's')}.yykv")))
         if op == "cli":
             return run_cli(directory, step)
         raise ValueError(f"unknown case op {op}")
