@@ -16,3 +16,4 @@ storage = ["dep:yyds"]
 [dependencies]
 yyds = { workspace = true, optional = true }
 serde_json = { workspace = true }
+regex = { workspace = true }

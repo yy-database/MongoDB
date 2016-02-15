@@ -20,6 +20,7 @@ repository = "https://github.com/yy-database/MongoDB"
 # Pin the full 40-char rev. Local path overrides belong in `.cargo/config.toml`.
 yyds = { git = "https://github.com/oovm/database.rs.git", rev = "5cae6652413f98bb32371178ac7dc8ece1c95587" }
 serde_json = "1"
+regex = "1"
 
 napi = { version = "3.14.2", default-features = false, features = ["napi4"] }
 napi-derive = "3.6.12"
