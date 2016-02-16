@@ -251,13 +251,19 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
         "pipeline",
         BsonValue::Array(vec![
             BsonValue::Document(document(&[("$match", BsonValue::Document(BsonDocument::new()))])),
-            BsonValue::Document(document(&[("$limit", BsonValue::Int32(1))])),
+            BsonValue::Document(document(&[(
+                "$lookup",
+                BsonValue::Document(document(&[("from", text("other"))])),
+            )])),
         ]),
     );
 
     let error = commands::aggregate(&aggregate, &store).expect_err("stage must be rejected");
     assert_eq!(error.code, 59);
-    assert_eq!(error.message, "$limit");
+    assert_eq!(
+        error.message,
+        "unknown aggregation stage: $lookup (supported: $match, $sort, $limit, $skip, $count, $unwind, $group, $project)"
+    );
 }
 
 #[test]

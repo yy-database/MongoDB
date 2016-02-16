@@ -39,6 +39,7 @@ const COMMAND_NAMES = [
     'deleteOne',
     'deleteMany',
     'countDocuments',
+    'aggregate',
     'exit',
     'quit',
 ]
@@ -59,7 +60,12 @@ Commands (one per line in pipe mode, one JSON line of output each):
   deleteOne(<collection>, <filter>)
   deleteMany(<collection>, <filter>)
   countDocuments(<collection>, [<filter>])
+  aggregate(<collection>, <pipeline>)
   exit | quit
+
+Pipeline stages (same implementation as the napi/pyo3 aggregate primitive):
+  $match, $sort, $limit, $skip, $count, $unwind, $group, $project
+  Unknown stages are rejected with code 59 and the supported list.
 
 Arguments are JSON / Extended JSON; a bare word is taken as a collection name.
 Filter operators (same whitelist as find/count/update/delete/aggregate $match):
@@ -297,6 +303,13 @@ class Session {
                 const collection = collectionArgument(args, 0, name)
                 const query = args.length > 1 ? documentArgument(args, 1, name, 'filter') : {}
                 return binding.count(this.store, json({ count: collection, query, $db: this.database }))
+            }
+            case 'aggregate': {
+                noChain(call)
+                argumentCount(args, 2, 2, name)
+                const collection = collectionArgument(args, 0, name)
+                if (!Array.isArray(args[1])) throw new CliError(2, 'aggregate expects a pipeline array as argument 2')
+                return binding.aggregate(this.store, json({ aggregate: collection, pipeline: args[1], cursor: {}, $db: this.database }))
             }
             default:
                 throw new CliError(59, unknownCommand(name))
