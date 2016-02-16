@@ -62,7 +62,12 @@ Commands (one per line in pipe mode, one JSON line of output each):
   exit | quit
 
 Arguments are JSON / Extended JSON; a bare word is taken as a collection name.
-Anything else is rejected with {"ok":{"$numberInt":"0"},"code":{"$numberInt":"59"},"errmsg":"unknown command: ..."}.
+Filter operators (same whitelist as find/count/update/delete/aggregate $match):
+  logical: $and $or $nor   (non-empty arrays; $not is field-level only)
+  field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options
+           $size $type $elemMatch $all $not
+Anything else is rejected: unknown commands with code 59, unknown filters with
+{"ok":{"$numberInt":"0"},"code":{"$numberInt":"2"},"errmsg":"unknown operator: $mod (...)"}.
 The store is <data-dir>/mongo.yykv.
 `
 

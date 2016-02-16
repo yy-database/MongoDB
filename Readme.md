@@ -61,7 +61,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | `hello` / `isMaster` | 已支持 | `isWritablePrimary: true`、`minWireVersion: 0`、`maxWireVersion: 17` |
 | `ping` | 已支持 | `{ ok: 1 }` |
 | `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档；`ordered: false` 继续写入后续合法文档 |
-| `find` | 已支持 | 字段过滤（`$eq`/`$ne`/`$gt`/`$gte`/`$lt`/`$lte`、一级点号嵌套）、`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
+| `find` | 已支持 | 过滤算子见“查询算子”一节；`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
 | `count` | 已支持 | 读 `query` 过滤，遵守 `skip` / `limit`；未知算子同上拒绝 |
 | `aggregate` | 部分支持 | 仅 `$match`、常量 `_id` 的 `$sum: 1` `$group`、`$project`（含/排除）；其他阶段回 `59`；`$match` 的未知算子回 `2` |
 | `delete` | 已支持 | `deletes[].q` 与 `limit`（`0` 表示全部）；未知算子回 `2` |
@@ -72,6 +72,33 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | 非法集合命名空间 | 拒绝 | `73` |
 
 游标回收：空闲 `600` 秒的游标没有后台定时器，只在后续 `find` / `getMore` 时惰性清扫。
+
+### 查询算子（filter）
+
+`find`、`count`、`update`、`delete`、`aggregate` 的 `$match` 五条路径共用同一份校验与匹配实现（`validate_filter` + `document_matches`），不各写一套。
+
+| 层级 | 算子 | 依据 |
+|------|------|------|
+| 顶层 | `$and`、`$or`、`$nor` | 手册各页 Syntax：非空 filter 数组 |
+| 顶层（拒绝） | `$not` | `$not` 是字段级算子；顶层出现报 `unknown top level operator: $not` |
+| 字段级 | `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte` | 手册各算子页 |
+| 字段级 | `$in`、`$nin`、`$exists`、`$regex`、`$options`、`$size`、`$type`、`$elemMatch`、`$all`、`$not` | 手册各算子页；`$options` 只作 `$regex` 的伴生键 |
+
+逐条落实的边界（全部写进 `tests/cases/operators.json`，case 带 `source` 指向手册页面/小节）：
+
+- `$all: []` **不匹配任何文档**（`$all` 页 Behavior：“When passed an empty array, `$all` matches no documents”）。
+- `$and: []`、`$or: []`、`$nor: []`、`$in: []`、`$nin: []` **回 `2` 拒绝**：手册只定义“one or more”，空数组无据可依，代码里写明 `refusing to guess`，不自行认定恒真/恒假。
+- `{a: null}` 匹配**缺失字段**、**显式 null**，以及**含 null 元素的数组**；空数组不匹配（`tutorial/query-for-null-fields`）。
+- `{a: {$exists: false}}` 只匹配缺失字段；`{a: {$exists: true}}` 含显式 null。`{a: {$ne: null}}` 的补集包含空数组（同页）。
+- `{a: {$type: 10}}` 只匹配显式 null，不匹配缺失（同页）。
+- 数组字段：`$eq` 先按“整体相等”判（**顺序敏感**，`$eq` 页），再按“任一元素相等”；`$in` 按“任一元素命中”；`$gt`/`$lt` 按“任一元素比较”，且比较前做类型分桶（字符串不会被 `$gt: 5` 命中）。
+- `$regex` 对数组按“任一元素匹配”处理，依据是 `tutorial/query-arrays` 的数组查询规则；`$regex` 页本身未单列数组情形的措辞。
+- 点路径进入数组会展开（`instock.qty`）；不带 `$elemMatch` 时不同条件可落在不同元素上（`tutorial/query-array-of-documents`），带 `$elemMatch` 时同一元素必须同时满足全部条件。
+- `$not` 命中“不匹配该算子表达式”的文档，**包括不含该字段的文档**（`$not` 页）。
+- `$type` 数组元素命中任一类型；`$type: "array"` 看字段本身是否为数组；别名与 BSON 码取自 `reference/bson-types`。
+
+未实现（保持 `unknown operator` 报错并带算子名/操作/字段路径，不静默空结果）：`$mod`、`$where`、`$text`、`$expr`、`$geoWithin` 等其余算子；`$in`/`$nin` 中的正则字面量（解析器没有 BSON regex 值类型）；`$regex` 的 PCRE 特性（回引用、环视），Rust `regex` 只覆盖 RE2 子集；存储容纳不了的 BSON 类型（`date`/`decimal`/`timestamp` 等）在 `$type` 中合法但恒不命中，不算静默错误。数字下标点路径已实现但未纳入 case：手册 `core/dot-notation` 页面本轮未取得，不作无来源断言。
+
 
 ## 目录
 
@@ -100,7 +127,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。
+当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。本机也没有 `mongod` 或 `mongodb-memory-server`，本轮新增的查询算子期望值**全部来自官方手册（case 的 `source` 字段指向具体页面/小节），仅文档依据、未在真实 `mongod` 上实机验证**；无法从手册确定语义的空数组形态直接拒绝，而不是猜一个恒真/恒假。
 
 ## 命令行（最小面）
 
@@ -124,9 +151,18 @@ printf 'use app\ninsertMany(items, [{"_id":1},{"_id":2}])\nfind(items, {}).sort(
 | `countDocuments(<coll>, [filter])` | 走 `count` |
 | `exit` / `quit` | 停止读后续行 |
 
+`find` / `updateOne` / `updateMany` / `deleteOne` / `deleteMany` / `countDocuments` 的过滤参数走同一条白名单（与上面的“查询算子”完全一致，`--help` 逐项列出）：
+
+```
+logical: $and $or $nor
+field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type $elemMatch $all $not
+```
+
+白名单外的算子（例如 `$mod`、`$where`、`$text`）在命令行里同样回 `2`，`errmsg` 带算子名与操作名。
+
 管道模式每条命令输出一行 Extended JSON；被拒绝的输入也输出一行 `{"ok":{"$numberInt":"0"},"code":...,"errmsg":...}` 并继续处理后续行，进程退出码为 `0`。未知命令回 `59` 且 `errmsg` 含 `unknown command:` 与支持清单；参数形态错误回 `2`；命令语义错误沿用原语错误码（`14` / `66` 等）。存储固定为 `<data-dir>/mongo.yykv`，不监听端口。
 
-测试覆盖性质不同：TypeScript 侧真实启动该进程（`cli` 面 23 个 case）；Python 侧没有同一入口，用同一份 case 把命令行语法映射到 pyo3 原语后比对终态，属于**语义等价**验证，不等同于“同一个入口两侧都跑”。
+测试覆盖性质不同：TypeScript 侧真实启动该进程（`cli` 面 24 个 case）；Python 侧没有同一入口，用同一份 case 把命令行语法映射到 pyo3 原语后比对终态，属于**语义等价**验证，不等同于“同一个入口两侧都跑”。
 
 ## 能力边界
 

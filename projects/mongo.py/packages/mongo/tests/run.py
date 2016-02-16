@@ -641,7 +641,7 @@ cases = []
 for path in sorted(CASE_DIR.glob("*.json")):
     payload = json.loads(path.read_text(encoding="utf-8"))
     for case in payload["cases"]:
-        case["source"] = path.name
+        case["file"] = path.name
         cases.append(case)
 
 results = [run_case(case) for case in cases]

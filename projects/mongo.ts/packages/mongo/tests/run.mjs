@@ -353,7 +353,7 @@ const files = readdirSync(caseDir)
     .sort()
 const cases = files.flatMap((name) => {
     const payload = JSON.parse(readFileSync(join(caseDir, name), 'utf8'))
-    return payload.cases.map((testCase) => ({ ...testCase, source: name }))
+    return payload.cases.map((testCase) => ({ ...testCase, file: name }))
 })
 
 const results = cases.map(runCase)

@@ -1,0 +1,731 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "op.and.two_clauses",
+            "surface": "query",
+            "source": "MongoDB manual, $and / Syntax: \"$and performs a logical AND operation on an array of one or more expressions\" (https://www.mongodb.com/docs/manual/reference/operator/query/and/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }] },
+                { "op": "find", "collection": "items", "filter": { "$and": [{ "score": { "$gte": 20 } }, { "score": { "$lt": 30 } }] }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.and.nested_or",
+            "surface": "query",
+            "source": "MongoDB manual, $and / Syntax and $or / Syntax (https://www.mongodb.com/docs/manual/reference/operator/query/or/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }, { "_id": 4, "score": 40 }] },
+                { "op": "find", "collection": "items", "filter": { "$and": [{ "$or": [{ "score": 10 }, { "score": 40 }] }, { "score": { "$gte": 20 } }] }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "4" } }
+            ]
+        },
+        {
+            "id": "op.or.two_clauses",
+            "surface": "query",
+            "source": "MongoDB manual, $or / Syntax: \"$or performs a logical OR operation on an array of one or more expressions and selects the documents that satisfy at least one of the expressions\" (https://www.mongodb.com/docs/manual/reference/operator/query/or/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }] },
+                { "op": "find", "collection": "items", "filter": { "$or": [{ "score": 10 }, { "score": 30 }] }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.or.single_clause",
+            "surface": "query",
+            "source": "MongoDB manual, $or / Behavior: \"Using $or with a single clause has the same effect as omitting the $or operator\" (https://www.mongodb.com/docs/manual/reference/operator/query/or/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }] },
+                { "op": "find", "collection": "items", "filter": { "$or": [{ "score": 20 }] }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.nor.missing_field",
+            "surface": "query",
+            "source": "MongoDB manual, $nor / Behavior: \"$nor selects documents that fail all the query clauses ... including those documents that do not contain these field(s)\" (https://www.mongodb.com/docs/manual/reference/operator/query/nor/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }, { "_id": 2, "a": 2 }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "$nor": [{ "a": 1 }, { "a": 2 }] }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "op.and.empty_array_rejected",
+            "surface": "error",
+            "source": "No source: https://www.mongodb.com/docs/manual/reference/operator/query/and/ documents only arrays of one or more expressions, so an empty $and is refused rather than guessed",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$and": [] }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$and with an empty array is not defined by the MongoDB manual; refusing to guess (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.or.empty_array_rejected",
+            "surface": "error",
+            "source": "No source: https://www.mongodb.com/docs/manual/reference/operator/query/or/ documents only arrays of one or more expressions, so an empty $or is refused rather than guessed",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$or": [] }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$or with an empty array is not defined by the MongoDB manual; refusing to guess (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.nor.empty_array_rejected",
+            "surface": "error",
+            "source": "No source: https://www.mongodb.com/docs/manual/reference/operator/query/nor/ documents only arrays of one or more query predicates, so an empty $nor is refused rather than guessed",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$nor": [] }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$nor with an empty array is not defined by the MongoDB manual; refusing to guess (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.nor.not_an_array",
+            "surface": "error",
+            "source": "MongoDB manual, $nor / Syntax: the argument is an array of query predicates (https://www.mongodb.com/docs/manual/reference/operator/query/nor/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$nor": { "a": 1 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$nor requires an array of filter documents (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.and.member_not_document",
+            "surface": "error",
+            "source": "MongoDB manual, $and / Syntax: each array member is an expression document (https://www.mongodb.com/docs/manual/reference/operator/query/and/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$and": [{ "score": 1 }, 5] }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$and element 1 is not a filter document (operation: find)" }
+            ]
+        },
+        {
+            "id": "op.not.top_level_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $not: \"$not performs a logical NOT operation on the specified <operator-expression>\" (a field-level operator) (https://www.mongodb.com/docs/manual/reference/operator/query/not/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "$not": { "score": { "$gt": 10 } } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown top level operator: $not (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.in.scalar",
+            "surface": "query",
+            "source": "MongoDB manual, $in / Syntax (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }] },
+                { "op": "find", "collection": "items", "filter": { "score": { "$in": [10, 30] } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.in.array_any_element",
+            "surface": "query",
+            "source": "MongoDB manual, $in / Behavior: \"If field has an array, the $in operator selects the documents whose field has an array that contains at least one element that matches a value in the specified array\" (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["red", "blue"] }, { "_id": 2, "tags": ["green"] }, { "_id": 3, "tags": ["blue"] }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$in": ["blue"] } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.in.empty_array_rejected",
+            "surface": "error",
+            "source": "No source: https://www.mongodb.com/docs/manual/reference/operator/query/in/ and .../nin/ do not define an empty operand array; the gateway refuses instead of guessing",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$in": [] } }, "as": "in" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$nin": [] } }, "as": "nin" }
+            ],
+            "checks": [
+                { "at": "/in/code", "equals": { "$numberInt": "2" } },
+                { "at": "/in/errmsg", "equals": "$in with an empty array is not defined by the MongoDB manual; refusing to guess (operation: find, field: \"score\", fieldIndex: 0, operatorIndex: 0)" },
+                { "at": "/nin/code", "equals": { "$numberInt": "2" } },
+                { "at": "/nin/errmsg", "equals": "$nin with an empty array is not defined by the MongoDB manual; refusing to guess (operation: find, field: \"score\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "op.nin.missing_field",
+            "surface": "query",
+            "source": "MongoDB manual, $nin / Behavior: \"$nin selects the documents where: the specified field value is not in the specified array or the specified field does not exist\" (https://www.mongodb.com/docs/manual/reference/operator/query/nin/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "color": "red" }, { "_id": 2, "color": "blue" }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "color": { "$nin": ["red"] } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.exists.missing_vs_present",
+            "surface": "query",
+            "source": "MongoDB manual, $exists / Behavior: \"$exists matches the documents that contain the field, including documents where the field value is null\" and \"$exists: false ... returns only those documents that do not contain the field\" (https://www.mongodb.com/docs/manual/reference/operator/query/exists/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "a": { "$exists": true } }, "sort": { "_id": 1 }, "as": "yes" },
+                { "op": "find", "collection": "items", "filter": { "a": { "$exists": false } }, "sort": { "_id": 1 }, "as": "no" }
+            ],
+            "checks": [
+                { "at": "/yes/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] },
+                { "at": "/no/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/no/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "op.null.matches_missing_and_explicit",
+            "surface": "query",
+            "source": "MongoDB manual, Query for Null or Missing Fields / Equality Filter: \"{ item: null } query matches documents that either contain the item field whose value is null or that do not contain the item field\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "a": null }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.null.array_with_null",
+            "surface": "query",
+            "source": "MongoDB manual, Query for Null or Missing Fields / $type: \"{ item: null } query matches ... an array that contains a null element\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [null, 1] }, { "_id": 2, "a": [] }, { "_id": 3, "a": 1 }] },
+                { "op": "find", "collection": "items", "filter": { "a": null }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.ne.null_complement",
+            "surface": "query",
+            "source": "MongoDB manual, Query for Null or Missing Fields / $ne: \"{ item: { $ne: null } } ... matches documents where the item field contains a value that is not null or ... an empty array\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3, "a": [] }, { "_id": 4 }] },
+                { "op": "find", "collection": "items", "filter": { "a": { "$ne": null } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.type.null_explicit_only",
+            "surface": "query",
+            "source": "MongoDB manual, Query for Null or Missing Fields / $type: \"{ item : { $type: 10 } } query matches only documents that contain the item field whose value is null\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "a": { "$type": 10 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.type.number_alias_array_element",
+            "surface": "query",
+            "source": "MongoDB manual, $type / Behavior: \"the query returns documents in which at least one array element matches a type passed to $type\" (https://www.mongodb.com/docs/manual/reference/operator/query/type/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": 1 }, { "_id": 2, "v": { "$numberLong": "1" } }, { "_id": 3, "v": "1" }, { "_id": 4, "v": ["x", 2] }] },
+                { "op": "find", "collection": "items", "filter": { "v": { "$type": "number" } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }, { "$numberInt": "4" }] }
+            ]
+        },
+        {
+            "id": "op.type.array_field",
+            "surface": "query",
+            "source": "MongoDB manual, $type / Behavior: \"Queries for $type: 'array' return documents where the field itself is an array\" (https://www.mongodb.com/docs/manual/reference/operator/query/type/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a"] }, { "_id": 2, "tags": "a" }, { "_id": 3, "tags": [] }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$type": "array" } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.type.array_operand",
+            "surface": "query",
+            "source": "MongoDB manual, $type / Syntax: the argument may be a single BSON type or an array of types (https://www.mongodb.com/docs/manual/reference/operator/query/type/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": 1 }, { "_id": 2, "v": { "$numberDouble": "1.5" } }, { "_id": 3, "v": { "$numberLong": "2" } }] },
+                { "op": "find", "collection": "items", "filter": { "v": { "$type": ["int", "long"] } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.type.int_vs_double",
+            "surface": "query",
+            "source": "MongoDB manual, BSON Types: Double 1, int 16, long 18 (https://www.mongodb.com/docs/manual/reference/bson-types/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": 1 }, { "_id": 2, "v": { "$numberDouble": "1.5" } }, { "_id": 3, "v": { "$numberLong": "2" } }] },
+                { "op": "find", "collection": "items", "filter": { "v": { "$type": 16 } }, "as": "int" },
+                { "op": "find", "collection": "items", "filter": { "v": { "$type": "double" } }, "as": "double" }
+            ],
+            "checks": [
+                { "at": "/int/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/int/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/double/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } },
+                { "at": "/double/cursor/firstBatch/0/v", "equals": { "$numberDouble": "1.5" } }
+            ]
+        },
+        {
+            "id": "op.type.unknown_alias_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $type / Behavior: the argument is a BSON type alias or code from the BSON Types table (https://www.mongodb.com/docs/manual/reference/bson-types/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "v": { "$type": "money" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "unknown \\$type alias: money" }
+            ]
+        },
+        {
+            "id": "op.size.array_and_non_array",
+            "surface": "query",
+            "source": "MongoDB manual, $size / Behavior: \"The $size operator matches any array with the number of elements specified by the argument\" (https://www.mongodb.com/docs/manual/reference/operator/query/size/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a", "b"] }, { "_id": 2, "tags": ["a"] }, { "_id": 3, "tags": [] }, { "_id": 4, "tags": "ab" }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$size": 2 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.size.non_integer_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $size / Syntax: the argument is the number of elements (a whole number) (https://www.mongodb.com/docs/manual/reference/operator/query/size/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$size": 1.5 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "\\$size requires a non-negative integer" }
+            ]
+        },
+        {
+            "id": "op.all.exact_values",
+            "surface": "query",
+            "source": "MongoDB manual, $all / Behavior: \"$all selects the documents where the value of a field is an array that contains all the specified elements\" (https://www.mongodb.com/docs/manual/reference/operator/query/all/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["ssl", "security", "red"] }, { "_id": 2, "tags": ["ssl"] }, { "_id": 3, "tags": ["security"] }, { "_id": 4, "tags": [] }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$all": ["ssl", "security"] } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.all.empty_matches_nothing",
+            "surface": "query",
+            "source": "MongoDB manual, $all / Behavior: \"When passed an empty array, $all matches no documents\" (https://www.mongodb.com/docs/manual/reference/operator/query/all/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a"] }, { "_id": 2, "tags": [] }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$all": [] } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "op.all.with_elem_match",
+            "surface": "query",
+            "source": "MongoDB manual, $all / \"$all with $elemMatch\": each element may be an $elemMatch expression (https://www.mongodb.com/docs/manual/reference/operator/query/all/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "results": [82, 85, 90] }, { "_id": 2, "results": [75, 88] }, { "_id": 3, "results": [82] }] },
+                { "op": "find", "collection": "items", "filter": { "results": { "$all": [{ "$elemMatch": { "$gte": 80, "$lt": 85 } }, { "$elemMatch": { "$gte": 85, "$lt": 90 } }] } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.elem_match.operator_form",
+            "surface": "query",
+            "source": "MongoDB manual, $elemMatch / \"Use the $elemMatch operator to specify multiple criteria on the elements of an array such that at least one array element satisfies all the specified criteria\" (https://www.mongodb.com/docs/manual/reference/operator/query/elemMatch/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "result": [82, 85, 90] }, { "_id": 2, "result": [75, 88] }, { "_id": 3, "result": [82] }] },
+                { "op": "find", "collection": "items", "filter": { "result": { "$elemMatch": { "$gte": 80, "$lt": 85 } } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.elem_match.document_form",
+            "surface": "query",
+            "source": "MongoDB manual, $elemMatch / \"The $elemMatch operator matches documents that contain an array field with at least one element that matches all the specified query criteria\" (document form) (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "instock": [{ "warehouse": "A", "qty": 5 }, { "warehouse": "C", "qty": 15 }] }, { "_id": 2, "instock": [{ "warehouse": "A", "qty": 15 }] }, { "_id": 3, "instock": [{ "warehouse": "B", "qty": 5 }] }] },
+                { "op": "find", "collection": "items", "filter": { "instock": { "$elemMatch": { "warehouse": "A", "qty": { "$gte": 10 } } } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.dotarray.any_combination",
+            "surface": "query",
+            "source": "MongoDB manual, Query an Array of Embedded Documents / \"the query ... does not specify ... $elemMatch, so MongoDB returns documents where any combination of elements satisfies the conditions\" (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "instock": [{ "warehouse": "A", "qty": 5 }, { "warehouse": "C", "qty": 15 }] }, { "_id": 2, "instock": [{ "warehouse": "A", "qty": 15 }] }, { "_id": 3, "instock": [{ "warehouse": "B", "qty": 5 }] }] },
+                { "op": "find", "collection": "items", "filter": { "instock.warehouse": "A", "instock.qty": { "$gte": 10 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "op.dotarray.in",
+            "surface": "query",
+            "source": "MongoDB manual, Query an Array of Embedded Documents / dot notation on array fields (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/) and $in / Behavior (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "instock": [{ "warehouse": "A", "qty": 5 }] }, { "_id": 2, "instock": [{ "warehouse": "B", "qty": 15 }] }] },
+                { "op": "find", "collection": "items", "filter": { "instock.qty": { "$in": [15] } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.eq.array_exact_order",
+            "surface": "query",
+            "source": "MongoDB manual, $eq / Behavior: \"MongoDB matches documents where <field> matches the array exactly or <field> contains an element that matches the array exactly. The order of the elements matters\" (https://www.mongodb.com/docs/manual/reference/operator/query/eq/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }, { "_id": 2, "a": [[1, 2], 3] }, { "_id": 3, "a": [2, 1] }] },
+                { "op": "find", "collection": "items", "filter": { "a": [1, 2] }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "op.gt.array_any_element",
+            "surface": "query",
+            "source": "MongoDB manual, Query an Array / \"query if the array field contains at least one element\" with a comparison operator (https://www.mongodb.com/docs/manual/tutorial/query-arrays/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "scores": [3, 7] }, { "_id": 2, "scores": [1, 2] }, { "_id": 3, "scores": 9 }] },
+                { "op": "find", "collection": "items", "filter": { "scores": { "$gt": 5 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.regex.string_form",
+            "surface": "query",
+            "source": "MongoDB manual, $regex / \"$regex provides regular expression capabilities for pattern matching strings in queries\" (string form) (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "name": "alpha" }, { "_id": 2, "name": "Beta" }, { "_id": 3, "name": "gamma" }] },
+                { "op": "find", "collection": "items", "filter": { "name": { "$regex": "^a" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.regex.options_i",
+            "surface": "query",
+            "source": "MongoDB manual, $regex / Options: \"$options ... i ... case insensitivity to match upper and lower cases\" (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "name": "alpha" }, { "_id": 2, "name": "Beta" }, { "_id": 3, "name": "gamma" }] },
+                { "op": "find", "collection": "items", "filter": { "name": { "$regex": "^b", "$options": "i" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.regex.array_elements",
+            "surface": "query",
+            "source": "MongoDB manual, Query an Array / \"query if the array field contains at least one element\" (https://www.mongodb.com/docs/manual/tutorial/query-arrays/) applied to a $regex condition (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["red", "blue"] }, { "_id": 2, "tags": ["green"] }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$regex": "^b" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.regex.unsupported_option",
+            "surface": "error",
+            "source": "MongoDB manual, $regex / Options: the documented options are i, m, x, s and u; \"g\" is not accepted (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "name": { "$regex": "^a", "$options": "g" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "unsupported \\$regex option: g" }
+            ]
+        },
+        {
+            "id": "op.regex.invalid_pattern",
+            "surface": "error",
+            "source": "MongoDB manual, $regex: the argument is a regular expression pattern (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "name": { "$regex": "(" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "invalid \\$regex pattern" }
+            ]
+        },
+        {
+            "id": "op.regex.options_without_regex",
+            "surface": "error",
+            "source": "MongoDB manual, $regex / Syntax: $options is used together with $regex\" (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "name": { "$options": "i" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "\\$options requires a \\$regex" }
+            ]
+        },
+        {
+            "id": "op.regex.with_in",
+            "surface": "query",
+            "source": "MongoDB manual, $regex / Options and $in / Behavior (both conditions apply to the same field document) (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "name": "abc" }, { "_id": 2, "name": "abd" }, { "_id": 3, "name": "cde" }] },
+                { "op": "find", "collection": "items", "filter": { "name": { "$regex": "^ab", "$in": ["abc", "cde"] } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.not.field_level",
+            "surface": "query",
+            "source": "MongoDB manual, $not / Behavior: \"$not selects the documents that do not match the <operator-expression>. This includes documents that do not contain the field\" (https://www.mongodb.com/docs/manual/reference/operator/query/not/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3 }] },
+                { "op": "find", "collection": "items", "filter": { "score": { "$not": { "$gt": 10 } } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.not.regex",
+            "surface": "query",
+            "source": "MongoDB manual, $not / \"Use $not with a Regular Expression\" (https://www.mongodb.com/docs/manual/reference/operator/query/not/) with the $regex / $options form (https://www.mongodb.com/docs/manual/reference/operator/query/regex/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "name": "alpha" }, { "_id": 2, "name": "Beta" }] },
+                { "op": "find", "collection": "items", "filter": { "name": { "$not": { "$regex": "^a" } } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "op.not.scalar_operand_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $not / Behavior: \"{ runtime: { $not: 120 } } is invalid\" because $not takes an operator expression (https://www.mongodb.com/docs/manual/reference/operator/query/not/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$not": 120 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "\\$not requires an operator document" }
+            ]
+        },
+        {
+            "id": "op.not.mixed_keys_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $not / Syntax: the argument is an operator expression (https://www.mongodb.com/docs/manual/reference/operator/query/not/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "score": { "$not": { "$gt": 0, "x": 1 } } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "\\$not requires an operator document" }
+            ]
+        },
+        {
+            "id": "op.count.new_operator",
+            "surface": "command",
+            "source": "MongoDB manual, count / Behavior: the query applies the same match semantics as find (https://www.mongodb.com/docs/manual/reference/command/count/) and $size (https://www.mongodb.com/docs/manual/reference/operator/query/size/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a", "b"] }, { "_id": 2, "tags": ["a"] }, { "_id": 3, "tags": [] }] },
+                { "op": "count", "collection": "items", "query": { "tags": { "$size": 1 } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r/ok", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "op.update.new_operator",
+            "surface": "update",
+            "source": "MongoDB manual, update / Behavior: the query and multi options use the same match semantics as find (https://www.mongodb.com/docs/manual/reference/command/update/) and $in (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a", "b"] }, { "_id": 2, "tags": ["a"] }, { "_id": 3, "tags": [] }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "tags": { "$in": ["a"] } }, "u": { "$set": { "hit": true } }, "multi": true }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "hit": true }, "sort": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/nModified", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "op.delete.new_operator",
+            "surface": "command",
+            "source": "MongoDB manual, delete / Behavior: each q uses the same match semantics as find (https://www.mongodb.com/docs/manual/reference/command/delete/) and $in (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }] },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "score": { "$in": [10, 30] } }, "limit": 0 }], "as": "r1" },
+                { "op": "count", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/deletedCount", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "op.aggregate.match_new_operator",
+            "surface": "command",
+            "source": "MongoDB manual, $match / \"$match selects the documents ... using the same query syntax as find\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/match/) and $or (https://www.mongodb.com/docs/manual/reference/operator/query/or/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }, { "_id": 3, "score": 30 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$match": { "$or": [{ "score": 10 }, { "score": 30 }] } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "op.sort_projection_with_operator",
+            "surface": "query",
+            "source": "MongoDB manual, find / projection and sort (https://www.mongodb.com/docs/manual/reference/command/find/) combined with $in (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a"], "extra": "x" }, { "_id": 2, "tags": ["a", "b"], "extra": "y" }, { "_id": 3, "tags": ["b"], "extra": "z" }] },
+                { "op": "find", "collection": "items", "filter": { "tags": { "$in": ["a"] } }, "sort": { "_id": -1 }, "projection": { "_id": 1, "tags": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }] },
+                { "at": "/r/cursor/firstBatch/0/extra", "absent": true }
+            ]
+        }
+    ]
+}
