@@ -1741,9 +1741,9 @@ fn equality_one(candidate: &BsonValue, expected: &BsonValue) -> bool {
 
 fn in_candidates(candidates: &[&BsonValue], operand: &BsonValue) -> bool {
     let BsonValue::Array(values) = operand else { return false };
-    candidates
-        .iter()
-        .any(|candidate| values.iter().any(|value| equality_one(candidate, value)))
+    // One `$eq` predicate per list element, so `$in` containing `null` also
+    // matches a missing field exactly like `{field: null}` does.
+    values.iter().any(|value| equality_candidates(candidates, value))
 }
 
 fn exists_candidates(candidates: &[&BsonValue], operand: &BsonValue) -> bool {
