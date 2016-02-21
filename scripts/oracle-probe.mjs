@@ -173,7 +173,12 @@ function insertOutcome(reply) {
     return { rejected: false, code: null }
 }
 
-const insert = (collection, documents) => ({ insert: collection, documents, $db: DB })
+const insert = (collection, documents, ordered) => ({
+    insert: collection,
+    documents,
+    ...(ordered === undefined ? {} : { ordered }),
+    $db: DB
+})
 const aggregate = (collection, pipeline) => ({ aggregate: collection, pipeline, cursor: {}, $db: DB })
 const find = (collection, filter) => ({ find: collection, filter, $db: DB })
 
@@ -185,7 +190,14 @@ const collections = {
     sort: 'oracle_sort',
     group: 'oracle_group',
     count: 'oracle_count',
-    project: 'oracle_project'
+    project: 'oracle_project',
+    typeq: 'oracle_typeq',
+    regexq: 'oracle_regexq',
+    notq: 'oracle_notq',
+    sizeq: 'oracle_sizeq',
+    inq: 'oracle_inq',
+    norq: 'oracle_norq',
+    mergeq: 'oracle_mergeq'
 }
 
 const probes = [
@@ -561,6 +573,241 @@ const probes = [
         pick: errorShape,
         orderMatters: false,
         errorProbe: true
+    },
+    {
+        id: 'insert.batch_int_and_double',
+        note: 'same insert batch with _id 1 and 1.0; check reply, written docs and n',
+        setup: [insert(collections.idnum, [{ _id: 1, tag: 'int' }, { _id: { $numberDouble: '1.0' }, tag: 'double' }])],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.batch_int_and_long',
+        note: 'same insert batch with _id 1 and NumberLong(1)',
+        setup: [insert(collections.idnum, [{ _id: 1, tag: 'int' }, { _id: { $numberLong: '1' }, tag: 'long' }])],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.batch_int_and_string',
+        note: 'same insert batch with numeric _id 1 and string _id "1": both are allowed',
+        setup: [insert(collections.idnum, [{ _id: 1, tag: 'int' }, { _id: '1', tag: 'string' }])],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.batch_identical',
+        note: 'same insert batch with two identical _id 1 documents',
+        setup: [insert(collections.idnum, [{ _id: 1, tag: 'a' }, { _id: 1, tag: 'b' }])],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.batch_third_conflicts',
+        note: 'batch [1, 2, 1]: whether the first two documents are committed',
+        setup: [insert(collections.idnum, [{ _id: 1 }, { _id: 2 }, { _id: 1, tag: 'again' }])],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.batch_unordered',
+        note: 'ordered: false with a duplicate in the batch keeps the valid documents',
+        setup: [insert(collections.idnum, [{ _id: 1 }, { _id: { $numberDouble: '1.0' } }, { _id: 3 }], false)],
+        command: find(collections.idnum, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'insert.cross_collection_independent',
+        note: 'the same _id may exist in two different collections',
+        setup: [
+            insert(collections.idnum, [{ _id: 1, tag: 'a' }]),
+            insert(collections.typeq, [{ _id: 1, tag: 'b' }])
+        ],
+        command: find(collections.typeq, {}),
+        pick: firstBatch,
+        orderMatters: false,
+        also: { name: 'insert_outcome', pick: null, fromSetup: 1 }
+    },
+    {
+        id: 'type.alias_number',
+        note: '$type "number" alias covers int32/int64/double',
+        setup: [
+            insert(collections.typeq, [
+                { _id: 1, v: 1 },
+                { _id: 2, v: { $numberLong: '2' } },
+                { _id: 3, v: 2.5 },
+                { _id: 4, v: 's' },
+                { _id: 5, v: [1, 's'] },
+                { _id: 6, v: true },
+                { _id: 7, v: null },
+                { _id: 8 }
+            ])
+        ],
+        command: find(collections.typeq, { v: { $type: 'number' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'type.alias_int_and_array',
+        note: '$type "int" alias and $type "array" on the array-valued document',
+        setup: [
+            insert(collections.typeq, [
+                { _id: 1, v: 1 },
+                { _id: 5, v: [1, 's'] },
+                { _id: 7, v: null }
+            ])
+        ],
+        command: find(collections.typeq, { v: { $type: 'int' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'type.array_of_names',
+        note: '$type accepts an array of type names',
+        setup: [
+            insert(collections.typeq, [
+                { _id: 4, v: 's' },
+                { _id: 5, v: [1, 's'] },
+                { _id: 6, v: true },
+                { _id: 7, v: null }
+            ])
+        ],
+        command: find(collections.typeq, { v: { $type: ['string', 'bool'] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'type.array_type_itself',
+        note: '$type "array" matches the array document itself',
+        setup: [insert(collections.typeq, [{ _id: 5, v: [1, 's'] }, { _id: 1, v: 1 }])],
+        command: find(collections.typeq, { v: { $type: 'array' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'type.null_alias_matches_array_null',
+        note: '$type "null" matches explicit null, maybe arrays containing null',
+        setup: [
+            insert(collections.typeq, [
+                { _id: 7, v: null },
+                { _id: 9, v: [null] },
+                { _id: 8 }
+            ])
+        ],
+        command: find(collections.typeq, { v: { $type: 'null' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'regex.array_contains',
+        note: '$regex matches an array field when one element matches',
+        setup: [
+            insert(collections.regexq, [
+                { _id: 1, tags: ['apple', 'banana'] },
+                { _id: 2, tags: ['cherry'] },
+                { _id: 3, tags: 'apple' },
+                { _id: 4 }
+            ])
+        ],
+        command: find(collections.regexq, { tags: { $regex: '^a' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'regex.options_case_insensitive',
+        note: '$options "i" applies to arrays and strings alike',
+        setup: [
+            insert(collections.regexq, [
+                { _id: 1, tags: ['apple', 'banana'] },
+                { _id: 2, tags: ['cherry'] },
+                { _id: 3, tags: 'apple' },
+                { _id: 4 }
+            ])
+        ],
+        command: find(collections.regexq, { tags: { $regex: 'APPLE', $options: 'i' } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'not.gt_includes_missing_and_null',
+        note: '$not of a comparison matches missing and null documents',
+        setup: [insert(collections.notq, [{ _id: 1, v: 1 }, { _id: 2, v: 5 }, { _id: 3 }, { _id: 4, v: null }])],
+        command: find(collections.notq, { v: { $not: { $gt: 5 } } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'size.matches_array_length',
+        note: '$size matches only an array of exactly that length',
+        setup: [insert(collections.sizeq, [{ _id: 1, tags: [1, 2] }, { _id: 2, tags: [1] }, { _id: 3, tags: 'a' }, { _id: 4 }])],
+        command: find(collections.sizeq, { tags: { $size: 2 } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'in.with_null',
+        note: '$in [null, 2] follows the same null semantics as {a: null}',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: 2 }])],
+        command: find(collections.inq, { a: { $in: [null, 2] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'in.numeric_type_equality',
+        note: '$in compares numbers by value across BSON numeric types',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: { $numberLong: '1' } }, { _id: 3, a: 1.5 }, { _id: 4, a: '1' }])],
+        command: find(collections.inq, { a: { $in: [{ $numberDouble: '1.0' }] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'nor.empty_array',
+        note: '$nor: [] - does the real server accept it and match everything, or reject it?',
+        setup: [insert(collections.norq, [{ _id: 1, a: 1 }, { _id: 2 }])],
+        command: find(collections.norq, { a: { $nor: [] } }),
+        pick: (reply) => (isZero(reply.ok) ? { code: reply.code } : { ok: true }),
+        orderMatters: false,
+        errorProbe: true
+    },
+    {
+        id: 'all.with_elem_match',
+        note: '$all entries may be $elemMatch expressions',
+        setup: [
+            insert(collections.mergeq, [
+                { _id: 1, tags: [{ n: 1 }, { n: 5 }] },
+                { _id: 2, tags: [{ n: 5 }, { n: 9 }] },
+                { _id: 3, tags: [{ n: 1 }] }
+            ])
+        ],
+        command: find(collections.mergeq, { tags: { $all: [{ $elemMatch: { n: { $gte: 5 } } }] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'elem_match_with_in',
+        note: '$elemMatch with $in requires one element to satisfy the $in',
+        setup: [
+            insert(collections.mergeq, [
+                { _id: 1, tags: [{ n: 1 }, { n: 5 }] },
+                { _id: 2, tags: [{ n: 5 }, { n: 9 }] },
+                { _id: 3, tags: [{ n: 1 }] }
+            ])
+        ],
+        command: find(collections.mergeq, { tags: { $elemMatch: { n: { $in: [1, 9] } } } }),
+        pick: firstBatch,
+        orderMatters: false
     }
 ]
 
