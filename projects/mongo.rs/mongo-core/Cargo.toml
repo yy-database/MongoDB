@@ -11,9 +11,9 @@ publish = false
 default = ["storage"]
 # The `.yykv` document store and command primitives. Disable it for wasm targets
 # that only need the BSON / JSON / wire codecs.
-storage = ["dep:yyds"]
+storage = ["dep:database", "database/types", "database/storage", "database/cluster"]
 
 [dependencies]
-yyds = { workspace = true, optional = true }
+database = { workspace = true, optional = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

@@ -23,10 +23,10 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-use yyds::{
-    catalog,
-    kv::{FileShard, InlineValue, Key, KvStore, ShardChange, StoredValue},
-    types::{CatalogSchema, Namespace, ShardId, CATALOG_SUFFIX},
+use database::{
+    cluster::catalog,
+    storage::cluster_kv::{FileShard, InlineValue, Key, KvStore, ShardChange, StoredValue},
+    types::cluster::{CatalogSchema, Namespace, ShardId, CATALOG_SUFFIX},
 };
 
 /// Namespace label used to remember which Mongo namespaces exist.

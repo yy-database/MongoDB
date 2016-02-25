@@ -16,9 +16,9 @@ license = "MPL-2.0"
 repository = "https://github.com/yy-database/MongoDB"
 
 [workspace.dependencies]
-# Sole database.rs dependency: the `yyds` facade (.yykv shard storage).
+# Sole database.rs dependency: the `database` facade (.yykv shard storage).
 # Pin the full 40-char rev. Local path overrides belong in `.cargo/config.toml`.
-yyds = { git = "https://github.com/oovm/database.rs.git", rev = "5cae6652413f98bb32371178ac7dc8ece1c95587" }
+database = { git = "https://github.com/oovm/database.rs.git", rev = "904bee590dfc0282d4d2ad5ee31773e7f25e658b", default-features = false }
 serde_json = "1"
 regex = "1"
 
