@@ -10,15 +10,29 @@
 // Pipe mode: `node bin/mongo.mjs --data-dir <dir>` reads one command per line
 // from stdin and prints exactly one JSON line per command (errors included).
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const repo = resolve(here, '..', '..', '..', '..', '..')
 const require = createRequire(import.meta.url)
-const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${process.platform}-${process.arch}`, 'index.js'))
+const platformPackage = `@yydb/mongo-${process.platform}-${process.arch}`
+
+// Installed layouts resolve the platform package through `node_modules`; a
+// checkout that never ran a workspace install keeps the same package next to
+// this command, so fall back to that repository path only when it exists.
+function loadBinding() {
+    try {
+        return require(platformPackage)
+    } catch (error) {
+        const local = resolve(here, '..', '..', '..', 'platforms', `mongo-${process.platform}-${process.arch}`, 'index.js')
+        if (existsSync(local)) return require(local)
+        throw new Error(`cannot resolve ${platformPackage}: install the matching platform package (${error.message})`)
+    }
+}
+
+const binding = loadBinding()
 
 class CliError extends Error {
     constructor(code, message) {

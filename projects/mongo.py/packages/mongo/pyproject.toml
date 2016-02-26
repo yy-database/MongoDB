@@ -1,14 +1,19 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
 [project]
 name = "yydb-mongo"
 version = "0.0.0"
 description = "MongoDB protocol primitives assembled from the Rust mongo-pyo3 bindings"
 license = { text = "MPL-2.0" }
-private = true
 requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
 
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-include = ["mongo*"]
+[tool.maturin]
+manifest-path = "../../../mongo.rs/mongo-pyo3/Cargo.toml"
+python-source = "."
+module-name = "mongo.mongo_pyo3"
