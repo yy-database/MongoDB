@@ -121,7 +121,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 - `includeArrayIndex`：数组展开后给出 **0 基下标**；非数组或保留的缺失/空数组文档给出 `null`。
 - 默认（不保留）时非数组标量按单元素展开，不改值。
 
-累加器语义（来源为各累加器页面）：`$sum` 忽略非数值，全无数值时回 `0`；`$avg` 忽略非数值，全无数值时回 `null`，结果按 double；`$min` / `$max` 只忽略 `null` 与缺失，其余值按 BSON 排序比较（所以字符串会参与比较并可能成为 `min`/`max`）；`$push` 保持输入顺序；`$addToSet` 去重但顺序未定义；`$first` / `$last` 按输入顺序取，缺失字段回 `null`，要在 `$group` 前定义顺序需显式 `$sort`。
+累加器语义（来源为各累加器页面，并且 `$push` / `$addToSet` 的缺失字段行为已在 `mongod 8.0.9` 上对拍）：`$sum` 忽略非数值，全无数值时回 `0`；`$avg` 忽略非数值，全无数值时回 `null`，结果按 double；`$min` / `$max` 只忽略 `null` 与缺失，其余值按 BSON 排序比较（所以字符串会参与比较并可能成为 `min`/`max`）；`$push` 保持输入顺序并**跳过缺失字段**（显式 `null` 照常压入）；`$addToSet` 去重但顺序未定义，同样跳过缺失字段，**文档按字段顺序判等**（`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值）；`$first` / `$last` 按输入顺序取，缺失字段回 `null`，要在 `$group` 前定义顺序需显式 `$sort`。
 
 `$project` 的混用规则（`project` 页）：
 
@@ -134,7 +134,6 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 - `$group` 的 `_id` 为**文档/数组表达式**（如 `{$field: "$a"}`）回 `59`，未做。
 - 其他累加器（`$accumulator`、`$median`、`$percentile`、`$firstN`、`$lastN`、`$maxN`、`$minN`、`$stdDev*`、`$mergeObjects` 等）回 `59`，`errmsg` 列出已支持累加器。
 - `$project` 的其他表达式/投影算子（`$literal`、`$slice`、`$filter`、`$map`、`$cond`、`$switch` 等）回 `59`，`errmsg` 列出 `$add, $concat, $ifNull`。
-- `$push` 对**缺失字段**的处理手册未写明确结论，实现按 `null` 推入但**不纳入断言**（`refusing to guess` 记缺口）。
 - `$avg` 输出类型按手册示例取 double，属文档依据。
 - 点路径 `$unwind`（如 `"$a.b"`）已实现但**未纳入 case**，因为手册该页未给出嵌套路径的确定表述。
 - `$sort` 手册明确**不保证稳定排序**，因此 case 不比较相同键的文档次序，也不把它当作稳定排序输出。
@@ -167,7 +166,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：64 个一致、10 个不一致**（1 个错误码粒度 + 2 个 `$group` 累加器 + 4 个 `update` 错误通道/码 + 2 个 `delete`/1 个 `count` 回复形态；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 967 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：66 个一致、8 个不一致**（1 个错误码粒度 + 4 个 `update` 错误通道/码 + 2 个 `delete` + 1 个 `count` 回复形态；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的两条 `$group` case 标注同一台真机。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 970 条断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
@@ -219,8 +218,8 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `update` 的 `multi` 只修改已存在文档，没有批量插入路径，因此不存在同类批内重复问题（不适用）。
 - `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；语义同为拒绝，错误码粒度不同。
 - `$in` / `$nin` 含 `null`：已按真机对齐——列表里每个值都复用 `{field: <value>}` 的同一判等谓词，所以 `{a: {$in: [null, 2]}}` 匹配缺失字段（与 `{a: null}` 相同），`$nin: [null]` 因此**排除**缺失字段，且 `$ne: null` 与 `$nin: [null]` 在同一批文档上结果一致（探针 `in.with_null` / `in.null_single_element` / `in.null_on_array_field` / `nin.with_null` / `nin.null_and_value` / `ne.null_on_same_docs` 全部 MATCH，case `op.in.null_matches_missing_field`）。
-- `$group` 的 `$push` / `$addToSet` 对**缺失字段**：真机跳过缺失（`[1, null, 2]`，显式 `null` 才进数组），本仓把缺失求值为 `null` 后压入（`[1, null, null, 2]`）。属**静默错数据**（数组内容多一项），本轮只报不改。
-- `$group` 的 `$addToSet` 对**文档**判等：真机按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；本仓经 JSON 命令解析后字段被排序（`serde_json::Map` 按 key 排序），两者合并成一个。属**静默错数据**（去重结果少一项），根因是命令 JSON 输入不保字段顺序，本轮只报不改。
+- `$group` 的 `$push` / `$addToSet` 对**缺失字段**：已与真机对齐——缺失字段被跳过，显式 `null` 才进数组（探针 `group.push_missing_field` 真机输出 `[1, null, 2]`）。修正前本仓把缺失求值为 `null` 压入（`[1, null, null, 2]`），属静默错数据；2026-11-06 已在 `mongod 8.0.9` 对拍后修正，case `pipe.group.push_and_add_to_set_skip_missing`。
+- `$group` 的 `$addToSet` 对**文档**判等：已与真机对齐——按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；修正前命令 JSON 解析把字段名排序（`serde_json::Map` 按 key 排序），两者被合并成一个，属静默错数据。根因修复是给 `serde_json` 开启 `preserve_order`，让命令文档从解析、存储到比较都保持调用方给出的字段顺序；case `pipe.group.add_to_set_document_field_order`。
 - `update` 修饰符错误通道：真机回 `ok: 1` + `writeErrors`（如 `$inc` `null` 为 code `14`，`$set` 穿数组为 code `28`），本仓回顶层 `ok: 0` + `code`；`$set` 穿数组的错误码也不同（真机 `28`，本仓 `2`）。语义同为拒绝，通道与码粒度不同。
 - 写命令回复类型：真机 `update` / `delete` / `count` 的 `n` 为 int32、`ok` 为 double `1.0`，本仓为 int64 与 int32；真机 `delete` 原始回复**没有** `deletedCount`（由驱动计算），本仓直接写出该字段。语义（`n`、无匹配 0）一致。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。

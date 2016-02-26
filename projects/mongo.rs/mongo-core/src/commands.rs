@@ -1277,10 +1277,13 @@ fn evaluate_group_id(document: &BsonDocument, identifier: &BsonValue) -> BsonVal
 }
 
 fn accumulate(accumulator: &Accumulator, documents: &[BsonDocument], members: &[usize]) -> Result<BsonValue, CommandError> {
-    let values: Vec<BsonValue> = members
+    // `$push` and `$addToSet` skip a missing field entirely while still keeping an
+    // explicit `null`; every other accumulator treats missing as `null`.
+    let optional_values: Vec<Option<BsonValue>> = members
         .iter()
-        .map(|index| evaluate_expression(&documents[*index], &accumulator.argument))
+        .map(|index| evaluate_expression_optional(&documents[*index], &accumulator.argument))
         .collect::<Result<Vec<_>, _>>()?;
+    let values: Vec<BsonValue> = optional_values.iter().cloned().map(|value| value.unwrap_or(BsonValue::Null)).collect();
 
     match accumulator.kind {
         AccumulatorKind::Sum => {
@@ -1336,10 +1339,10 @@ fn accumulate(accumulator: &Accumulator, documents: &[BsonDocument], members: &[
             }
             Ok(chosen.unwrap_or(BsonValue::Null))
         }
-        AccumulatorKind::Push => Ok(BsonValue::Array(values)),
+        AccumulatorKind::Push => Ok(BsonValue::Array(optional_values.into_iter().flatten().collect())),
         AccumulatorKind::AddToSet => {
             let mut unique: Vec<BsonValue> = Vec::new();
-            for value in values {
+            for value in optional_values.into_iter().flatten() {
                 if !unique.iter().any(|existing| values_equal(Some(existing), &value)) {
                     unique.push(value);
                 }
@@ -1448,6 +1451,15 @@ fn remove_field_path(document: &mut BsonDocument, path: &str) {
                 }
             }
         }
+    }
+}
+
+/// A field-path expression evaluates to `None` when the field is missing, so
+/// `$push` / `$addToSet` can skip it instead of turning it into `null`.
+fn evaluate_expression_optional(document: &BsonDocument, expression: &BsonValue) -> Result<Option<BsonValue>, CommandError> {
+    match expression {
+        BsonValue::String(path) if path.starts_with('$') => Ok(lookup_field(document, &path[1..]).cloned()),
+        other => evaluate_expression(document, other).map(Some),
     }
 }
 

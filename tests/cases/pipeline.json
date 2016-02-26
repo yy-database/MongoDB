@@ -351,6 +351,33 @@
             ]
         },
         {
+            "id": "pipe.group.push_and_add_to_set_skip_missing",
+            "surface": "command",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $group with documents v=1, missing, null, 2 returned pushed [1, null, 2]: a missing field is skipped while an explicit null is kept (probe group.push_missing_field); $addToSet skipped the missing field too (probe group.add_to_set_documents)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": 1 }, { "_id": 2 }, { "_id": 3, "v": null }, { "_id": 4, "v": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "pushed": { "$push": "$v" }, "unique": { "$addToSet": "$v" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/pushed", "equals": [{ "$numberInt": "1" }, null, { "$numberInt": "2" }] },
+                { "at": "/r/cursor/firstBatch/0/unique/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "pipe.group.add_to_set_document_field_order",
+            "surface": "command",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $addToSet over {x:1,y:2}, {y:2,x:1}, [1,2], [2,1], 1, 1.0, \"s\" and a missing field produced 6 distinct values: embedded documents compare by field order, arrays compare element-wise, numbers compare by value and the missing field is skipped (probe group.add_to_set_documents)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "d": { "x": 1, "y": 2 } }, { "_id": 2, "d": { "y": 2, "x": 1 } }, { "_id": 3, "d": [1, 2] }, { "_id": 4, "d": [2, 1] }, { "_id": 5, "d": 1 }, { "_id": 6, "d": 1.0 }, { "_id": 7, "d": "s" }, { "_id": 8 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "s": { "$addToSet": "$d" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/s/#", "equals": 6 }
+            ]
+        },
+        {
             "id": "pipe.group.first_last_after_sort",
             "surface": "command",
             "source": "MongoDB manual, $push: \"To guarantee a defined order, place a $sort stage before the $group stage\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/push/); $first returns null for a missing field (https://www.mongodb.com/docs/manual/reference/operator/aggregation/first/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, sort-before-group ordering matched; the missing-field-null path was not probed",
