@@ -84,8 +84,8 @@
                 { "at": "/r3", "equals": "5959445301000000000100000001000000360000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73222c226f746865722e6974656d73225d7d000000000100000001000000730000000000000000" },
                 { "at": "/r4/namespaces", "equals": ["app.items", "other.items"] },
                 { "at": "/r4/byteLength", "equals": 96 },
-                { "at": "/r5/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r6/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r5/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r6/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -228,8 +228,8 @@
                 { "at": "/r4/namespaces", "equals": null },
                 { "at": "/r6/ok", "equals": true },
                 { "at": "/r6/shards", "equals": ["local-0"] },
-                { "at": "/r7/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r8/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r7/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r8/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r9/namespaces", "equals": ["app.items"] },
                 { "at": "/r9/shards", "equals": ["local-0"] }
             ]
@@ -265,7 +265,7 @@
                 { "at": "/r2/created", "equals": true },
                 { "at": "/r2/shard", "equals": "s" },
                 { "at": "/r3", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
-                { "at": "/r5/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r5/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r6/ok", "equals": true },
                 { "at": "/r6/namespaces", "equals": ["app.items"] },
                 { "at": "/r7", "equals": ["s.yyds", "s.yykv"] }
@@ -293,7 +293,7 @@
                 { "at": "/r6/created", "equals": false },
                 { "at": "/r6/shard", "equals": "s" },
                 { "at": "/r7", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
-                { "at": "/r8/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r8/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -310,7 +310,7 @@
             "checks": [
                 { "at": "/r1/created", "equals": true },
                 { "at": "/r1/shard", "equals": "s" },
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r3", "equals": ["s.yyds", "s.yykv"] },
                 { "at": "/r4/created", "equals": false }
             ]
@@ -363,9 +363,9 @@
                 { "op": "verifyCatalog", "path": "s.yyds", "as": "r7" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r3", "equals": ["s.yyds", "s.yykv"] },
-                { "at": "/r5/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r5/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r6/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r7/ok", "equals": true },
                 { "at": "/r7/namespaces", "equals": ["app.items"] }

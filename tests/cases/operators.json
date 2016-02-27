@@ -683,8 +683,8 @@
                 { "op": "count", "collection": "items", "query": { "tags": { "$size": 1 } }, "as": "r" }
             ],
             "checks": [
-                { "at": "/r/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r/ok", "equals": { "$numberInt": "1" } }
+                { "at": "/r/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         },
         {
@@ -714,9 +714,10 @@
                 { "op": "count", "collection": "items", "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
-                { "at": "/r1/deletedCount", "equals": { "$numberLong": "2" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/deletedCount", "absent": true },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {

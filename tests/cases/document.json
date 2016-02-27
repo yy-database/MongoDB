@@ -10,7 +10,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors", "absent": true },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r2/cursor/firstBatch/0/_id/$oid", "matches": "^[0-9a-f]{24}$" },
@@ -26,7 +26,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/v", "equals": "one" }
@@ -42,8 +42,8 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/#", "equals": 1 },
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
@@ -67,11 +67,11 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/#", "equals": 1 },
                 { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -90,10 +90,10 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/writeErrors/#", "equals": 1 },
                 { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } }
             ]
         },
         {
@@ -106,8 +106,9 @@
                 { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "3" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "3" } },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 3 }
             ]
         },
@@ -122,7 +123,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": { "$numberLong": "5" } }, "as": "r4" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "3" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "3" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r2/cursor/firstBatch/0/v", "equals": { "$numberInt": "1" } },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
@@ -167,7 +168,7 @@
             ],
             "checks": [
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -181,8 +182,8 @@
                 { "op": "find", "collection": "others", "filter": {}, "as": "r4" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r3/cursor/firstBatch/0/v", "equals": "i" },
                 { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
@@ -200,8 +201,8 @@
                 { "op": "find", "collection": "items", "filter": {}, "db": "other", "as": "r4" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r3/cursor/firstBatch/0/v", "equals": "app" },
                 { "at": "/r4/cursor/firstBatch/0/v", "equals": "other" }
             ]
@@ -362,9 +363,9 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/deletedCount", "equals": { "$numberLong": "1" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/deletedCount", "absent": true },
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } }
             ]
         },
         {
@@ -383,9 +384,9 @@
                 { "op": "count", "collection": "items", "query": { "kind": "b" }, "as": "r4" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
-                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r4/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -398,8 +399,8 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "0" } }
+                { "at": "/r2/n", "equals": { "$numberInt": "3" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } }
             ]
         },
         {
@@ -422,8 +423,8 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "3" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r2/n", "equals": { "$numberInt": "3" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -436,8 +437,8 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } }
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } }
             ]
         },
         {
@@ -505,8 +506,8 @@
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberDouble": "1.0" }, "v": "second" }], "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } }
             ]
         },
@@ -520,8 +521,8 @@
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberLong": "1" } }], "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } }
             ]
         },
@@ -535,7 +536,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
@@ -552,7 +553,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
@@ -568,7 +569,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r1/writeErrors", "absent": true },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 2 }
             ]
@@ -583,7 +584,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "2" } },
                 { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
@@ -600,7 +601,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
                 { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 2 },

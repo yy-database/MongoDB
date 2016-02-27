@@ -428,7 +428,10 @@
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "kind": "a" }, { "_id": 2, "kind": "a" }, { "_id": 3, "kind": "b" }], "as": "r1" },
                 { "op": "count", "collection": "items", "query": { "kind": "a" }, "as": "r2" }
             ],
-            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "2" } }]
+            "checks": [
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "2" } }
+            ]
         },
         {
             "id": "query.count.skip",
@@ -438,7 +441,7 @@
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }], "as": "r1" },
                 { "op": "count", "collection": "items", "query": {}, "skip": 2, "as": "r2" }
             ],
-            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "3" } }]
+            "checks": [{ "at": "/r2/n", "equals": { "$numberInt": "3" } }]
         },
         {
             "id": "query.count.limit",
@@ -448,7 +451,7 @@
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
                 { "op": "count", "collection": "items", "query": {}, "limit": 2, "as": "r2" }
             ],
-            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "2" } }]
+            "checks": [{ "at": "/r2/n", "equals": { "$numberInt": "2" } }]
         },
         {
             "id": "query.count.empty_collection",
@@ -458,8 +461,8 @@
                 { "op": "count", "collection": "missing", "query": {}, "as": "r1" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "0" } },
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } }
+                { "at": "/r1/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         },
         {

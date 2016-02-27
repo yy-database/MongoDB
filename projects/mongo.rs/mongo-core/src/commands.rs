@@ -333,23 +333,7 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     }
     write_errors.sort_by_key(|(index, _, _)| *index);
 
-    let mut response = BsonDocument::new();
-    response.push("ok".to_string(), BsonValue::Int32(1));
-    response.push("n".to_string(), BsonValue::Int64(report.inserted));
-    if !write_errors.is_empty() {
-        let errors: Vec<BsonValue> = write_errors
-            .into_iter()
-            .map(|(index, code, message)| {
-                let mut error = BsonDocument::new();
-                error.push("index".to_string(), BsonValue::Int32(index as i32));
-                error.push("code".to_string(), BsonValue::Int32(code));
-                error.push("errmsg".to_string(), BsonValue::String(message));
-                BsonValue::Document(error)
-            })
-            .collect();
-        response.push("writeErrors".to_string(), BsonValue::Array(errors));
-    }
-    Ok(response)
+    Ok(write_reply(report.inserted, None, &write_errors))
 }
 
 /// `find` with filter, sort, skip, limit and cursor batching.
@@ -409,10 +393,7 @@ pub fn count(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Comm
     let start = skip.min(matched);
     let end = if limit > 0 { (start + limit).min(matched) } else { matched };
 
-    let mut response = BsonDocument::new();
-    response.push("n".to_string(), BsonValue::Int64((end - start) as i64));
-    response.push("ok".to_string(), BsonValue::Int32(1));
-    Ok(response)
+    Ok(write_reply((end - start) as i64, None, &[]))
 }
 
 /// `aggregate` with `$match`, constant-`_id` `$sum: 1` `$group`, and `$project`.
@@ -567,11 +548,7 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         }
     }
 
-    let mut response = BsonDocument::new();
-    response.push("ok".to_string(), BsonValue::Int32(1));
-    response.push("n".to_string(), BsonValue::Int64(deleted));
-    response.push("deletedCount".to_string(), BsonValue::Int64(deleted));
-    Ok(response)
+    Ok(write_reply(deleted, None, &[]))
 }
 
 /// `update` with `$set`, `$unset` and `$inc`; `multi` toggles updateMany.
@@ -631,7 +608,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     if !changes.is_empty() {
                         store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
                     }
-                    return Ok(update_error_reply(index, &error));
+                    return Ok(write_reply(0, Some(0), &[(index, error.code, error.message.clone())]));
                 }
             };
             let payload = encode_bson(&updated);
@@ -648,23 +625,30 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         }
     }
 
-    let mut response = BsonDocument::new();
-    response.push("ok".to_string(), BsonValue::Double(1.0));
-    response.push("n".to_string(), count_value(matched));
-    response.push("nModified".to_string(), count_value(modified));
-    Ok(response)
+    Ok(write_reply(matched, Some(modified), &[]))
 }
 
-/// `ok: 1.0` plus one `writeErrors` entry, matching `mongod 8.0.9`.
-fn update_error_reply(index: usize, error: &CommandError) -> BsonDocument {
-    let mut entry = BsonDocument::new();
-    entry.push("index".to_string(), BsonValue::Int32(index as i32));
-    entry.push("code".to_string(), BsonValue::Int32(error.code));
-    entry.push("errmsg".to_string(), BsonValue::String(error.message.clone()));
+/// Reply shape shared by `insert` / `update` / `delete` / `count`, matching
+/// `mongod 8.0.9`: `ok` is a double and every counter is int32.
+fn write_reply(count: i64, modified: Option<i64>, errors: &[(usize, i32, String)]) -> BsonDocument {
     let mut response = BsonDocument::new();
-    response.push("n".to_string(), BsonValue::Int32(0));
-    response.push("writeErrors".to_string(), BsonValue::Array(vec![BsonValue::Document(entry)]));
-    response.push("nModified".to_string(), BsonValue::Int32(0));
+    response.push("n".to_string(), count_value(count));
+    if let Some(modified) = modified {
+        response.push("nModified".to_string(), count_value(modified));
+    }
+    if !errors.is_empty() {
+        let entries: Vec<BsonValue> = errors
+            .iter()
+            .map(|(index, code, message)| {
+                let mut entry = BsonDocument::new();
+                entry.push("index".to_string(), BsonValue::Int32(*index as i32));
+                entry.push("code".to_string(), BsonValue::Int32(*code));
+                entry.push("errmsg".to_string(), BsonValue::String(message.clone()));
+                BsonValue::Document(entry)
+            })
+            .collect();
+        response.push("writeErrors".to_string(), BsonValue::Array(entries));
+    }
     response.push("ok".to_string(), BsonValue::Double(1.0));
     response
 }

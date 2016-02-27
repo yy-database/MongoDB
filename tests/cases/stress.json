@@ -89,31 +89,31 @@
                 {
                     "at": "/r1/n",
                     "equals": {
-                        "$numberLong": "500"
+                        "$numberInt": "500"
                     }
                 },
                 {
                     "at": "/r2/n",
                     "equals": {
-                        "$numberLong": "500"
+                        "$numberInt": "500"
                     }
                 },
                 {
                     "at": "/r3/n",
                     "equals": {
-                        "$numberLong": "500"
+                        "$numberInt": "500"
                     }
                 },
                 {
                     "at": "/r4/n",
                     "equals": {
-                        "$numberLong": "500"
+                        "$numberInt": "500"
                     }
                 },
                 {
                     "at": "/r5/n",
                     "equals": {
-                        "$numberLong": "2000"
+                        "$numberInt": "2000"
                     }
                 },
                 {
@@ -268,7 +268,7 @@
                 {
                     "at": "/r1/n",
                     "equals": {
-                        "$numberLong": "1"
+                        "$numberInt": "1"
                     }
                 },
                 {
@@ -282,7 +282,7 @@
                 {
                     "at": "/r3/n",
                     "equals": {
-                        "$numberLong": "1"
+                        "$numberInt": "1"
                     }
                 },
                 {
@@ -324,7 +324,7 @@
                 {
                     "at": "/r1/n",
                     "equals": {
-                        "$numberLong": "1"
+                        "$numberInt": "1"
                     }
                 },
                 {
@@ -344,7 +344,7 @@
                 {
                     "at": "/r3/n",
                     "equals": {
-                        "$numberLong": "1"
+                        "$numberInt": "1"
                     }
                 },
                 {
@@ -380,7 +380,7 @@
                 {
                     "at": "/r1/n",
                     "equals": {
-                        "$numberLong": "1"
+                        "$numberInt": "1"
                     }
                 },
                 {
@@ -502,13 +502,13 @@
                 {
                     "at": "/r2/n",
                     "equals": {
-                        "$numberLong": "2000"
+                        "$numberInt": "2000"
                     }
                 },
                 {
                     "at": "/r3/n",
                     "equals": {
-                        "$numberLong": "0"
+                        "$numberInt": "0"
                     }
                 },
                 {

@@ -79,8 +79,9 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } }
+                { "at": "/out/lines/1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -98,8 +99,8 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/1/n", "equals": { "$numberLong": "3" } },
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } }
+                { "at": "/out/lines/1/n", "equals": { "$numberInt": "3" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "3" } }
             ]
         },
         {
@@ -117,7 +118,7 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/1/n", "equals": { "$numberInt": "1" } },
                 { "at": "/out/lines/2/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/out/lines/2/cursor/firstBatch/0/_id", "equals": { "$numberLong": "9" } }
             ]
@@ -201,8 +202,10 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } },
-                { "at": "/out/lines/3/n", "equals": { "$numberLong": "2" } }
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/2/deletedCount", "absent": true },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/3/n", "equals": { "$numberInt": "2" } }
             ]
         },
         {
@@ -221,8 +224,8 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } },
-                { "at": "/out/lines/3/n", "equals": { "$numberLong": "0" } }
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "3" } },
+                { "at": "/out/lines/3/n", "equals": { "$numberInt": "0" } }
             ]
         },
         {
@@ -240,7 +243,8 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } }
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "3" } }
             ]
         },
         {
@@ -264,7 +268,7 @@
                 { "at": "/out/lines/#", "equals": 3 },
                 { "at": "/out/lines/2/bye", "equals": true },
                 { "at": "/out/exitCode", "equals": 0 },
-                { "at": "/after/lines/1/n", "equals": { "$numberLong": "1" } }
+                { "at": "/after/lines/1/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -300,9 +304,9 @@
                 }
             ],
             "checks": [
-                { "at": "/a/lines/1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/a/lines/1/n", "equals": { "$numberInt": "2" } },
                 { "at": "/b/lines/#", "equals": 2 },
-                { "at": "/b/lines/1/n", "equals": { "$numberLong": "2" } }
+                { "at": "/b/lines/1/n", "equals": { "$numberInt": "2" } }
             ]
         },
         {
@@ -365,10 +369,10 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/1/ok", "equals": { "$numberInt": "1" } },
-                { "at": "/out/lines/1/n", "equals": { "$numberLong": "0" } },
-                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } },
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "0" } }
+                { "at": "/out/lines/1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/1/n", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "0" } }
             ]
         },
         {

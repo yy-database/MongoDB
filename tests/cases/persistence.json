@@ -11,7 +11,7 @@
                 { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
                 { "at": "/r2/cursor/firstBatch/*/v", "equals": ["a", "b"] },
                 { "at": "/r2/cursor/ns", "equals": "app.items" }
@@ -41,8 +41,8 @@
                 { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r4" }
             ],
             "checks": [
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } },
                 { "at": "/r4/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
             ]
         },
@@ -58,8 +58,8 @@
                 { "op": "count", "collection": "items", "query": {}, "db": "other", "as": "r4" }
             ],
             "checks": [
-                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
-                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r4/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -79,7 +79,7 @@
             ],
             "checks": [
                 { "at": "/r1", "equals": 1 },
-                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "1" } },
                 { "at": "/r3/cursor/firstBatch/0/v", "equals": "a" },
                 { "at": "/r3/cursor/firstBatch/0/_id", "equals": { "$oid": "000000000000000000000001" } }
             ]
@@ -124,7 +124,7 @@
                 { "at": "/r2", "equals": 1 },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r3/cursor/firstBatch/0/v", "equals": "second" },
-                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+                { "at": "/r4/n", "equals": { "$numberInt": "1" } }
             ]
         },
         {
@@ -169,10 +169,10 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r4" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "100" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "100" } },
                 { "at": "/r2/#", "equals": 2 },
                 { "at": "/r3", "gte": 100 },
-                { "at": "/r4/n", "equals": { "$numberLong": "100" } }
+                { "at": "/r4/n", "equals": { "$numberInt": "100" } }
             ]
         },
         {
@@ -186,7 +186,7 @@
             ],
             "checks": [
                 { "at": "/r1", "throws": true },
-                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/n", "equals": { "$numberInt": "0" } },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 0 }
             ]
         },
@@ -213,7 +213,7 @@
                 { "op": "reopen", "store": "s" },
                 { "op": "count", "collection": "items", "query": {}, "as": "r2" }
             ],
-            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "1" } }]
+            "checks": [{ "at": "/r2/n", "equals": { "$numberInt": "1" } }]
         },
         {
             "id": "persist.binary_subtype_survives_reopen",
