@@ -11,9 +11,9 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/v", "equals": "changed" }
             ]
         },
@@ -27,8 +27,8 @@
                 { "op": "find", "collection": "items", "filter": { "v": 9 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
-                { "at": "/r1/nModified", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "2" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 2 }
             ]
         },
@@ -42,7 +42,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/tag", "equals": "x" },
                 { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } }
             ]
@@ -57,7 +57,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/a/b", "equals": { "$numberInt": "2" } }
             ]
         },
@@ -96,7 +96,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/b", "absent": true },
                 { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } }
             ]
@@ -110,8 +110,9 @@
                 { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$unset": { "missing": "" } } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r/nModified", "equals": { "$numberLong": "0" } }
+                { "at": "/r/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r/nModified", "equals": { "$numberInt": "0" } }
             ]
         },
         {
@@ -136,7 +137,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "8" } }
             ]
         },
@@ -150,7 +151,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberDouble": "2.0" } }
             ]
         },
@@ -164,7 +165,7 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "2" } }
             ]
         },
@@ -177,8 +178,8 @@
                 { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$inc": { "n": { "$numberInt": "1" } } } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "14" } },
-                { "at": "/r/errmsg", "equals": "Cannot apply $inc to a value of non-numeric type (field: \"n\", _id: 1)" }
+                { "at": "/r/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r/writeErrors/0/code", "equals": { "$numberInt": "14" } }
             ]
         },
         {
@@ -239,8 +240,8 @@
                 { "op": "find", "collection": "items", "filter": { "v": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
             ]
         },
@@ -253,8 +254,8 @@
                 { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a.b": 2 } } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "2" } },
-                { "at": "/r/errmsg", "equals": "cannot create field at path 'a.b'" }
+                { "at": "/r/writeErrors/0/code", "equals": { "$numberInt": "28" } },
+                { "at": "/r/writeErrors/0/errmsg", "equals": "Cannot create field 'b' in element {a: 1}" }
             ]
         },
         {
@@ -266,8 +267,8 @@
                 { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 9 }, "u": { "$set": { "v": 1 } } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/n", "equals": { "$numberLong": "0" } },
-                { "at": "/r/nModified", "equals": { "$numberLong": "0" } }
+                { "at": "/r/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r/nModified", "equals": { "$numberInt": "0" } }
             ]
         },
         {
@@ -305,8 +306,58 @@
                 { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "update.set_dotted_scalar_array",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $set of a.b through the array a returns ok 1.0 with n 0, nModified 0 and writeErrors[0] {index: 0, code: 28, errmsg: \"Cannot create field 'b' in element {a: [ 1, 2 ]}\"} (probe update.set_dotted_scalar_array)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a.b": 5 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r/nModified", "equals": { "$numberInt": "0" } },
+                { "at": "/r/writeErrors/0/code", "equals": { "$numberInt": "28" } },
+                { "at": "/r/writeErrors/0/errmsg", "equals": "Cannot create field 'b' in element {a: [ 1, 2 ]}" }
+            ]
+        },
+        {
+            "id": "update.set_dotted_document_array",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $set of a.b through the embedded-document array a returns code 28 and errmsg \"Cannot create field 'b' in element {a: [ { b: 1 }, { b: 2 } ]}\" (probe update.set_dotted_document_array)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [{ "b": 1 }, { "b": 2 }] }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a.b": 5 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r/writeErrors/0/code", "equals": { "$numberInt": "28" } },
+                { "at": "/r/writeErrors/0/errmsg", "equals": "Cannot create field 'b' in element {a: [ { b: 1 }, { b: 2 } ]}" }
+            ]
+        },
+        {
+            "id": "update.partial_failure_keeps_writes",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, a multi update that applies the first document and fails on the second keeps the applied write, reports n 0 and nModified 0 with one writeErrors entry, and aborts the remaining specs",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": {} }, { "_id": 2, "a": [1, 2] }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$set": { "a.c": 5 } }, "multi": true }, { "q": { "_id": 2 }, "u": { "$set": { "b": 9 } } }], "as": "r" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "docs" }
+            ],
+            "checks": [
+                { "at": "/r/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r/nModified", "equals": { "$numberInt": "0" } },
+                { "at": "/r/writeErrors/0/code", "equals": { "$numberInt": "28" } },
+                { "at": "/docs/cursor/firstBatch/0/a/c", "equals": { "$numberInt": "5" } },
+                { "at": "/docs/cursor/firstBatch/1/b", "absent": true }
             ]
         }
     ]

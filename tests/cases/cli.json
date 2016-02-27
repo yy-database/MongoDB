@@ -159,8 +159,8 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } },
-                { "at": "/out/lines/2/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/2/nModified", "equals": { "$numberInt": "1" } },
                 { "at": "/out/lines/3/cursor/firstBatch/0/n", "equals": { "$numberInt": "99" } }
             ]
         },
@@ -180,8 +180,8 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } },
-                { "at": "/out/lines/2/nModified", "equals": { "$numberLong": "3" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberInt": "3" } },
+                { "at": "/out/lines/2/nModified", "equals": { "$numberInt": "3" } },
                 { "at": "/out/lines/3/cursor/firstBatch/*/n", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }] }
             ]
         },
@@ -386,9 +386,9 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "0" } },
-                { "at": "/out/lines/2/code", "equals": { "$numberInt": "14" } },
-                { "at": "/out/lines/2/errmsg", "matches": "non-numeric" }
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/out/lines/2/writeErrors/0/code", "equals": { "$numberInt": "14" } },
+                { "at": "/out/lines/2/writeErrors/0/errmsg", "matches": "non-numeric" }
             ]
         },
         {

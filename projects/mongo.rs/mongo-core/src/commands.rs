@@ -588,7 +588,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
     let mut matched: i64 = 0;
     let mut modified: i64 = 0;
-    for specification in specifications {
+    for (index, specification) in specifications.iter().enumerate() {
         let BsonValue::Document(specification) = specification
         else {
             return Err(CommandError::new(2, "update specification must be a document"));
@@ -622,7 +622,18 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             }
             matched += 1;
             let identifier = document.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
-            let updated = apply_update(&document, update_document, &identifier)?;
+            let updated = match apply_update(&document, update_document, &identifier) {
+                Ok(updated) => updated,
+                Err(error) => {
+                    // The real server keeps the writes already applied, reports a
+                    // zeroed counter pair plus `writeErrors`, and aborts the rest
+                    // of the command.
+                    if !changes.is_empty() {
+                        store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                    }
+                    return Ok(update_error_reply(index, &error));
+                }
+            };
             let payload = encode_bson(&updated);
             if payload != value {
                 modified += 1;
@@ -638,10 +649,24 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     }
 
     let mut response = BsonDocument::new();
-    response.push("ok".to_string(), BsonValue::Int32(1));
-    response.push("n".to_string(), BsonValue::Int64(matched));
-    response.push("nModified".to_string(), BsonValue::Int64(modified));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response.push("n".to_string(), count_value(matched));
+    response.push("nModified".to_string(), count_value(modified));
     Ok(response)
+}
+
+/// `ok: 1.0` plus one `writeErrors` entry, matching `mongod 8.0.9`.
+fn update_error_reply(index: usize, error: &CommandError) -> BsonDocument {
+    let mut entry = BsonDocument::new();
+    entry.push("index".to_string(), BsonValue::Int32(index as i32));
+    entry.push("code".to_string(), BsonValue::Int32(error.code));
+    entry.push("errmsg".to_string(), BsonValue::String(error.message.clone()));
+    let mut response = BsonDocument::new();
+    response.push("n".to_string(), BsonValue::Int32(0));
+    response.push("writeErrors".to_string(), BsonValue::Array(vec![BsonValue::Document(entry)]));
+    response.push("nModified".to_string(), BsonValue::Int32(0));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response
 }
 
 fn validate_update_document(document: &BsonDocument) -> Result<(), CommandError> {
@@ -720,9 +745,12 @@ fn set_path(document: &mut BsonDocument, path: &str, value: BsonValue) -> Result
             if !document.fields.iter().any(|(field, _)| field == head) {
                 document.push(head.to_string(), BsonValue::Document(BsonDocument::new()));
             }
-            match document.fields.iter_mut().find(|(field, _)| field == head).map(|(_, value)| value) {
-                Some(BsonValue::Document(child)) => set_path(child, tail, value),
-                _ => Err(CommandError::new(2, format!("cannot create field at path '{path}'"))),
+            let index = document.fields.iter().position(|(field, _)| field == head).expect("head was inserted");
+            if let BsonValue::Document(child) = &mut document.fields[index].1 {
+                set_path(child, tail, value)
+            }
+            else {
+                Err(cannot_create_field(document, head, tail))
             }
         }
     }
@@ -775,12 +803,56 @@ fn inc_path(
             if !document.fields.iter().any(|(field, _)| field == head) {
                 document.push(head.to_string(), BsonValue::Document(BsonDocument::new()));
             }
-            match document.fields.iter_mut().find(|(field, _)| field == head).map(|(_, value)| value) {
-                Some(BsonValue::Document(child)) => inc_path(child, tail, amount, identifier),
-                _ => Err(CommandError::new(2, format!("cannot create field at path '{path}'"))),
+            let index = document.fields.iter().position(|(field, _)| field == head).expect("head was inserted");
+            if let BsonValue::Document(child) = &mut document.fields[index].1 {
+                inc_path(child, tail, amount, identifier)
+            }
+            else {
+                Err(cannot_create_field(document, head, tail))
             }
         }
     }
+}
+
+/// Renders one value the way `mongod` prints it inside update error messages.
+fn render_shell_value(value: &BsonValue) -> String {
+    match value {
+        BsonValue::Document(document) => {
+            if document.fields.is_empty() {
+                "{}".to_string()
+            }
+            else {
+                let fields: Vec<String> =
+                    document.fields.iter().map(|(field, value)| format!("{field}: {}", render_shell_value(value))).collect();
+                format!("{{ {} }}", fields.join(", "))
+            }
+        }
+        BsonValue::Array(items) => {
+            if items.is_empty() {
+                "[]".to_string()
+            }
+            else {
+                let items: Vec<String> = items.iter().map(render_shell_value).collect();
+                format!("[ {} ]", items.join(", "))
+            }
+        }
+        BsonValue::String(text) => format!("\"{text}\""),
+        BsonValue::Int32(number) => number.to_string(),
+        BsonValue::Int64(number) => number.to_string(),
+        BsonValue::Double(number) => number.to_string(),
+        BsonValue::Bool(flag) => if *flag { "true" } else { "false" }.to_string(),
+        BsonValue::Null => "null".to_string(),
+        BsonValue::ObjectId(bytes) => format!("ObjectId('{}')", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Code `28` plus the message shape the real server uses for a dotted path
+/// that runs through a non-document value.
+fn cannot_create_field(document: &BsonDocument, head: &str, tail: &str) -> CommandError {
+    let child = tail.split('.').next().unwrap_or(tail);
+    let value = document.get(head).map(render_shell_value).unwrap_or_else(|| "null".to_string());
+    CommandError::new(28, format!("Cannot create field '{child}' in element {{{head}: {value}}}"))
 }
 
 fn increment_value(current: &BsonValue, amount: &BsonValue) -> Option<BsonValue> {

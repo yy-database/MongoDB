@@ -698,8 +698,8 @@
                 { "op": "find", "collection": "items", "filter": { "hit": true }, "sort": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
-                { "at": "/r1/nModified", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "2" } },
                 { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
             ]
         },
