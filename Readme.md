@@ -125,7 +125,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 
 `$project` 的混用规则（`project` 页）：
 
-- 排除（如 `x: 0`）**不能**与包含（`x: 1`）或表达式投影混用，混用回 `2`；`_id: 0` 是**唯一例外**，可与包含/表达式一起出现。
+- 排除（如 `x: 0`）**不能**与包含（`x: 1`）或表达式投影混用，已按 `mongod 8.0.9` 对齐错误码与消息：包含在前、排除在后回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field <field> in inclusion projection`），排除在前、包含在后回 `31253`（`... Cannot do inclusion on field <field> in exclusion projection`），排除在前、表达式在后回 `31252`（`... Cannot use expression other than $meta in exclusion projection`）。布尔/数值形式的 `_id` 规则（`_id: 0` 或 `_id: 1`）**不参与混用判定**。
 - 包含模式下引用缺失字段被忽略（不报错、不输出该字段）；默认保留 `_id`，除非显式 `_id: 0`。
 - 表达式最小集：`$add`、`$concat`、`$ifNull`。`$concat` 任一参数为 `null` 或缺失即回 `null`；`$ifNull` 把缺失与 `null` 都当 `null`，回第一个非空值。
 
@@ -166,7 +166,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：66 个一致、8 个不一致**（1 个错误码粒度 + 4 个 `update` 错误通道/码 + 2 个 `delete` + 1 个 `count` 回复形态；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的两条 `$group` case 标注同一台真机。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 970 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：67 个一致、7 个不一致**（4 个 `update` 错误通道/码 + 2 个 `delete` + 1 个 `count` 回复形态；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` 与 `$project` case 标注同一台真机。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 977 条断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
@@ -216,7 +216,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - **同一个 `insert` 命令的批内重复 `_id`**：批内校验复用与单条路径相同的 key 编码（int32/int64/整值 double 同一 key 空间，字符串 `"1"` 与数字 `1` 不冲突）。真机对拍一致：`ordered` 停在首个冲突并保留此前文档（`[1, 2, 1]` 保留 1、2，`n=2`），`ordered: false` 跳过冲突继续写入，错误码 `11000`。
 - `$unwind` 的 `includeArrayIndex`：与真机一致，输出 **int64**（`{"$numberLong":"0"}`），非数组/保留文档输出 `null`。
 - `update` 的 `multi` 只修改已存在文档，没有批量插入路径，因此不存在同类批内重复问题（不适用）。
-- `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；语义同为拒绝，错误码粒度不同。
+- `$project` 混用排除与包含：已按真机对齐——包含在前、排除在后回 `31254`，排除在前、包含在后回 `31253`，排除在前、表达式在后回 `31252`，消息与真机逐字一致，`_id: 0` / `_id: 1` 均不参与混用判定（探针 `project.mixing_rejected` MATCH，case `pipe.project.mixing_rejected` / `pipe.project.inclusion_in_exclusion_rejected` / `pipe.project.expression_in_exclusion_rejected` / `pipe.project.id_inclusion_with_exclusion`）。
 - `$in` / `$nin` 含 `null`：已按真机对齐——列表里每个值都复用 `{field: <value>}` 的同一判等谓词，所以 `{a: {$in: [null, 2]}}` 匹配缺失字段（与 `{a: null}` 相同），`$nin: [null]` 因此**排除**缺失字段，且 `$ne: null` 与 `$nin: [null]` 在同一批文档上结果一致（探针 `in.with_null` / `in.null_single_element` / `in.null_on_array_field` / `nin.with_null` / `nin.null_and_value` / `ne.null_on_same_docs` 全部 MATCH，case `op.in.null_matches_missing_field`）。
 - `$group` 的 `$push` / `$addToSet` 对**缺失字段**：已与真机对齐——缺失字段被跳过，显式 `null` 才进数组（探针 `group.push_missing_field` 真机输出 `[1, null, 2]`）。修正前本仓把缺失求值为 `null` 压入（`[1, null, null, 2]`），属静默错数据；2026-11-06 已在 `mongod 8.0.9` 对拍后修正，case `pipe.group.push_and_add_to_set_skip_missing`。
 - `$group` 的 `$addToSet` 对**文档**判等：已与真机对齐——按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；修正前命令 JSON 解析把字段名排序（`serde_json::Map` 按 key 排序），两者被合并成一个，属静默错数据。根因修复是给 `serde_json` 开启 `preserve_order`，让命令文档从解析、存储到比较都保持调用方给出的字段顺序；case `pipe.group.add_to_set_document_field_order`。

@@ -1355,24 +1355,39 @@ fn accumulate(accumulator: &Accumulator, documents: &[BsonDocument], members: &[
 }
 
 fn project_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, CommandError> {
-    let mut has_exclusion = false;
-    let mut has_non_exclusion = false;
+    // The projection mode is fixed by the first non-`_id` field, and a later
+    // field of the other mode is rejected with the same code and message as
+    // `mongod 8.0.9`. Boolean/numeric `_id` rules never count as a conflict.
+    let mut exclusion_projection: Option<bool> = None;
     for (field, rule) in specification.fields.iter() {
-        if field == "_id" && rule_is_exclusion(rule) {
+        if field == "_id" && (rule_is_exclusion(rule) || rule_is_inclusion(rule)) {
             continue;
         }
-        if rule_is_exclusion(rule) {
-            has_exclusion = true;
-        } else {
-            has_non_exclusion = true;
+        let is_exclusion = rule_is_exclusion(rule);
+        match exclusion_projection {
+            None => exclusion_projection = Some(is_exclusion),
+            Some(true) if !is_exclusion => {
+                if rule_is_inclusion(rule) {
+                    return Err(CommandError::new(
+                        31253,
+                        format!("Invalid $project :: caused by :: Cannot do inclusion on field {field} in exclusion projection"),
+                    ));
+                }
+                return Err(CommandError::new(
+                    31252,
+                    "Invalid $project :: caused by :: Cannot use expression other than $meta in exclusion projection".to_string(),
+                ));
+            }
+            Some(false) if is_exclusion => {
+                return Err(CommandError::new(
+                    31254,
+                    format!("Invalid $project :: caused by :: Cannot do exclusion on field {field} in inclusion projection"),
+                ));
+            }
+            _ => {}
         }
     }
-    if has_exclusion && has_non_exclusion {
-        return Err(CommandError::new(
-            2,
-            "cannot mix exclusion with inclusion or computed fields in $project (except _id: 0)",
-        ));
-    }
+    let has_exclusion = exclusion_projection.unwrap_or(false);
     if has_exclusion {
         let mut projected = Vec::new();
         for document in documents {

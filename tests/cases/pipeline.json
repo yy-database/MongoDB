@@ -451,14 +451,55 @@
         {
             "id": "pipe.project.mixing_rejected",
             "surface": "error",
-            "source": "MongoDB manual, $project: \"if you exclude fields, you cannot also specify the inclusion of fields, reset the value of existing fields, or add new fields\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, real mongod rejects with code 31254 while this repo uses the generic code 2 - same semantics, different error-code granularity (see README)",
+            "source": "MongoDB manual, $project: \"if you exclude fields, you cannot also specify the inclusion of fields, reset the value of existing fields, or add new fields\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, {a:1, b:0} is rejected with code 31254 and errmsg \"Invalid $project :: caused by :: Cannot do exclusion on field b in inclusion projection\" (probe project.mixing_rejected)",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "a": 1, "b": 0 } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "2" } },
-                { "at": "/r/errmsg", "equals": "cannot mix exclusion with inclusion or computed fields in $project (except _id: 0)" }
+                { "at": "/r/code", "equals": { "$numberInt": "31254" } },
+                { "at": "/r/errmsg", "equals": "Invalid $project :: caused by :: Cannot do exclusion on field b in inclusion projection" }
+            ]
+        },
+        {
+            "id": "pipe.project.inclusion_in_exclusion_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, exclusion-first {b:0, a:1} is rejected with code 31253 and errmsg \"Invalid $project :: caused by :: Cannot do inclusion on field a in exclusion projection\"",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "b": 0, "a": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "31253" } },
+                { "at": "/r/errmsg", "equals": "Invalid $project :: caused by :: Cannot do inclusion on field a in exclusion projection" }
+            ]
+        },
+        {
+            "id": "pipe.project.expression_in_exclusion_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, exclusion-first {b:0, a:{$add:[1,2]}} is rejected with code 31252 and errmsg \"Invalid $project :: caused by :: Cannot use expression other than $meta in exclusion projection\"",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "b": 0, "a": { "$add": [1, 2] } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "31252" } },
+                { "at": "/r/errmsg", "equals": "Invalid $project :: caused by :: Cannot use expression other than $meta in exclusion projection" }
+            ]
+        },
+        {
+            "id": "pipe.project.id_inclusion_with_exclusion",
+            "surface": "command",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, {_id:1, b:0} is accepted and keeps _id, a and c while dropping b: a boolean/numeric _id rule does not count as a mixing conflict",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2, "c": "s" }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 1, "b": 0 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/b", "absent": true }
             ]
         },
         {
