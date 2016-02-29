@@ -35,6 +35,7 @@
         {
             "id": "doc.insert.duplicate_ordered",
             "surface": "document",
+            "source": "oracle: mongod 8.0.9 insert duplicate _id 2026-11-06",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "first" }], "as": "r1" },
@@ -48,6 +49,8 @@
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r2/writeErrors/0/index", "equals": { "$numberInt": "0" } },
                 { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: 1 }" },
+                { "at": "/r2/writeErrors/0/keyPattern/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/writeErrors/0/keyValue/_id", "equals": { "$numberInt": "1" } },
                 { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r3/cursor/firstBatch/0/v", "equals": "first" }
             ]
@@ -141,7 +144,9 @@
             ],
             "checks": [
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
-                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: \"k1\" }" }
+                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: \"k1\" }" },
+                { "at": "/r2/writeErrors/0/keyPattern/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/writeErrors/0/keyValue/_id", "equals": "k1" }
             ]
         },
         {
@@ -154,7 +159,9 @@
             ],
             "checks": [
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
-                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: ObjectId('00112233445566778899aabb') }" }
+                { "at": "/r2/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: _id_ dup key: { _id: ObjectId('00112233445566778899aabb') }" },
+                { "at": "/r2/writeErrors/0/keyPattern/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/writeErrors/0/keyValue/_id", "equals": { "$oid": "00112233445566778899aabb" } }
             ]
         },
         {
@@ -168,6 +175,8 @@
             ],
             "checks": [
                 { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/writeErrors/0/keyPattern/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/writeErrors/0/keyValue/_id", "equals": null },
                 { "at": "/r3/n", "equals": { "$numberInt": "1" } }
             ]
         },

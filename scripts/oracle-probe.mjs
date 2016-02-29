@@ -1176,6 +1176,30 @@ const probes = [
         command: find(collections.inq, { a: { $in: [null] } }),
         pick: firstBatch,
         orderMatters: false
+    },
+    {
+        id: 'insert.duplicate_key_entry',
+        note: 'raw _id duplicate writeErrors entry: field order, keyPattern and keyValue',
+        setup: [insert(collections.idnum, [{ _id: 5, tag: 'first' }])],
+        command: insert(collections.idnum, [{ _id: 5, tag: 'second' }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'insert.duplicate_key_entry_string',
+        note: 'string _id duplicate keeps quotes in errmsg and the raw string in keyValue',
+        setup: [insert(collections.idnum, [{ _id: 'x' }])],
+        command: insert(collections.idnum, [{ _id: 'x' }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'insert.duplicate_key_entry_unordered',
+        note: 'unordered batch reports one entry per duplicate with its own keyValue',
+        setup: [insert(collections.idnum, [{ _id: 1 }, { _id: 2 }])],
+        command: insert(collections.idnum, [{ _id: 1 }, { _id: 2, tag: 'dup' }], false),
+        pick: (reply) => reply,
+        exactOrder: true
     }
 ]
 
@@ -1200,7 +1224,8 @@ async function runProbe(probe) {
     const format = (value) => (probe.orderMatters ? value : Array.isArray(value) ? [...value].sort((a, b) => stable(a).localeCompare(stable(b))) : value)
     const oracle = format(probe.pick(oracleReply))
     const local = format(probe.pick(localReply))
-    const match = stable(oracle) === stable(local)
+    // `stable` sorts keys, so probes that also assert field order compare raw JSON.
+    const match = probe.exactOrder ? JSON.stringify(oracle) === JSON.stringify(local) : stable(oracle) === stable(local)
 
     const record = {
         id: probe.id,

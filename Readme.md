@@ -60,7 +60,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 |------|------|------|
 | `hello` / `isMaster` | 已支持 | `isWritablePrimary: true`、`minWireVersion: 0`、`maxWireVersion: 17` |
 | `ping` | 已支持 | `{ ok: 1 }` |
-| `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档；`ordered: false` 继续写入后续合法文档；回复 `ok` 为 double `1.0`、`n` 为 int32 |
+| `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档，`writeErrors` 条目按真机顺序带 `index` / `code` / `errmsg` / `keyPattern` / `keyValue`；`ordered: false` 继续写入后续合法文档；回复 `ok` 为 double `1.0`、`n` 为 int32 |
 | `find` | 已支持 | 过滤算子见“查询算子”一节；`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
 | `count` | 已支持 | 读 `query` 过滤，遵守 `skip` / `limit`；未知算子同上拒绝；回复 `n` 为 int32、`ok` 为 double `1.0` |
 | `aggregate` | 部分支持 | 顺序执行 `$match`、`$sort`、`$limit`、`$skip`、`$count`、`$unwind`、`$group`、`$project`，详见“聚合管道”一节；其他阶段回 `59` 并列出支持清单 |
@@ -166,7 +166,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：74 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 case 标注同一台真机。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 998 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **77 个探针：77 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 / 重复键条目 case 标注同一台真机。回复字段顺序敏感的探针用 `exactOrder` 逐字比较，其余按排序后的键比较。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 1006 条断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
@@ -221,7 +221,8 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `$group` 的 `$push` / `$addToSet` 对**缺失字段**：已与真机对齐——缺失字段被跳过，显式 `null` 才进数组（探针 `group.push_missing_field` 真机输出 `[1, null, 2]`）。修正前本仓把缺失求值为 `null` 压入（`[1, null, null, 2]`），属静默错数据；2026-11-06 已在 `mongod 8.0.9` 对拍后修正，case `pipe.group.push_and_add_to_set_skip_missing`。
 - `$group` 的 `$addToSet` 对**文档**判等：已与真机对齐——按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；修正前命令 JSON 解析把字段名排序（`serde_json::Map` 按 key 排序），两者被合并成一个，属静默错数据。根因修复是给 `serde_json` 开启 `preserve_order`，让命令文档从解析、存储到比较都保持调用方给出的字段顺序；case `pipe.group.add_to_set_document_field_order`。
 - `update` 修饰符错误通道：已与真机对齐——应用阶段失败先落盘已累计改动，再回 `ok: 1.0` + `writeErrors:[{index, code, errmsg}]` + `n:0`/`nModified:0` 并中止后续 spec（探针 `update.error_channel` / `update.set_dotted_scalar_array` / `update.set_dotted_document_array` 全部 MATCH）。`$set` / `$inc` 穿数组的错误码改为 `28`，消息逐字对齐真机（含 shell 风格值渲染，如 `{a: [ { b: 1 }, { b: 2 } ]}`）。校验阶段错误（未知修饰符 `9`、路径冲突 `40`、改 `_id` `66`）本仓仍回顶层 `ok: 0`，真机走 `writeErrors`，属剩余差异。
-- 写命令回复类型：已与真机对齐——`insert` / `update` / `delete` / `count` 原始回复的 `ok` 为 double `1.0`，计数字段（`n` / `nModified`）为 int32（探针 `delete.many_no_match` / `delete.one_no_match` / `count.null_filter` / `update.unset_missing` 全部 MATCH）。`delete` 原始回复**不含** `deletedCount`（该字段由驱动层计算），本仓已移除。剩余差异是 `insert` 的 `writeErrors` 条目缺少真机附带的 `keyPattern` / `keyValue`。
+- 写命令回复类型：已与真机对齐——`insert` / `update` / `delete` / `count` 原始回复的 `ok` 为 double `1.0`，计数字段（`n` / `nModified`）为 int32（探针 `delete.many_no_match` / `delete.one_no_match` / `count.null_filter` / `update.unset_missing` 全部 MATCH）。`delete` 原始回复**不含** `deletedCount`（该字段由驱动层计算），本仓已移除。`insert` 的 `_id` 重复 `writeErrors` 条目已补齐 `keyPattern: {_id: 1}` 与 `keyValue: {_id: <原值>}`，字段顺序与真机一致（探针 `insert.duplicate_key_entry*` 用 `exactOrder` 逐字比较）。
+- 唯一索引未实现：`createIndexes` / `listIndexes` 一律回 `59`，所以单字段唯一索引与复合唯一索引的重复键在本仓**不可达**。真机 `mongod 8.0.9` 实测形态已记录，待索引能力落地后再补探针：单字段 `index: a_1 dup key: { a: 1 }` 配 `keyPattern: {a: 1}` / `keyValue: {a: 1}`；复合 `index: a_1_b_1 dup key: { a: 1, b: 1 }` 配 `keyPattern: {a: 1, b: 1}` / `keyValue: {a: 1, b: 1}`，`errmsg` 同形且键值按索引键顺序渲染。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。

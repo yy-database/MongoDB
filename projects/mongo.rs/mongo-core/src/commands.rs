@@ -273,6 +273,32 @@ pub fn describe_id(value: &BsonValue) -> String {
     }
 }
 
+/// One `writeErrors` entry. Field order follows `mongod 8.0.9`: `index`, `code`,
+/// `errmsg`, then `keyPattern` / `keyValue` for duplicate-key failures.
+struct WriteError {
+    index: usize,
+    code: i32,
+    message: String,
+    key_pattern: Option<BsonDocument>,
+    key_value: Option<BsonDocument>,
+}
+
+impl WriteError {
+    fn plain(index: usize, code: i32, message: impl Into<String>) -> Self {
+        Self { index, code, message: message.into(), key_pattern: None, key_value: None }
+    }
+
+    fn duplicate(index: usize, message: impl Into<String>, key_pattern: BsonDocument, key_value: BsonDocument) -> Self {
+        Self {
+            index,
+            code: 11000,
+            message: message.into(),
+            key_pattern: Some(key_pattern),
+            key_value: Some(key_value),
+        }
+    }
+}
+
 /// `insert`, with `_id` generation, `11000` duplicate mapping, and ordered /
 /// unordered continuation.
 pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
@@ -292,12 +318,12 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     let mut positions = Vec::with_capacity(documents.len());
     let mut entries = Vec::with_capacity(documents.len());
     let mut identifiers = Vec::with_capacity(documents.len());
-    let mut write_errors: Vec<(usize, i32, String)> = Vec::new();
+    let mut write_errors: Vec<WriteError> = Vec::new();
 
     for (index, item) in documents.iter().enumerate() {
         let BsonValue::Document(sub_document) = item
         else {
-            write_errors.push((index, 2, "documents must be objects".to_string()));
+            write_errors.push(WriteError::plain(index, 2, "documents must be objects"));
             if ordered {
                 break;
             }
@@ -322,16 +348,21 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     for duplicate in &report.duplicates {
         let index = positions[*duplicate];
         let identifier = &identifiers[*duplicate];
-        write_errors.push((
+        let mut key_pattern = BsonDocument::new();
+        key_pattern.push("_id".to_string(), BsonValue::Int32(1));
+        let mut key_value = BsonDocument::new();
+        key_value.push("_id".to_string(), identifier.clone());
+        write_errors.push(WriteError::duplicate(
             index,
-            11000,
             format!(
                 "E11000 duplicate key error collection: {namespace} index: _id_ dup key: {{ _id: {} }}",
                 describe_id(identifier)
             ),
+            key_pattern,
+            key_value,
         ));
     }
-    write_errors.sort_by_key(|(index, _, _)| *index);
+    write_errors.sort_by_key(|error| error.index);
 
     Ok(write_reply(report.inserted, None, &write_errors))
 }
@@ -608,7 +639,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     if !changes.is_empty() {
                         store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
                     }
-                    return Ok(write_reply(0, Some(0), &[(index, error.code, error.message.clone())]));
+                    return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
             };
             let payload = encode_bson(&updated);
@@ -630,7 +661,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
 /// Reply shape shared by `insert` / `update` / `delete` / `count`, matching
 /// `mongod 8.0.9`: `ok` is a double and every counter is int32.
-fn write_reply(count: i64, modified: Option<i64>, errors: &[(usize, i32, String)]) -> BsonDocument {
+fn write_reply(count: i64, modified: Option<i64>, errors: &[WriteError]) -> BsonDocument {
     let mut response = BsonDocument::new();
     response.push("n".to_string(), count_value(count));
     if let Some(modified) = modified {
@@ -639,11 +670,17 @@ fn write_reply(count: i64, modified: Option<i64>, errors: &[(usize, i32, String)
     if !errors.is_empty() {
         let entries: Vec<BsonValue> = errors
             .iter()
-            .map(|(index, code, message)| {
+            .map(|error| {
                 let mut entry = BsonDocument::new();
-                entry.push("index".to_string(), BsonValue::Int32(*index as i32));
-                entry.push("code".to_string(), BsonValue::Int32(*code));
-                entry.push("errmsg".to_string(), BsonValue::String(message.clone()));
+                entry.push("index".to_string(), BsonValue::Int32(error.index as i32));
+                entry.push("code".to_string(), BsonValue::Int32(error.code));
+                entry.push("errmsg".to_string(), BsonValue::String(error.message.clone()));
+                if let Some(pattern) = &error.key_pattern {
+                    entry.push("keyPattern".to_string(), BsonValue::Document(pattern.clone()));
+                }
+                if let Some(value) = &error.key_value {
+                    entry.push("keyValue".to_string(), BsonValue::Document(value.clone()));
+                }
                 BsonValue::Document(entry)
             })
             .collect();
