@@ -30,18 +30,27 @@ pub const LOGICAL_OPERATORS: [&str; 3] = ["$and", "$or", "$nor"];
 pub const UPDATE_OPERATORS: [&str; 3] = ["$set", "$unset", "$inc"];
 
 /// Command failure carrying the MongoDB error code.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandError {
     /// MongoDB error code (`59` unsupported, `73` invalid namespace, `43` no such cursor).
     pub code: i32,
     /// Message drivers surface as `errmsg`.
     pub message: String,
+    /// Extra top-level fields the real reply carries after `codeName`, such as
+    /// `keyPattern` / `keyValue` on an index-build duplicate key failure.
+    pub details: Vec<(String, BsonValue)>,
 }
 
 impl CommandError {
     /// Builds one command failure.
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self { code, message: message.into(), details: Vec::new() }
+    }
+
+    /// Appends one top-level field to the error reply.
+    pub fn with_detail(mut self, key: &str, value: BsonValue) -> Self {
+        self.details.push((key.to_string(), value));
+        self
     }
 
     /// `CommandNotFound`: the command or stage is outside the documented surface.
@@ -234,13 +243,42 @@ fn validate_listing_filter(filter: &BsonDocument) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// Result document for a failed command: `{ ok: 0, code, errmsg }`.
+/// Result document for a failed command: `{ ok: 0, errmsg, code, codeName, ... }`.
+///
+/// `codeName` strings below were read from `mongod 8.0.9`, covering every code
+/// the index commands and the index-build duplicate key path can emit. Codes
+/// outside that set keep the three-field shape rather than guessing a name.
 pub fn error_document(error: &CommandError) -> BsonDocument {
     let mut document = BsonDocument::new();
     document.push("ok".to_string(), BsonValue::Int32(0));
     document.push("errmsg".to_string(), BsonValue::String(error.message.clone()));
     document.push("code".to_string(), BsonValue::Int32(error.code));
+    if let Some(name) = code_name(error.code) {
+        document.push("codeName".to_string(), BsonValue::String(name.to_string()));
+    }
+    for (key, value) in &error.details {
+        document.push(key.clone(), value.clone());
+    }
     document
+}
+
+/// Symbolic name `mongod` reports next to a numeric error code.
+pub fn code_name(code: i32) -> Option<&'static str> {
+    Some(match code {
+        2 => "BadValue",
+        9 => "FailedToParse",
+        14 => "TypeMismatch",
+        26 => "NamespaceNotFound",
+        27 => "IndexNotFound",
+        67 => "CannotCreateIndex",
+        72 => "InvalidOptions",
+        73 => "InvalidNamespace",
+        85 => "IndexOptionsConflict",
+        86 => "IndexKeySpecsConflict",
+        11000 => "DuplicateKey",
+        40414 => "IDLFailedToParse",
+        _ => return None,
+    })
 }
 
 /// `hello` / `isMaster` handshake answer.
@@ -1036,6 +1074,34 @@ fn render_shell_value(value: &BsonValue) -> String {
     }
 }
 
+/// Whether a requested key pattern names the same index key as `specification`.
+///
+/// Field order is significant and each value uses the numeric-equivalence key
+/// encoding, so `{ a: 1 }` matches `{ a: 1.0 }` but not `{ a: "1" }` and not
+/// a reordered compound key.
+fn key_pattern_matches(requested: &BsonDocument, specification: &BsonDocument) -> bool {
+    requested.fields.len() == specification.fields.len()
+        && requested.fields.iter().zip(&specification.fields).all(|((want, left), (have, right))| {
+            want == have && value_to_key(left) == value_to_key(right)
+        })
+}
+
+/// BSON type name `mongod` prints in a wrong-type error message.
+fn bson_type_name(value: &BsonValue) -> &'static str {
+    match value {
+        BsonValue::Document(_) => "object",
+        BsonValue::Array(_) => "array",
+        BsonValue::String(_) => "string",
+        BsonValue::Int32(_) => "int",
+        BsonValue::Int64(_) => "long",
+        BsonValue::Double(_) => "double",
+        BsonValue::Bool(_) => "bool",
+        BsonValue::Null => "null",
+        BsonValue::ObjectId(_) => "objectId",
+        BsonValue::Binary(_) => "binData",
+    }
+}
+
 /// Code `28` plus the message shape the real server uses for a dotted path
 /// that runs through a non-document value.
 fn cannot_create_field(document: &BsonDocument, head: &str, tail: &str) -> CommandError {
@@ -1304,10 +1370,58 @@ fn verify_unique_build(store: &Store, namespace: &str, specification: &IndexSpec
         };
         let values = index_values(&document, specification);
         if !seen.insert(index_tuple(&values)) {
-            return Err(CommandError::new(11000, duplicate_message(namespace, specification, &values)));
+            let key_value = specification.key.fields.iter().zip(values.iter()).fold(
+                BsonDocument::new(),
+                |mut document, ((field, _), value)| {
+                    document.push(field.clone(), value.clone());
+                    document
+                },
+            );
+            return Err(CommandError::new(
+                11000,
+                format!(
+                    "Index build failed: {}: Collection {} ( {} ) :: caused by :: {}",
+                    seeded_uuid(&format!("{namespace}|{}|build", specification.name)),
+                    namespace,
+                    seeded_uuid(namespace),
+                    duplicate_message(namespace, specification, &values)
+                ),
+            )
+            .with_detail("keyPattern", BsonValue::Document(specification.key.clone()))
+            .with_detail("keyValue", BsonValue::Document(key_value)));
         }
     }
     Ok(())
+}
+
+/// Deterministic UUID-shaped identifier.
+///
+/// `mongod` prints its random collection UUID and index-build operation UUID in
+/// this message. Their concrete values are opaque and change per build, so this
+/// gateway derives stable ones from the namespace instead: the message template
+/// is byte-identical while the two UUID slots stay reproducible for tests.
+fn seeded_uuid(seed: &str) -> String {
+    let high = fnv1a64(0xcbf2_9ce4_8422_2325, seed);
+    let low = fnv1a64(0x8422_2325_cbf2_9ce4, seed);
+    let high = (high & 0xffff_ffff_ffff_0fff) | 0x0000_0000_0000_4000;
+    let low = (low & 0x3fff_ffff_ffff_ffff) | 0x8000_0000_0000_0000;
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        high >> 32,
+        (high >> 16) & 0xffff,
+        high & 0xffff,
+        low >> 48,
+        low & 0xffff_ffff_ffff
+    )
+}
+
+fn fnv1a64(offset: u64, text: &str) -> u64 {
+    let mut hash = offset;
+    for byte in text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 fn duplicate_message(namespace: &str, specification: &IndexSpec, values: &[BsonValue]) -> String {
@@ -1363,25 +1477,44 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     Ok(reply)
 }
 
-/// `dropIndexes` by name or `*`; `_id_` is never droppable.
+/// `dropIndexes` by name, `*`, or key pattern; `_id_` is never droppable.
 pub fn drop_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "dropIndexes")
         .ok_or_else(|| CommandError::new(73, "dropIndexes command missing collection name"))?;
     if !store.namespace_exists(&namespace) {
         return Err(CommandError::new(26, format!("ns not found {namespace}")));
     }
+    let existing = store.index_specs(&namespace);
     let name = match command.get("index") {
         Some(BsonValue::String(name)) => name.clone(),
-        Some(BsonValue::Document(_)) => {
+        Some(BsonValue::Document(key)) => {
+            let mut identifier = BsonDocument::new();
+            identifier.push("_id".to_string(), BsonValue::Int32(1));
+            if key_pattern_matches(key, &identifier) {
+                return Err(CommandError::new(72, "cannot drop _id index"));
+            }
+            match existing.iter().find(|index| key_pattern_matches(key, &index.key)) {
+                Some(index) => index.name.clone(),
+                None => {
+                    return Err(CommandError::new(
+                        27,
+                        format!("can't find index with key: {}", render_shell_value(&BsonValue::Document(key.clone()))),
+                    ))
+                }
+            }
+        }
+        Some(other) => {
             return Err(CommandError::new(
-                59,
-                "dropIndexes by key pattern is not supported; pass the index name or `*`",
+                14,
+                format!(
+                    "BSON field 'dropIndexes.index' is the wrong type '{}', expected types '[string']",
+                    bson_type_name(other)
+                ),
             ))
         }
-        _ => return Err(CommandError::new(40414, "BSON field 'dropIndexes.index' is missing but a required field")),
+        None => return Err(CommandError::new(40414, "BSON field 'dropIndexes.index' is missing but a required field")),
     };
 
-    let existing = store.index_specs(&namespace);
     let before = 1 + existing.len() as i64;
     if name == "_id_" {
         return Err(CommandError::new(72, "cannot drop _id index"));

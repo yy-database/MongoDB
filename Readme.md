@@ -70,7 +70,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | `listCollections` / `listDatabases` | 已支持 | 供命令行列目录使用，来源是实际存储命名空间 |
 | `createIndexes` | 已支持 | 单字段与复合键、`unique`、显式 `name`；同名同定义幂等成功，同名不同定义回 `86`，同键不同名回 `85`；元数据随 catalog 落盘并在重开后保留；建唯一索引前先扫描已有数据，冲突回 `11000` |
 | `listIndexes` | 已支持 | 先 `_id_` 后用户索引（按创建顺序），`v` 为 int32 `2`，`unique: false` 不输出；缺失命名空间回 `26` |
-| `dropIndexes` | 已支持 | 按 `name` 或 `*`，`_id_` 回 `72`，未知 name 回 `27`，缺失命名空间回 `26`；按 key pattern 删除回 `59`（未实现） |
+| `dropIndexes` | 已支持 | 按 `name`、key pattern（如 `{a: 1}`）或 `*`；key pattern 按键顺序与数值等价匹配，`_id_` 回 `72`，未命中回 `27`，非字符串/文档类型回 `14`，缺失命名空间回 `26` |
 | 其他命令 | 拒绝 | `59`，`errmsg: "unsupported"` |
 | 非法集合命名空间 | 拒绝 | `73` |
 
@@ -225,16 +225,14 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `$group` 的 `$addToSet` 对**文档**判等：已与真机对齐——按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；修正前命令 JSON 解析把字段名排序（`serde_json::Map` 按 key 排序），两者被合并成一个，属静默错数据。根因修复是给 `serde_json` 开启 `preserve_order`，让命令文档从解析、存储到比较都保持调用方给出的字段顺序；case `pipe.group.add_to_set_document_field_order`。
 - `update` 修饰符错误通道：已与真机对齐——应用阶段失败先落盘已累计改动，再回 `ok: 1.0` + `writeErrors:[{index, code, errmsg}]` + `n:0`/`nModified:0` 并中止后续 spec（探针 `update.error_channel` / `update.set_dotted_scalar_array` / `update.set_dotted_document_array` 全部 MATCH）。`$set` / `$inc` 穿数组的错误码改为 `28`，消息逐字对齐真机（含 shell 风格值渲染，如 `{a: [ { b: 1 }, { b: 2 } ]}`）。校验阶段错误（未知修饰符 `9`、路径冲突 `40`、改 `_id` `66`）本仓仍回顶层 `ok: 0`，真机走 `writeErrors`，属剩余差异。
 - 写命令回复类型：已与真机对齐——`insert` / `update` / `delete` / `count` 原始回复的 `ok` 为 double `1.0`，计数字段（`n` / `nModified`）为 int32（探针 `delete.many_no_match` / `delete.one_no_match` / `count.null_filter` / `update.unset_missing` 全部 MATCH）。`delete` 原始回复**不含** `deletedCount`（该字段由驱动层计算），本仓已移除。`insert` 的 `_id` 重复 `writeErrors` 条目已补齐 `keyPattern: {_id: 1}` 与 `keyValue: {_id: <原值>}`，字段顺序与真机一致（探针 `insert.duplicate_key_entry*` 用 `exactOrder` 逐字比较）。
-- 索引能力：`createIndexes` / `listIndexes` / `dropIndexes` 已实现单字段与复合键、`unique`、显式 `name`，唯一索引在 `insert` 与 `update` 上真实生效，重复键走 `writeErrors` 且 `keyPattern` / `keyValue` 按索引键顺序渲染，与 `_id` 重复键同一构造。全部形态在 `mongod 8.0.9` 上逐条取期望值（探针 `index.*` / `unique.*` 共 22 条全 MATCH，case 见 `tests/cases/indexes.json`）。已对齐的边界：
+- 索引能力：`createIndexes` / `listIndexes` / `dropIndexes` 已实现单字段与复合键、`unique`、显式 `name`，唯一索引在 `insert` 与 `update` 上真实生效，重复键走 `writeErrors` 且 `keyPattern` / `keyValue` 按索引键顺序渲染，与 `_id` 重复键同一构造。全部形态在 `mongod 8.0.9` 上逐条取期望值（探针 `index.*` 共 31 条全 MATCH，case 见 `tests/cases/indexes.json`）。已对齐的边界：
   - `name` 必填：真机不自动生成索引名，缺 `name` 回 `9`（`The 'name' field is a required property of an index specification`），本仓同样拒绝而非自造名字。缺 `key` 回 `9`，空 `key` 回 `67`，空 `name` 回 `67`（渲染时追加 `v: 2`），空 `indexes` 数组回 `2`，缺 `indexes` 字段回 `40414`。
   - 幂等创建：全部已存在回 `note: "all indexes already exist"` 且无 `createdCollectionAutomatically`；部分已存在回 `createdCollectionAutomatically: false` 加 `note: "index already exists"`。
   - `listIndexes` 的 `_id_` 恒为 `{v: 2, key: {_id: 1}, name: "_id_"}`，用户索引按创建顺序追加，`unique: false` 不出现在回复里。
-  - `dropIndexes` 的 `*` 回 `msg: "non-_id indexes dropped for collection"`，`_id_` 在任何情况下都不可删。
+  - `dropIndexes` 的 `*` 回 `msg: "non-_id indexes dropped for collection"`，`_id_` 在任何情况下都不可删；key pattern 支持单字段与复合键，字段顺序不同视为不同索引，`1` 与 `1.0` 视为同值，未命中回 `can't find index with key: { ... }`，类型不是字符串或文档时回 `14` 并带真机 `expected types '[string']` 文案。
   - 索引元数据存在 catalog 的 `indexes` 字段里，无索引时**不写**该字段，保持既有 catalog 字节长度断言不变。
+- 错误回复：`createIndexes` / `dropIndexes` / 重复键相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`26 NamespaceNotFound`、`27 IndexNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
 - 索引剩余差异（坐标，不降级成“返回错误即通过”）：
-  - 建唯一索引时若已有重复数据，真机的 `11000` `errmsg` 带集合 UUID 前缀，本仓只输出 `E11000 duplicate key error collection: <ns> index: ...`，没有 UUID 段。
-  - 所有错误回复都不带 `codeName`，真机带（如 `IndexKeySpecsConflict` / `IndexOptionsConflict`）。
-  - `dropIndexes` 按 key pattern（传文档而非字符串）回 `59`，真机支持，属未实现。
   - 数组字段的多键索引未实现：索引键按字段整体取值，不展开数组元素。
   - 陈旧索引：`update` 冲突时真机先把 `multi` 已匹配的文档实际持久化，但计数仍报 `n: 0` / `nModified: 0`，本仓行为一致，但这条属真机反直觉语义，单列在此备查。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。

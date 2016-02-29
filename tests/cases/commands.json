@@ -30,7 +30,8 @@
                 { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
                 { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r1/errmsg", "equals": "duplicate key" },
-                { "at": "/r1/#", "equals": 3 }
+                { "at": "/r1/codeName", "equals": "DuplicateKey" },
+                { "at": "/r1/#", "equals": 4 }
             ]
         },
         {

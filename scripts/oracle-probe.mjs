@@ -189,6 +189,22 @@ function errorShape(reply) {
     return { code: null, errmsg: null }
 }
 
+// `mongod` prints random collection and index-build UUIDs in this message.
+// Mask them so the byte-level template is compared instead of the values.
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+function maskUuid(value) {
+    return typeof value === 'string' ? value.replace(UUID_PATTERN, '<uuid>') : value
+}
+
+// Index command errors also assert `codeName`, which the real server emits
+// alongside `code`.
+function indexErrorShape(reply) {
+    if (reply && isZero(reply.ok)) {
+        return { code: reply.code, codeName: reply.codeName, errmsg: maskUuid(reply.errmsg) }
+    }
+    return { code: null, codeName: null, errmsg: null }
+}
+
 // Write commands report modifier failures through `writeErrors` on an
 // `ok: 1` reply; compare only the code so message wording does not mask it.
 function writeErrorCode(reply) {
@@ -261,6 +277,8 @@ const collections = {
     idxNever: 'oracle_idx_never',
     idxNameless: 'oracle_idx_nameless',
     idxKeyless: 'oracle_idx_keyless',
+    idxBuildDup: 'oracle_idx_build_dup',
+    idxDropPattern: 'oracle_idx_drop_pattern',
     idxEmpty: 'oracle_idx_empty'
 }
 
@@ -1278,7 +1296,7 @@ const probes = [
             createIndexes(collections.idxConflict, [{ key: { a: 1 }, name: 'a_1' }])
         ],
         command: createIndexes(collections.idxConflict, [{ key: { a: -1 }, name: 'a_1' }]),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1290,7 +1308,7 @@ const probes = [
             createIndexes(collections.idxEquivalent, [{ key: { a: 1 }, name: 'a_1' }])
         ],
         command: createIndexes(collections.idxEquivalent, [{ key: { a: 1 }, name: 'a_second' }]),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1313,7 +1331,7 @@ const probes = [
         note: 'listIndexes on an absent namespace replies code 26',
         setup: [],
         command: listIndexes(collections.idxNever),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1359,7 +1377,7 @@ const probes = [
         note: '_id_ cannot be dropped',
         setup: [insert(collections.idxDropId, [{ _id: 1 }])],
         command: dropIndexes(collections.idxDropId, '_id_'),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1367,7 +1385,7 @@ const probes = [
         note: 'dropping a missing index name replies code 27',
         setup: [insert(collections.idxDropUnknown, [{ _id: 1 }])],
         command: dropIndexes(collections.idxDropUnknown, 'zzz'),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1441,7 +1459,7 @@ const probes = [
         note: 'the name field is required by mongod 8.0.9, so no default name is invented',
         setup: [],
         command: createIndexes(collections.idxNameless, [{ key: { a: 1 } }]),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1449,7 +1467,7 @@ const probes = [
         note: 'the key field is required',
         setup: [],
         command: createIndexes(collections.idxKeyless, [{ name: 'x' }]),
-        pick: errorShape,
+        pick: indexErrorShape,
         errorProbe: true
     },
     {
@@ -1457,7 +1475,107 @@ const probes = [
         note: 'an empty indexes array is a BadValue',
         setup: [],
         command: createIndexes(collections.idxEmpty, []),
-        pick: errorShape,
+        pick: indexErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.create_empty_key_codename',
+        note: 'an empty key document is CannotCreateIndex and the reply carries codeName',
+        setup: [],
+        command: createIndexes(collections.idxKeyless, [{ key: {}, name: 'x' }]),
+        pick: indexErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.create_missing_indexes_codename',
+        note: 'a missing indexes field is IDLFailedToParse with codeName',
+        setup: [],
+        command: { createIndexes: collections.idxNameless, $db: DB },
+        pick: indexErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.unique_build_duplicate_error',
+        note: 'unique index build over duplicates: UUID template plus keyPattern and keyValue',
+        setup: [insert(collections.idxBuildDup, [{ _id: 1, a: 7 }, { _id: 2, a: 7 }])],
+        command: createIndexes(collections.idxBuildDup, [{ key: { a: 1 }, name: 'a_1', unique: true }]),
+        pick: (reply) => ({
+            code: reply.code,
+            codeName: reply.codeName,
+            errmsg: maskUuid(reply.errmsg),
+            keyPattern: reply.keyPattern,
+            keyValue: reply.keyValue
+        }),
+        errorProbe: true
+    },
+    {
+        id: 'index.drop_by_key_pattern_reply',
+        note: 'a key pattern drops the index by matching its definition, not its name',
+        setup: [
+            insert(collections.idxDropPattern, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropPattern, '*'),
+            createIndexes(collections.idxDropPattern, [
+                { key: { a: 1 }, name: 'a_1' },
+                { key: { b: 1 }, name: 'b_1' }
+            ])
+        ],
+        command: dropIndexes(collections.idxDropPattern, { a: 1 }),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_by_key_pattern_compound_reply',
+        note: 'a compound key pattern matches when the field order is identical',
+        setup: [
+            insert(collections.idxDropPattern, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropPattern, '*'),
+            createIndexes(collections.idxDropPattern, [
+                { key: { b: -1, c: 1 }, name: 'bc' },
+                { key: { a: 1 }, name: 'a_1' }
+            ])
+        ],
+        command: dropIndexes(collections.idxDropPattern, { b: -1, c: 1 }),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_by_key_pattern_reversed_error',
+        note: 'a reordered compound key pattern does not match and reports IndexNotFound',
+        setup: [
+            insert(collections.idxDropPattern, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropPattern, '*'),
+            createIndexes(collections.idxDropPattern, [{ key: { b: -1, c: 1 }, name: 'bc' }])
+        ],
+        command: dropIndexes(collections.idxDropPattern, { c: 1, b: -1 }),
+        pick: indexErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.drop_by_key_pattern_numeric_equivalent',
+        note: 'a double key value matches the integer index key { a: 1 }',
+        setup: [
+            insert(collections.idxDropPattern, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropPattern, '*'),
+            createIndexes(collections.idxDropPattern, [{ key: { a: 1 }, name: 'a_1' }])
+        ],
+        command: dropIndexes(collections.idxDropPattern, { a: { $numberDouble: '1.0' } }),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_by_key_pattern_id_error',
+        note: 'a key pattern naming _id_ is rejected exactly like the name form',
+        setup: [insert(collections.idxDropPattern, [{ _id: 1 }])],
+        command: dropIndexes(collections.idxDropPattern, { _id: 1 }),
+        pick: indexErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.drop_wrong_type_error',
+        note: 'a numeric index field is TypeMismatch with the real expected-types wording',
+        setup: [insert(collections.idxDropPattern, [{ _id: 1 }])],
+        command: dropIndexes(collections.idxDropPattern, 5),
+        pick: indexErrorShape,
         errorProbe: true
     }
 ]
