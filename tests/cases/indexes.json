@@ -1,0 +1,474 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "index.create.single_field_reply",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/numIndexesBefore", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/numIndexesAfter", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/createdCollectionAutomatically", "equals": false },
+                { "at": "/r1/#", "equals": 4 }
+            ]
+        },
+        {
+            "id": "index.create.compound_reply",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": -1 }, "name": "ab" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/numIndexesAfter", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/createdCollectionAutomatically", "equals": false },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "index.create.autocreate_collection",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }], "as": "r1" },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/numIndexesBefore", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/numIndexesAfter", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/createdCollectionAutomatically", "equals": true },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/1/name", "equals": "a_1" },
+                { "at": "/r2/cursor/firstBatch/1/key/a", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "index.create.idempotent_reply",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/numIndexesBefore", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/numIndexesAfter", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/note", "equals": "all indexes already exist" },
+                { "at": "/r2/createdCollectionAutomatically", "absent": true },
+                { "at": "/r2/#", "equals": 4 },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "index.create.partial_existing_note",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }, { "key": { "b": 1 }, "name": "b_1" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/numIndexesBefore", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/numIndexesAfter", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/createdCollectionAutomatically", "equals": false },
+                { "at": "/r2/note", "equals": "index already exists" },
+                { "at": "/r2/#", "equals": 5 }
+            ]
+        },
+        {
+            "id": "index.create.same_name_conflict",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": -1 }, "name": "a_1" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/code", "equals": { "$numberInt": "86" } },
+                { "at": "/r2/errmsg", "equals": "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, key: { a: -1 }, name: \"a_1\" }, existing index: { v: 2, key: { a: 1 }, name: \"a_1\" }" }
+            ]
+        },
+        {
+            "id": "index.create.equivalent_key_conflict",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_second" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/code", "equals": { "$numberInt": "85" } },
+                { "at": "/r2/errmsg", "equals": "Index already exists with a different name: a_1" }
+            ]
+        },
+        {
+            "id": "index.create.missing_name",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 } }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r1/errmsg", "equals": "Error in specification { key: { a: 1 } } :: caused by :: The 'name' field is a required property of an index specification" }
+            ]
+        },
+        {
+            "id": "index.create.missing_key",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "name": "x" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r1/errmsg", "equals": "Error in specification { name: \"x\" } :: caused by :: The 'key' field is a required property of an index specification" }
+            ]
+        },
+        {
+            "id": "index.create.empty_key",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": {}, "name": "x" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "67" } },
+                { "at": "/r1/errmsg", "equals": "Error in specification { key: {}, name: \"x\" } :: caused by :: Index keys cannot be empty." }
+            ]
+        },
+        {
+            "id": "index.create.empty_name",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "67" } },
+                { "at": "/r1/errmsg", "equals": "Error in specification { key: { a: 1 }, name: \"\", v: 2 } :: caused by :: index name cannot be empty" }
+            ]
+        },
+        {
+            "id": "index.create.empty_indexes",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "indexes": [], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/errmsg", "equals": "Must specify at least one index to create" }
+            ]
+        },
+        {
+            "id": "index.create.missing_indexes_field",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "items", "omitIndexes": true, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "40414" } },
+                { "at": "/r1/errmsg", "equals": "BSON field 'createIndexes.indexes' is missing but a required field" }
+            ]
+        },
+        {
+            "id": "index.create.unique_over_duplicates_rejected",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 5 }, { "_id": 2, "a": 5 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }], "as": "r1" },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "index.list.shape",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "b": -1, "a": 1 }, "name": "ba", "unique": true }, { "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/cursor/ns", "equals": "app.items" },
+                { "at": "/r2/cursor/#", "equals": 3 },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/cursor/firstBatch/0/key/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/name", "equals": "_id_" },
+                { "at": "/r2/cursor/firstBatch/1/key/b", "equals": { "$numberInt": "-1" } },
+                { "at": "/r2/cursor/firstBatch/1/key/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/1/name", "equals": "ba" },
+                { "at": "/r2/cursor/firstBatch/1/unique", "equals": true },
+                { "at": "/r2/cursor/firstBatch/2/name", "equals": "a_1" },
+                { "at": "/r2/cursor/firstBatch/2/unique", "absent": true },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "index.list.missing_namespace",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "listIndexes", "collection": "items", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "26" } },
+                { "at": "/r1/errmsg", "equals": "ns does not exist: app.items" }
+            ]
+        },
+        {
+            "id": "index.drop.by_name",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }, { "key": { "b": 1 }, "name": "b_1" }] },
+                { "op": "dropIndexes", "collection": "items", "index": "a_1", "as": "r2" },
+                { "op": "listIndexes", "collection": "items", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/nIndexesWas", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/#", "equals": 2 },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r3/cursor/firstBatch/1/name", "equals": "b_1" }
+            ]
+        },
+        {
+            "id": "index.drop.star",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }, { "key": { "b": 1 }, "name": "b_1" }] },
+                { "op": "dropIndexes", "collection": "items", "index": "*", "as": "r2" },
+                { "op": "listIndexes", "collection": "items", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/nIndexesWas", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/msg", "equals": "non-_id indexes dropped for collection" },
+                { "at": "/r2/#", "equals": 3 },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "index.drop.star_empty_collection",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "dropIndexes", "collection": "items", "index": "*", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/nIndexesWas", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/msg", "equals": "non-_id indexes dropped for collection" },
+                { "at": "/r1/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "index.drop.id_rejected",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "dropIndexes", "collection": "items", "index": "_id_", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "72" } },
+                { "at": "/r1/errmsg", "equals": "cannot drop _id index" }
+            ]
+        },
+        {
+            "id": "index.drop.unknown_name",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "dropIndexes", "collection": "items", "index": "zzz", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "27" } },
+                { "at": "/r1/errmsg", "equals": "index not found with name [zzz]" }
+            ]
+        },
+        {
+            "id": "index.drop.missing_namespace",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropIndexes", "collection": "items", "index": "*", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "26" } },
+                { "at": "/r1/errmsg", "equals": "ns not found app.items" }
+            ]
+        },
+        {
+            "id": "index.drop.missing_field",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "dropIndexes", "collection": "items", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "40414" } },
+                { "at": "/r1/errmsg", "equals": "BSON field 'dropIndexes.index' is missing but a required field" }
+            ]
+        },
+        {
+            "id": "index.insert.single_unique_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 7 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 7 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/#", "equals": 1 },
+                { "at": "/r3/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: 7 }" },
+                { "at": "/r3/writeErrors/0/keyPattern/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$numberInt": "7" } },
+                { "at": "/r3/writeErrors/0/#", "equals": 5 }
+            ]
+        },
+        {
+            "id": "index.insert.compound_unique_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 1 }, { "_id": 2, "a": 1, "b": 2 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "b": -1, "a": 1 }, "name": "ba", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 3, "a": 1, "b": 1 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: ba dup key: { b: 1, a: 1 }" },
+                { "at": "/r3/writeErrors/0/keyPattern/b", "equals": { "$numberInt": "-1" } },
+                { "at": "/r3/writeErrors/0/keyPattern/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/0/keyValue/b", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } }
+            ]
+        },
+        {
+            "id": "index.insert.unordered_continues",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 7 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 7 }, { "_id": 3, "a": 9 }], "ordered": false, "as": "r3" },
+                { "op": "find", "collection": "items", "filter": { "_id": 3 }, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/#", "equals": 1 },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/a", "equals": { "$numberInt": "9" } }
+            ]
+        },
+        {
+            "id": "index.update.single_unique_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 7 }, { "_id": 2, "a": 8 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 2 }, "u": { "$set": { "a": 7 } } }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/nModified", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: 7 }" },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$numberInt": "7" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "index.update.compound_unique_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 1 }, { "_id": 2, "a": 1, "b": 2 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "b": -1, "a": 1 }, "name": "ba", "unique": true }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 2 }, "u": { "$set": { "b": 1 } } }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: ba dup key: { b: 1, a: 1 }" },
+                { "at": "/r3/writeErrors/0/keyPattern/b", "equals": { "$numberInt": "-1" } },
+                { "at": "/r3/writeErrors/0/keyValue/b", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "index.persistence.reopen",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 7 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }], "as": "r1" },
+                { "op": "reopen", "store": "s" },
+                { "op": "listIndexes", "collection": "items", "as": "r2" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 7 }], "as": "r3" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/1/name", "equals": "a_1" },
+                { "at": "/r2/cursor/firstBatch/1/unique", "equals": true },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$numberInt": "7" } },
+                { "at": "/r4/ok", "equals": true },
+                { "at": "/r4/schema/length", "gte": 41 },
+                { "at": "/r4/namespaces", "equals": ["app.items"] },
+                { "at": "/r4/shardCount", "equals": 1 }
+            ]
+        },
+        {
+            "id": "index.drop.after_star_insert_allows_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 7 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "dropIndexes", "collection": "items", "index": "*", "as": "r2" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 7 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/msg", "equals": "non-_id indexes dropped for collection" },
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors", "absent": true },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        }
+    ]
+}

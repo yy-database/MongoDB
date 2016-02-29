@@ -422,3 +422,99 @@ fn library_smoke_decodes_op_msg_bytes_and_returns_a_reply() {
     let _ = parse_bson(&encode_bson(&reply)).expect("reply is valid BSON");
     let _ = SocketAddr::from(([127, 0, 0, 1], 0));
 }
+
+fn index_command(collection: &str, direction: i32, name: &str, unique: bool) -> BsonDocument {
+    let mut key = BsonDocument::new();
+    key.push("a", BsonValue::Int32(direction));
+    let mut specification = BsonDocument::new();
+    specification.push("key", BsonValue::Document(key));
+    specification.push("name", text(name));
+    if unique {
+        specification.push("unique", BsonValue::Bool(true));
+    }
+    let mut create = command("createIndexes", collection, "app");
+    create.push("indexes", BsonValue::Array(vec![BsonValue::Document(specification)]));
+    create
+}
+
+#[test]
+fn indexes_persist_across_reopen_and_drop_by_name() {
+    let path = temporary_dir().join("store.yykv");
+    let store = Store::open(&path).expect("open shard");
+    insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(1))])]);
+
+    let created = commands::create_indexes(&index_command("items", 1, "a_1", true), &store).expect("createIndexes");
+    assert_eq!(int(&created, "numIndexesBefore"), 1);
+    assert_eq!(int(&created, "numIndexesAfter"), 2);
+    assert_eq!(created.get("createdCollectionAutomatically"), Some(&BsonValue::Bool(false)));
+
+    let listed = commands::list_indexes(&command("listIndexes", "items", "app"), &store).expect("listIndexes");
+    let indexes = batch(&listed, "firstBatch");
+    assert_eq!(indexes.len(), 2);
+    assert_eq!(indexes[0].get("name"), Some(&text("_id_")));
+    assert_eq!(indexes[1].get("name"), Some(&text("a_1")));
+    assert_eq!(indexes[1].get("unique"), Some(&BsonValue::Bool(true)));
+
+    let mut drop = command("dropIndexes", "items", "app");
+    drop.push("index", text("a_1"));
+    let dropped = commands::drop_indexes(&drop, &store).expect("dropIndexes");
+    assert_eq!(int(&dropped, "nIndexesWas"), 2);
+
+    let reopened = Store::open(&path).expect("reopen shard");
+    let relisted = commands::list_indexes(&command("listIndexes", "items", "app"), &reopened).expect("listIndexes");
+    assert_eq!(batch(&relisted, "firstBatch").len(), 1);
+
+    let mut drop_id = command("dropIndexes", "items", "app");
+    drop_id.push("index", text("_id_"));
+    let error = commands::drop_indexes(&drop_id, &reopened).expect_err("_id_ is not droppable");
+    assert_eq!(error.code, 72);
+}
+
+#[test]
+fn unique_index_rejects_duplicate_keys_on_insert_and_update() {
+    let store = store();
+    insert_documents(
+        &store,
+        "items",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("a", BsonValue::Int32(7))]),
+            document(&[("_id", BsonValue::Int32(2)), ("a", BsonValue::Int32(8))]),
+        ],
+    );
+    commands::create_indexes(&index_command("items", 1, "a_1", true), &store).expect("createIndexes");
+
+    let duplicate = insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(3)), ("a", BsonValue::Int32(7))])]);
+    assert_eq!(int(&duplicate, "n"), 0);
+    let errors = array(&duplicate, "writeErrors");
+    assert_eq!(int(&errors[0], "code"), 11000);
+    let key_value = match errors[0].get("keyValue") {
+        Some(BsonValue::Document(document)) => document.clone(),
+        _ => BsonDocument::new(),
+    };
+    assert_eq!(key_value.get("a"), Some(&BsonValue::Int32(7)));
+
+    let mut update = command("update", "items", "app");
+    let mut specification = BsonDocument::new();
+    specification.push("q", BsonValue::Document(document(&[("_id", BsonValue::Int32(2))])));
+    specification.push("u", BsonValue::Document(document(&[("$set", BsonValue::Document(document(&[("a", BsonValue::Int32(7))]))) ])));
+    update.push("updates", BsonValue::Array(vec![BsonValue::Document(specification)]));
+    let reply = commands::update(&update, &store).expect("update");
+    assert_eq!(int(&reply, "n"), 0);
+    assert_eq!(int(&reply, "nModified"), 0);
+    let errors = array(&reply, "writeErrors");
+    assert_eq!(int(&errors[0], "code"), 11000);
+}
+
+#[test]
+fn create_indexes_rejects_conflicting_definitions() {
+    let store = store();
+    commands::create_indexes(&index_command("items", 1, "a_1", false), &store).expect("createIndexes");
+
+    let same_name = commands::create_indexes(&index_command("items", -1, "a_1", false), &store).expect_err("name conflict");
+    assert_eq!(same_name.code, 86);
+
+    let equivalent = commands::create_indexes(&index_command("items", 1, "a_second", false), &store)
+        .expect_err("equivalent key conflict");
+    assert_eq!(equivalent.code, 85);
+}
+

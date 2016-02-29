@@ -187,6 +187,24 @@ fn list_databases(store: PyRef<'_, MongoStore>) -> String {
     reply(&commands::list_databases(&store.inner))
 }
 
+/// `createIndexes` reply.
+#[pyfunction]
+fn create_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::create_indexes(&decode_command(command)?, &store.inner)))
+}
+
+/// `listIndexes` reply.
+#[pyfunction]
+fn list_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::list_indexes(&decode_command(command)?, &store.inner)))
+}
+
+/// `dropIndexes` reply.
+#[pyfunction]
+fn drop_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::drop_indexes(&decode_command(command)?, &store.inner)))
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[pyfunction]
 fn import_bson(store: PyRef<'_, MongoStore>, namespace: &str, bytes: &[u8]) -> PyResult<usize> {
@@ -228,6 +246,9 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(kill_cursors, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
+    module.add_function(wrap_pyfunction!(create_indexes, module)?)?;
+    module.add_function(wrap_pyfunction!(list_indexes, module)?)?;
+    module.add_function(wrap_pyfunction!(drop_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson_file, module)?)?;
     module.add_function(wrap_pyfunction!(repair_shard, module)?)?;

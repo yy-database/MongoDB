@@ -29,6 +29,24 @@ use database::{
     types::cluster::{CatalogSchema, Namespace, ShardId, CATALOG_SUFFIX},
 };
 
+use crate::{
+    bson::BsonDocument,
+    json,
+};
+
+/// One user-created index. `_id_` is implicit and is never stored here.
+#[derive(Debug, Clone)]
+pub struct IndexSpec {
+    /// Namespace the index belongs to.
+    pub namespace: String,
+    /// Index name drivers and `listIndexes` report.
+    pub name: String,
+    /// Ordered key specification, exactly as it was sent.
+    pub key: BsonDocument,
+    /// Whether the index rejects duplicate keys.
+    pub unique: bool,
+}
+
 /// Namespace label used to remember which Mongo namespaces exist.
 ///
 /// Mongo collection names cannot contain `$` or a NUL byte and a database name
@@ -74,6 +92,7 @@ struct CatalogState {
     path: PathBuf,
     shard_id: String,
     namespaces: BTreeSet<String>,
+    indexes: Vec<IndexSpec>,
 }
 
 impl CatalogState {
@@ -85,7 +104,20 @@ impl CatalogState {
             }
             document.push_str(&serde_json::to_string(namespace).unwrap_or_else(|_| "\"\"".to_string()));
         }
-        document.push_str("]}");
+        document.push(']');
+        // The `indexes` array is additive: catalogs without user indexes keep
+        // the original byte length, so existing catalog assertions stay valid.
+        if !self.indexes.is_empty() {
+            document.push_str(",\"indexes\":[");
+            for (position, index) in self.indexes.iter().enumerate() {
+                if position > 0 {
+                    document.push(',');
+                }
+                document.push_str(&index.to_json());
+            }
+            document.push(']');
+        }
+        document.push('}');
         document
     }
 
@@ -137,6 +169,73 @@ fn parse_namespaces(document: &str) -> Result<BTreeSet<String>, StoreError> {
     Ok(namespaces)
 }
 
+impl IndexSpec {
+    /// One catalog entry. The key is stored as ordered `[field, value]` pairs so
+    /// a compound index keeps its creation order across a reopen.
+    fn to_json(&self) -> String {
+        let field = |text: &str| serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
+        let mut text = format!(
+            "{{\"namespace\":{},\"name\":{},\"unique\":{},\"key\":[",
+            field(&self.namespace),
+            field(&self.name),
+            self.unique
+        );
+        for (position, (name, value)) in self.key.fields.iter().enumerate() {
+            if position > 0 {
+                text.push(',');
+            }
+            text.push('[');
+            text.push_str(&field(name));
+            text.push(',');
+            text.push_str(&serde_json::to_string(&json::to_json(value)).unwrap_or_else(|_| "null".to_string()));
+            text.push(']');
+        }
+        text.push_str("]}");
+        text
+    }
+}
+
+fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
+    let value: serde_json::Value = serde_json::from_str(document)
+        .map_err(|error| StoreError::Catalog(format!("catalog schema document is not JSON: {error}")))?;
+    let Some(entries) = value.get("indexes") else { return Ok(Vec::new()) };
+    let Some(entries) = entries.as_array() else {
+        return Err(StoreError::Catalog("catalog schema document has a non-array `indexes` field".to_string()));
+    };
+    let mut indexes = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let namespace = entry
+            .get("namespace")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| StoreError::Catalog("catalog index entry has no namespace".to_string()))?;
+        let name = entry
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| StoreError::Catalog("catalog index entry has no name".to_string()))?;
+        let unique = entry.get("unique").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        let Some(pairs) = entry.get("key").and_then(serde_json::Value::as_array) else {
+            return Err(StoreError::Catalog(format!("catalog index `{name}` has no key array")));
+        };
+        let mut key = BsonDocument::new();
+        for pair in pairs {
+            let Some(fields) = pair.as_array() else {
+                return Err(StoreError::Catalog(format!("catalog index `{name}` has a malformed key entry")));
+            };
+            if fields.len() != 2 {
+                return Err(StoreError::Catalog(format!("catalog index `{name}` has a malformed key entry")));
+            }
+            let Some(field) = fields[0].as_str() else {
+                return Err(StoreError::Catalog(format!("catalog index `{name}` has a non-string key field")));
+            };
+            let value = json::from_json(&fields[1])
+                .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` key value is invalid: {error}")))?;
+            key.push(field.to_string(), value);
+        }
+        indexes.push(IndexSpec { namespace: namespace.to_string(), name: name.to_string(), key, unique });
+    }
+    Ok(indexes)
+}
+
 fn legacy_namespaces(shard: &FileShard) -> Vec<String> {
     match shard.scan(&Namespace(CATALOG_NAMESPACE.to_string()), b"", None, None, 0) {
         Ok(records) => records
@@ -176,7 +275,7 @@ fn load_catalog(catalog_path: &Path) -> Result<CatalogState, StoreError> {
     if !valid_shard_id(&shard_id) {
         return Err(StoreError::Catalog(format!("catalog `{}` has an unusable shard id", catalog_path.display())));
     }
-    let namespaces = match schema {
+    let namespaces = match &schema {
         Some(schema) => {
             if schema.version != CATALOG_DOCUMENT_VERSION {
                 return Err(StoreError::Catalog(format!(
@@ -189,7 +288,11 @@ fn load_catalog(catalog_path: &Path) -> Result<CatalogState, StoreError> {
         }
         None => BTreeSet::new(),
     };
-    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id, namespaces })
+    let indexes = match &schema {
+        Some(schema) => parse_indexes(&schema.document)?,
+        None => Vec::new(),
+    };
+    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id, namespaces, indexes })
 }
 
 fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, StoreError> {
@@ -198,7 +301,7 @@ fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, St
         .and_then(|stem| stem.to_str())
         .filter(|stem| !stem.is_empty())
         .ok_or_else(|| StoreError::Catalog(format!("shard path `{}` has no file stem", requested.display())))?;
-    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id: stem.to_string(), namespaces: BTreeSet::new() })
+    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id: stem.to_string(), namespaces: BTreeSet::new(), indexes: Vec::new() })
 }
 
 /// Document store backed by one `.yyds` catalog and one `.yykv` shard.
@@ -404,6 +507,44 @@ impl Store {
     /// Namespaces registered in the `.yyds` catalog, sorted.
     pub fn namespaces(&self) -> Vec<String> {
         self.catalog_lock().namespaces.iter().cloned().collect()
+    }
+
+    /// Whether `namespace` is registered in the catalog.
+    pub fn namespace_exists(&self, namespace: &str) -> bool {
+        self.catalog_lock().namespaces.contains(namespace)
+    }
+
+    /// User indexes of one namespace in creation order, `_id_` excluded.
+    pub fn index_specs(&self, namespace: &str) -> Vec<IndexSpec> {
+        self.catalog_lock().indexes.iter().filter(|index| index.namespace == namespace).cloned().collect()
+    }
+
+    /// Registers `namespace` and appends the new index definitions in one flush.
+    ///
+    /// `createIndexes` creates the collection, so an index can exist on a
+    /// namespace that holds no documents yet.
+    pub fn add_indexes(&self, namespace: &str, indexes: &[IndexSpec]) -> Result<(), StoreError> {
+        let mut catalog = self.catalog_lock();
+        catalog.namespaces.insert(namespace.to_string());
+        catalog.indexes.extend(indexes.iter().cloned());
+        catalog.flush()
+    }
+
+    /// Drops the named user index, or every user index when `name` is `*`.
+    pub fn drop_indexes(&self, namespace: &str, name: &str) -> Result<usize, StoreError> {
+        let mut catalog = self.catalog_lock();
+        let before = catalog.indexes.len();
+        catalog.indexes.retain(|index| {
+            if index.namespace != namespace {
+                return true;
+            }
+            name != "*" && index.name != name
+        });
+        let removed = before - catalog.indexes.len();
+        if removed > 0 {
+            catalog.flush()?;
+        }
+        Ok(removed)
     }
 
     /// Creates the shard named by the catalog when only the catalog survived.

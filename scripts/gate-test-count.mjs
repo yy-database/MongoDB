@@ -10,8 +10,8 @@ const ts = JSON.parse(readFileSync(join(resultsDir, 'ts.json'), 'utf8'))
 const py = JSON.parse(readFileSync(join(resultsDir, 'py.json'), 'utf8'))
 
 // Measured floors: keep this number in sync with reality, never lower it.
-const MIN_ASSERTIONS = 1006
-const MIN_CASES = 441
+const MIN_ASSERTIONS = 1131
+const MIN_CASES = 471
 
 const problems = []
 for (const [name, summary] of [['ts', ts], ['py', py]]) {

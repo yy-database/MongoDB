@@ -142,6 +142,12 @@ function localCommand(command) {
             return JSON.parse(binding.update(store, text))
         case 'count':
             return JSON.parse(binding.count(store, text))
+        case 'createIndexes':
+            return JSON.parse(binding.createIndexes(store, text))
+        case 'listIndexes':
+            return JSON.parse(binding.listIndexes(store, text))
+        case 'dropIndexes':
+            return JSON.parse(binding.dropIndexes(store, text))
         default:
             throw new Error(`unsupported local command ${name}`)
     }
@@ -212,6 +218,9 @@ const find = (collection, filter, options = {}) => ({ find: collection, filter, 
 const count = (collection, query) => ({ count: collection, query, $db: DB })
 const update = (collection, updates) => ({ update: collection, updates, $db: DB })
 const remove = (collection, q, limit) => ({ delete: collection, deletes: [{ q, limit }], $db: DB })
+const createIndexes = (collection, indexes) => ({ createIndexes: collection, indexes, $db: DB })
+const listIndexes = (collection) => ({ listIndexes: collection, $db: DB })
+const dropIndexes = (collection, index) => ({ dropIndexes: collection, index, $db: DB })
 
 const collections = {
     unwind: 'oracle_unwind',
@@ -234,7 +243,25 @@ const collections = {
     groupq2: 'oracle_groupq2',
     updq: 'oracle_updq',
     delq: 'oracle_delq',
-    countq: 'oracle_countq'
+    countq: 'oracle_countq',
+    idxCreate: 'oracle_idx_create',
+    idxIdem: 'oracle_idx_idem',
+    idxConflict: 'oracle_idx_conflict',
+    idxEquivalent: 'oracle_idx_equivalent',
+    idxList: 'oracle_idx_list',
+    idxDropName: 'oracle_idx_drop_name',
+    idxDropStar: 'oracle_idx_drop_star',
+    idxDropId: 'oracle_idx_drop_id',
+    idxDropUnknown: 'oracle_idx_drop_unknown',
+    idxInsertSingle: 'oracle_idx_insert_single',
+    idxInsertCompound: 'oracle_idx_insert_compound',
+    idxInsertUnordered: 'oracle_idx_insert_unordered',
+    idxUpdateSingle: 'oracle_idx_update_single',
+    idxUpdateCompound: 'oracle_idx_update_compound',
+    idxNever: 'oracle_idx_never',
+    idxNameless: 'oracle_idx_nameless',
+    idxKeyless: 'oracle_idx_keyless',
+    idxEmpty: 'oracle_idx_empty'
 }
 
 const probes = [
@@ -1200,6 +1227,238 @@ const probes = [
         command: insert(collections.idnum, [{ _id: 1 }, { _id: 2, tag: 'dup' }], false),
         pick: (reply) => reply,
         exactOrder: true
+    },
+    {
+        id: 'index.create_reply',
+        note: 'createIndexes reply counters and field order for single-field plus compound keys',
+        setup: [insert(collections.idxCreate, [{ _id: 1 }]), dropIndexes(collections.idxCreate, '*')],
+        command: createIndexes(collections.idxCreate, [
+            { key: { a: 1 }, name: 'a_1' },
+            { key: { b: -1, a: 1 }, name: 'ba' }
+        ]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.create_idempotent_reply',
+        note: 'repeating an identical specification replies with the all-exist note',
+        setup: [
+            insert(collections.idxIdem, [{ _id: 1 }]),
+            dropIndexes(collections.idxIdem, '*'),
+            createIndexes(collections.idxIdem, [
+                { key: { a: 1 }, name: 'a_1' },
+                { key: { b: -1, a: 1 }, name: 'ba' }
+            ])
+        ],
+        command: createIndexes(collections.idxIdem, [
+            { key: { a: 1 }, name: 'a_1' },
+            { key: { b: -1, a: 1 }, name: 'ba' }
+        ]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.create_partial_existing_reply',
+        note: 'one existing plus one new index keeps createdCollectionAutomatically and adds the short note',
+        setup: [
+            insert(collections.idxIdem, [{ _id: 1 }]),
+            dropIndexes(collections.idxIdem, '*'),
+            createIndexes(collections.idxIdem, [{ key: { a: 1 }, name: 'a_1' }])
+        ],
+        command: createIndexes(collections.idxIdem, [{ key: { a: 1 }, name: 'a_1' }, { key: { b: 1 }, name: 'b_1' }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.create_conflicting_name_error',
+        note: 'same name with a different key is rejected with code 86 and the real message',
+        setup: [
+            insert(collections.idxConflict, [{ _id: 1 }]),
+            dropIndexes(collections.idxConflict, '*'),
+            createIndexes(collections.idxConflict, [{ key: { a: 1 }, name: 'a_1' }])
+        ],
+        command: createIndexes(collections.idxConflict, [{ key: { a: -1 }, name: 'a_1' }]),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.create_equivalent_key_error',
+        note: 'the same key under a new name is rejected with code 85',
+        setup: [
+            insert(collections.idxEquivalent, [{ _id: 1 }]),
+            dropIndexes(collections.idxEquivalent, '*'),
+            createIndexes(collections.idxEquivalent, [{ key: { a: 1 }, name: 'a_1' }])
+        ],
+        command: createIndexes(collections.idxEquivalent, [{ key: { a: 1 }, name: 'a_second' }]),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.list_shape',
+        note: 'listIndexes: cursor first, then _id_ and user indexes in creation order with v/key/name/unique',
+        setup: [
+            insert(collections.idxList, [{ _id: 1 }]),
+            dropIndexes(collections.idxList, '*'),
+            createIndexes(collections.idxList, [
+                { key: { b: -1, a: 1 }, name: 'ba', unique: true },
+                { key: { a: 1 }, name: 'a_1' }
+            ])
+        ],
+        command: listIndexes(collections.idxList),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.list_missing_namespace_error',
+        note: 'listIndexes on an absent namespace replies code 26',
+        setup: [],
+        command: listIndexes(collections.idxNever),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.drop_by_name_reply',
+        note: 'dropIndexes by name reports nIndexesWas and ok only',
+        setup: [
+            insert(collections.idxDropName, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropName, '*'),
+            createIndexes(collections.idxDropName, [
+                { key: { a: 1 }, name: 'a_1' },
+                { key: { b: 1 }, name: 'b_1' }
+            ])
+        ],
+        command: dropIndexes(collections.idxDropName, 'a_1'),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_star_reply',
+        note: 'dropIndexes * reports nIndexesWas plus the non-_id message',
+        setup: [
+            insert(collections.idxDropStar, [{ _id: 1 }]),
+            dropIndexes(collections.idxDropStar, '*'),
+            createIndexes(collections.idxDropStar, [
+                { key: { a: 1 }, name: 'a_1' },
+                { key: { b: 1 }, name: 'b_1' }
+            ])
+        ],
+        command: dropIndexes(collections.idxDropStar, '*'),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_star_empty_collection',
+        note: 'dropIndexes * on a collection that only has _id_ still carries the message',
+        setup: [insert(collections.idxEmpty, [{ _id: 1 }]), dropIndexes(collections.idxEmpty, '*')],
+        command: dropIndexes(collections.idxEmpty, '*'),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.drop_id_error',
+        note: '_id_ cannot be dropped',
+        setup: [insert(collections.idxDropId, [{ _id: 1 }])],
+        command: dropIndexes(collections.idxDropId, '_id_'),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.drop_unknown_error',
+        note: 'dropping a missing index name replies code 27',
+        setup: [insert(collections.idxDropUnknown, [{ _id: 1 }])],
+        command: dropIndexes(collections.idxDropUnknown, 'zzz'),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.insert_single_unique_duplicate',
+        note: 'single-field unique index duplicate: full writeErrors entry including keyPattern and keyValue',
+        setup: [
+            insert(collections.idxInsertSingle, [{ _id: 1, a: 7 }]),
+            dropIndexes(collections.idxInsertSingle, '*'),
+            createIndexes(collections.idxInsertSingle, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.idxInsertSingle, [{ _id: 2, a: 7 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.insert_compound_unique_duplicate',
+        note: 'compound unique duplicate renders key fields in key order, not value order',
+        setup: [
+            insert(collections.idxInsertCompound, [
+                { _id: 1, a: 1, b: 1 },
+                { _id: 2, a: 1, b: 2 }
+            ]),
+            dropIndexes(collections.idxInsertCompound, '*'),
+            createIndexes(collections.idxInsertCompound, [{ key: { b: -1, a: 1 }, name: 'ba', unique: true }])
+        ],
+        command: insert(collections.idxInsertCompound, [{ _id: 3, a: 1, b: 1 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.insert_unordered_continues_past_duplicate',
+        note: 'unordered insert continues after a unique-index duplicate and reports the accepted count',
+        setup: [
+            insert(collections.idxInsertUnordered, [{ _id: 1, a: 7 }]),
+            dropIndexes(collections.idxInsertUnordered, '*'),
+            createIndexes(collections.idxInsertUnordered, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.idxInsertUnordered, [{ _id: 2, a: 7 }, { _id: 3, a: 9 }], false),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.update_single_unique_duplicate',
+        note: 'update replies n, writeErrors, nModified, ok; keyValue matches the colliding document',
+        setup: [
+            insert(collections.idxUpdateSingle, [{ _id: 1, a: 7 }, { _id: 2, a: 8 }]),
+            dropIndexes(collections.idxUpdateSingle, '*'),
+            createIndexes(collections.idxUpdateSingle, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: update(collections.idxUpdateSingle, [{ q: { _id: 2 }, u: { $set: { a: 7 } } }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.update_compound_unique_duplicate',
+        note: 'compound unique update duplicate keeps keyPattern order',
+        setup: [
+            insert(collections.idxUpdateCompound, [
+                { _id: 1, a: 1, b: 1 },
+                { _id: 2, a: 1, b: 2 }
+            ]),
+            dropIndexes(collections.idxUpdateCompound, '*'),
+            createIndexes(collections.idxUpdateCompound, [{ key: { b: -1, a: 1 }, name: 'ba', unique: true }])
+        ],
+        command: update(collections.idxUpdateCompound, [{ q: { _id: 2 }, u: { $set: { b: 1 } } }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.create_missing_name_error',
+        note: 'the name field is required by mongod 8.0.9, so no default name is invented',
+        setup: [],
+        command: createIndexes(collections.idxNameless, [{ key: { a: 1 } }]),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.create_missing_key_error',
+        note: 'the key field is required',
+        setup: [],
+        command: createIndexes(collections.idxKeyless, [{ name: 'x' }]),
+        pick: errorShape,
+        errorProbe: true
+    },
+    {
+        id: 'index.create_empty_indexes_error',
+        note: 'an empty indexes array is a BadValue',
+        setup: [],
+        command: createIndexes(collections.idxEmpty, []),
+        pick: errorShape,
+        errorProbe: true
     }
 ]
 

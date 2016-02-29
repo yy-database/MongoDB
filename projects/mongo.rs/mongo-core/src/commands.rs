@@ -6,13 +6,14 @@
 
 use std::{
     cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
     bson::{BsonDocument, BsonValue, encode_bson, integral_value, parse_bson, value_to_key},
     cursor::CursorStore,
-    store::Store,
+    store::{IndexSpec, Store},
 };
 
 /// Filter operators this gateway implements. Anything outside this list is a
@@ -299,8 +300,8 @@ impl WriteError {
     }
 }
 
-/// `insert`, with `_id` generation, `11000` duplicate mapping, and ordered /
-/// unordered continuation.
+/// `insert`, with `_id` generation, `11000` duplicate mapping, unique-index
+/// enforcement, and ordered / unordered continuation.
 pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "insert")
         .ok_or_else(|| CommandError::new(73, "insert command missing collection name"))?;
@@ -315,9 +316,8 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         _ => true,
     };
 
-    let mut positions = Vec::with_capacity(documents.len());
-    let mut entries = Vec::with_capacity(documents.len());
-    let mut identifiers = Vec::with_capacity(documents.len());
+    let unique_indexes: Vec<IndexSpec> = store.index_specs(&namespace).into_iter().filter(|index| index.unique).collect();
+    let mut candidates: Vec<(usize, BsonDocument, BsonValue)> = Vec::with_capacity(documents.len());
     let mut write_errors: Vec<WriteError> = Vec::new();
 
     for (index, item) in documents.iter().enumerate() {
@@ -337,34 +337,153 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         else {
             continue;
         };
-        positions.push(index);
-        identifiers.push(identifier.clone());
-        entries.push((value_to_key(&identifier), encode_bson(&stored)));
+        candidates.push((index, stored, identifier));
     }
 
-    let report =
-        store.insert(&namespace, &entries, ordered).map_err(|error| CommandError::new(2, format!("insert failed: {error}")))?;
-
-    for duplicate in &report.duplicates {
-        let index = positions[*duplicate];
-        let identifier = &identifiers[*duplicate];
-        let mut key_pattern = BsonDocument::new();
-        key_pattern.push("_id".to_string(), BsonValue::Int32(1));
-        let mut key_value = BsonDocument::new();
-        key_value.push("_id".to_string(), identifier.clone());
-        write_errors.push(WriteError::duplicate(
-            index,
-            format!(
-                "E11000 duplicate key error collection: {namespace} index: _id_ dup key: {{ _id: {} }}",
-                describe_id(identifier)
-            ),
-            key_pattern,
-            key_value,
-        ));
-    }
+    let inserted = if unique_indexes.is_empty() {
+        let entries: Vec<(Vec<u8>, Vec<u8>)> =
+            candidates.iter().map(|(_, stored, identifier)| (value_to_key(identifier), encode_bson(stored))).collect();
+        let positions: Vec<usize> = candidates.iter().map(|(index, _, _)| *index).collect();
+        let identifiers: Vec<BsonValue> = candidates.iter().map(|(_, _, identifier)| identifier.clone()).collect();
+        let report = store
+            .insert(&namespace, &entries, ordered)
+            .map_err(|error| CommandError::new(2, format!("insert failed: {error}")))?;
+        for duplicate in &report.duplicates {
+            write_errors.push(id_duplicate_error(&namespace, positions[*duplicate], &identifiers[*duplicate]));
+        }
+        report.inserted as usize
+    } else {
+        commit_insert(store, &namespace, &candidates, &unique_indexes, ordered, &mut write_errors)?
+    };
     write_errors.sort_by_key(|error| error.index);
 
-    Ok(write_reply(report.inserted, None, &write_errors))
+    Ok(write_reply(inserted as i64, None, &write_errors))
+}
+
+/// Inserts the candidate documents that satisfy every unique index.
+///
+/// Documents are evaluated in request order. A rejected document never
+/// contributes keys, so an unordered batch may still accept a later document
+/// that reuses a rejected one's key, exactly like `mongod`.
+fn commit_insert(
+    store: &Store,
+    namespace: &str,
+    candidates: &[(usize, BsonDocument, BsonValue)],
+    unique_indexes: &[IndexSpec],
+    ordered: bool,
+    write_errors: &mut Vec<WriteError>,
+) -> Result<usize, CommandError> {
+    let mut indexed: Vec<BTreeSet<Vec<u8>>> = vec![BTreeSet::new(); unique_indexes.len()];
+    let mut existing: BTreeSet<Vec<u8>> = BTreeSet::new();
+    for (key, payload) in store.scan(namespace) {
+        existing.insert(key);
+        let Ok(document) = parse_bson(&payload) else { continue };
+        for (position, specification) in unique_indexes.iter().enumerate() {
+            indexed[position].insert(index_tuple(&index_values(&document, specification)));
+        }
+    }
+
+    let mut staged: BTreeSet<Vec<u8>> = BTreeSet::new();
+    let mut accepted: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    for (index, document, identifier) in candidates {
+        let id_key = value_to_key(identifier);
+        if existing.contains(&id_key) || staged.contains(&id_key) {
+            write_errors.push(id_duplicate_error(namespace, *index, identifier));
+            if ordered {
+                break;
+            }
+            continue;
+        }
+        let mut conflict: Option<(&IndexSpec, Vec<BsonValue>)> = None;
+        for (position, specification) in unique_indexes.iter().enumerate() {
+            let values = index_values(document, specification);
+            if indexed[position].contains(&index_tuple(&values)) {
+                conflict = Some((specification, values));
+                break;
+            }
+        }
+        if let Some((specification, values)) = conflict {
+            write_errors.push(duplicate_index_error(*index, namespace, specification, &values));
+            if ordered {
+                break;
+            }
+            continue;
+        }
+        staged.insert(id_key.clone());
+        for (position, specification) in unique_indexes.iter().enumerate() {
+            indexed[position].insert(index_tuple(&index_values(document, specification)));
+        }
+        accepted.push((id_key, encode_bson(document)));
+    }
+
+    if !accepted.is_empty() {
+        store.import(namespace, &accepted).map_err(|error| CommandError::new(2, format!("insert failed: {error}")))?;
+    }
+    Ok(accepted.len())
+}
+
+fn id_duplicate_error(namespace: &str, index: usize, identifier: &BsonValue) -> WriteError {
+    let mut key_pattern = BsonDocument::new();
+    key_pattern.push("_id".to_string(), BsonValue::Int32(1));
+    let mut key_value = BsonDocument::new();
+    key_value.push("_id".to_string(), identifier.clone());
+    WriteError::duplicate(
+        index,
+        format!(
+            "E11000 duplicate key error collection: {namespace} index: _id_ dup key: {{ _id: {} }}",
+            describe_id(identifier)
+        ),
+        key_pattern,
+        key_value,
+    )
+}
+
+/// The values a document contributes to one index key, in key order.
+///
+/// A missing field is indexed as `null`, which is what makes `{a: null}` and an
+/// absent `a` collide in a unique index.
+fn index_values(document: &BsonDocument, specification: &IndexSpec) -> Vec<BsonValue> {
+    specification
+        .key
+        .fields
+        .iter()
+        .map(|(field, _)| collect_field(document, field).first().cloned().cloned().unwrap_or(BsonValue::Null))
+        .collect()
+}
+
+/// Length-prefixed key so two adjacent tuples can never be confused.
+fn index_tuple(values: &[BsonValue]) -> Vec<u8> {
+    let mut tuple = Vec::new();
+    for value in values {
+        let key = value_to_key(value);
+        tuple.extend_from_slice(&(key.len() as u32).to_be_bytes());
+        tuple.extend_from_slice(&key);
+    }
+    tuple
+}
+
+fn duplicate_index_error(index: usize, namespace: &str, specification: &IndexSpec, values: &[BsonValue]) -> WriteError {
+    let mut key_value = BsonDocument::new();
+    for ((field, _), value) in specification.key.fields.iter().zip(values) {
+        key_value.push(field.clone(), value.clone());
+    }
+    let rendered: Vec<String> = specification
+        .key
+        .fields
+        .iter()
+        .zip(values)
+        .map(|((field, _), value)| format!("{field}: {}", render_shell_value(value)))
+        .collect();
+    WriteError::duplicate(
+        index,
+        format!(
+            "E11000 duplicate key error collection: {namespace} index: {} dup key: {{ {} }}",
+            specification.name,
+            rendered.join(", ")
+        ),
+        specification.key.clone(),
+        key_value,
+    )
 }
 
 /// `find` with filter, sort, skip, limit and cursor batching.
@@ -596,6 +715,15 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
     let mut matched: i64 = 0;
     let mut modified: i64 = 0;
+    let unique_indexes: Vec<IndexSpec> = store.index_specs(&namespace).into_iter().filter(|index| index.unique).collect();
+    let mut indexed: BTreeMap<Vec<u8>, Vec<Vec<u8>>> = BTreeMap::new();
+    if !unique_indexes.is_empty() {
+        for (key, value) in store.scan(&namespace) {
+            if let Ok(document) = parse_bson(&value) {
+                indexed.insert(key, unique_indexes.iter().map(|spec| index_tuple(&index_values(&document, spec))).collect());
+            }
+        }
+    }
     for (index, specification) in specifications.iter().enumerate() {
         let BsonValue::Document(specification) = specification
         else {
@@ -642,6 +770,23 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
             };
+            if !unique_indexes.is_empty() {
+                if let Some((specification, values)) = find_unique_conflict(&unique_indexes, &updated, &key, &indexed) {
+                    // Same shape as a failing multi-update: already applied writes
+                    // stay, counters report zero, and the command stops here.
+                    if !changes.is_empty() {
+                        store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                    }
+                    return Ok(write_reply(
+                        0,
+                        Some(0),
+                        &[duplicate_index_error(index, &namespace, specification, &values)],
+                    ));
+                }
+                if let Some(entry) = indexed.get_mut(&key) {
+                    *entry = unique_indexes.iter().map(|spec| index_tuple(&index_values(&updated, spec))).collect();
+                }
+            }
             let payload = encode_bson(&updated);
             if payload != value {
                 modified += 1;
@@ -659,14 +804,34 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     Ok(write_reply(matched, Some(modified), &[]))
 }
 
+/// Finds the first unique index whose key tuple of `document` is already held
+/// by a different stored document.
+fn find_unique_conflict<'a>(
+    indexes: &'a [IndexSpec],
+    document: &BsonDocument,
+    key: &[u8],
+    current: &BTreeMap<Vec<u8>, Vec<Vec<u8>>>,
+) -> Option<(&'a IndexSpec, Vec<BsonValue>)> {
+    for (position, specification) in indexes.iter().enumerate() {
+        let values = index_values(document, specification);
+        let tuple = index_tuple(&values);
+        for (other, tuples) in current {
+            if other.as_slice() != key && tuples.get(position) == Some(&tuple) {
+                return Some((specification, values));
+            }
+        }
+    }
+    None
+}
+
 /// Reply shape shared by `insert` / `update` / `delete` / `count`, matching
 /// `mongod 8.0.9`: `ok` is a double and every counter is int32.
+///
+/// The field order is also the real server's: `n`, `writeErrors`, `nModified`,
+/// `ok`. A successful update therefore stays `n`, `nModified`, `ok`.
 fn write_reply(count: i64, modified: Option<i64>, errors: &[WriteError]) -> BsonDocument {
     let mut response = BsonDocument::new();
     response.push("n".to_string(), count_value(count));
-    if let Some(modified) = modified {
-        response.push("nModified".to_string(), count_value(modified));
-    }
     if !errors.is_empty() {
         let entries: Vec<BsonValue> = errors
             .iter()
@@ -685,6 +850,9 @@ fn write_reply(count: i64, modified: Option<i64>, errors: &[WriteError]) -> Bson
             })
             .collect();
         response.push("writeErrors".to_string(), BsonValue::Array(entries));
+    }
+    if let Some(modified) = modified {
+        response.push("nModified".to_string(), count_value(modified));
     }
     response.push("ok".to_string(), BsonValue::Double(1.0));
     response
@@ -990,6 +1158,247 @@ pub fn list_databases(store: &Store) -> BsonDocument {
     response.push("totalSizeMb".to_string(), BsonValue::Int64(0));
     response.push("ok".to_string(), BsonValue::Int32(1));
     response
+}
+
+/// `createIndexes` for single-field and compound keys, `unique`, and explicit
+/// names.
+///
+/// `name` is required: `mongod 8.0.9` rejects a specification without it, so
+/// this gateway does not invent a default name either.
+pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let namespace = namespace_from_command(command, "createIndexes")
+        .ok_or_else(|| CommandError::new(73, "createIndexes command missing collection name"))?;
+    let Some(BsonValue::Array(specifications)) = command.get("indexes")
+    else {
+        return Err(CommandError::new(40414, "BSON field 'createIndexes.indexes' is missing but a required field"));
+    };
+    if specifications.is_empty() {
+        return Err(CommandError::new(2, "Must specify at least one index to create"));
+    }
+
+    let existing = store.index_specs(&namespace);
+    let existed = store.namespace_exists(&namespace);
+    let mut known = existing.clone();
+    let mut accepted: Vec<IndexSpec> = Vec::new();
+    let mut skipped = 0_usize;
+
+    for item in specifications {
+        let BsonValue::Document(specification) = item
+        else {
+            return Err(CommandError::new(2, "index specification must be a document"));
+        };
+        let Some(BsonValue::Document(key)) = specification.get("key")
+        else {
+            return Err(CommandError::new(
+                9,
+                format!(
+                    "Error in specification {} :: caused by :: The 'key' field is a required property of an index specification",
+                    render_shell_value(&BsonValue::Document(specification.clone()))
+                ),
+            ));
+        };
+        if key.fields.is_empty() {
+            return Err(CommandError::new(
+                67,
+                format!(
+                    "Error in specification {} :: caused by :: Index keys cannot be empty.",
+                    render_shell_value(&BsonValue::Document(specification.clone()))
+                ),
+            ));
+        }
+        let Some(BsonValue::String(name)) = specification.get("name")
+        else {
+            return Err(CommandError::new(
+                9,
+                format!(
+                    "Error in specification {} :: caused by :: The 'name' field is a required property of an index specification",
+                    render_shell_value(&BsonValue::Document(specification.clone()))
+                ),
+            ));
+        };
+        if name.is_empty() {
+            let mut rendered = specification.clone();
+            rendered.push("v".to_string(), BsonValue::Int32(2));
+            return Err(CommandError::new(
+                67,
+                format!(
+                    "Error in specification {} :: caused by :: index name cannot be empty",
+                    render_shell_value(&BsonValue::Document(rendered))
+                ),
+            ));
+        }
+        let unique = matches!(specification.get("unique"), Some(BsonValue::Bool(true)));
+
+        if let Some(hit) = known.iter().find(|index| index.name == *name) {
+            if hit.key == *key && hit.unique == unique {
+                skipped += 1;
+                continue;
+            }
+            let requested = render_index_definition(key, name, unique);
+            let present = render_index_definition(&hit.key, &hit.name, hit.unique);
+            return Err(CommandError::new(
+                86,
+                format!(
+                    "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: {requested}, existing index: {present}"
+                ),
+            ));
+        }
+        if let Some(hit) = known.iter().find(|index| index.key == *key && index.unique == unique) {
+            return Err(CommandError::new(85, format!("Index already exists with a different name: {}", hit.name)));
+        }
+
+        let candidate = IndexSpec {
+            namespace: namespace.clone(),
+            name: name.clone(),
+            key: key.clone(),
+            unique,
+        };
+        if unique {
+            verify_unique_build(store, &namespace, &candidate)?;
+        }
+        known.push(candidate.clone());
+        accepted.push(candidate);
+    }
+
+    if !accepted.is_empty() {
+        store
+            .add_indexes(&namespace, &accepted)
+            .map_err(|error| CommandError::new(2, format!("createIndexes failed: {error}")))?;
+    }
+
+    let before = 1 + existing.len() as i64;
+    let after = before + accepted.len() as i64;
+    let mut reply = BsonDocument::new();
+    reply.push("numIndexesBefore".to_string(), count_value(before));
+    reply.push("numIndexesAfter".to_string(), count_value(after));
+    if accepted.is_empty() {
+        reply.push("note".to_string(), BsonValue::String("all indexes already exist".to_string()));
+    } else {
+        reply.push("createdCollectionAutomatically".to_string(), BsonValue::Bool(!existed));
+        if skipped > 0 {
+            reply.push("note".to_string(), BsonValue::String("index already exists".to_string()));
+        }
+    }
+    reply.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(reply)
+}
+
+fn render_index_definition(key: &BsonDocument, name: &str, unique: bool) -> String {
+    let mut specification = BsonDocument::new();
+    specification.push("v".to_string(), BsonValue::Int32(2));
+    if unique {
+        specification.push("unique".to_string(), BsonValue::Bool(true));
+    }
+    specification.push("key".to_string(), BsonValue::Document(key.clone()));
+    specification.push("name".to_string(), BsonValue::String(name.to_string()));
+    render_shell_value(&BsonValue::Document(specification))
+}
+
+/// Refuses to build a unique index over documents that already collide.
+fn verify_unique_build(store: &Store, namespace: &str, specification: &IndexSpec) -> Result<(), CommandError> {
+    let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
+    for (_, payload) in store.scan(namespace) {
+        let Ok(document) = parse_bson(&payload)
+        else {
+            continue;
+        };
+        let values = index_values(&document, specification);
+        if !seen.insert(index_tuple(&values)) {
+            return Err(CommandError::new(11000, duplicate_message(namespace, specification, &values)));
+        }
+    }
+    Ok(())
+}
+
+fn duplicate_message(namespace: &str, specification: &IndexSpec, values: &[BsonValue]) -> String {
+    let rendered: Vec<String> = specification
+        .key
+        .fields
+        .iter()
+        .zip(values)
+        .map(|((field, _), value)| format!("{field}: {}", render_shell_value(value)))
+        .collect();
+    format!(
+        "E11000 duplicate key error collection: {namespace} index: {} dup key: {{ {} }}",
+        specification.name,
+        rendered.join(", ")
+    )
+}
+
+/// `listIndexes`: `_id_` first, then user indexes in creation order.
+pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let namespace = namespace_from_command(command, "listIndexes")
+        .ok_or_else(|| CommandError::new(73, "listIndexes command missing collection name"))?;
+    if !store.namespace_exists(&namespace) {
+        return Err(CommandError::new(26, format!("ns does not exist: {namespace}")));
+    }
+
+    let mut first_batch: Vec<BsonValue> = Vec::new();
+    let mut identifier = BsonDocument::new();
+    identifier.push("_id".to_string(), BsonValue::Int32(1));
+    let mut entry = BsonDocument::new();
+    entry.push("v".to_string(), BsonValue::Int32(2));
+    entry.push("key".to_string(), BsonValue::Document(identifier));
+    entry.push("name".to_string(), BsonValue::String("_id_".to_string()));
+    first_batch.push(BsonValue::Document(entry));
+
+    for specification in store.index_specs(&namespace) {
+        let mut entry = BsonDocument::new();
+        entry.push("v".to_string(), BsonValue::Int32(2));
+        entry.push("key".to_string(), BsonValue::Document(specification.key));
+        entry.push("name".to_string(), BsonValue::String(specification.name));
+        if specification.unique {
+            entry.push("unique".to_string(), BsonValue::Bool(true));
+        }
+        first_batch.push(BsonValue::Document(entry));
+    }
+
+    let mut cursor = BsonDocument::new();
+    cursor.push("id".to_string(), BsonValue::Int64(0));
+    cursor.push("ns".to_string(), BsonValue::String(namespace));
+    cursor.push("firstBatch".to_string(), BsonValue::Array(first_batch));
+    let mut reply = BsonDocument::new();
+    reply.push("cursor".to_string(), BsonValue::Document(cursor));
+    reply.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(reply)
+}
+
+/// `dropIndexes` by name or `*`; `_id_` is never droppable.
+pub fn drop_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let namespace = namespace_from_command(command, "dropIndexes")
+        .ok_or_else(|| CommandError::new(73, "dropIndexes command missing collection name"))?;
+    if !store.namespace_exists(&namespace) {
+        return Err(CommandError::new(26, format!("ns not found {namespace}")));
+    }
+    let name = match command.get("index") {
+        Some(BsonValue::String(name)) => name.clone(),
+        Some(BsonValue::Document(_)) => {
+            return Err(CommandError::new(
+                59,
+                "dropIndexes by key pattern is not supported; pass the index name or `*`",
+            ))
+        }
+        _ => return Err(CommandError::new(40414, "BSON field 'dropIndexes.index' is missing but a required field")),
+    };
+
+    let existing = store.index_specs(&namespace);
+    let before = 1 + existing.len() as i64;
+    if name == "_id_" {
+        return Err(CommandError::new(72, "cannot drop _id index"));
+    }
+    if name != "*" && !existing.iter().any(|index| index.name == name) {
+        return Err(CommandError::new(27, format!("index not found with name [{name}]")));
+    }
+
+    store.drop_indexes(&namespace, &name).map_err(|error| CommandError::new(2, format!("dropIndexes failed: {error}")))?;
+
+    let mut reply = BsonDocument::new();
+    reply.push("nIndexesWas".to_string(), count_value(before));
+    if name == "*" {
+        reply.push("msg".to_string(), BsonValue::String("non-_id indexes dropped for collection".to_string()));
+    }
+    reply.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(reply)
 }
 
 /// Generates a 12-byte ObjectId without any global counter.

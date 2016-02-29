@@ -188,6 +188,24 @@ pub fn list_databases(store: &MongoStore) -> String {
     reply(&commands::list_databases(store_of(store)))
 }
 
+/// `createIndexes` reply.
+#[napi]
+pub fn create_indexes(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::create_indexes(&decode_command(&command)?, store_of(store))))
+}
+
+/// `listIndexes` reply.
+#[napi]
+pub fn list_indexes(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::list_indexes(&decode_command(&command)?, store_of(store))))
+}
+
+/// `dropIndexes` reply.
+#[napi]
+pub fn drop_indexes(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::drop_indexes(&decode_command(&command)?, store_of(store))))
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[napi]
 pub fn import_bson(store: &MongoStore, namespace: String, bytes: Buffer) -> Result<u32> {

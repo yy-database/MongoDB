@@ -202,6 +202,20 @@ function runCase(testCase) {
                 if (step.filter !== undefined) command.filter = step.filter
                 return JSON.parse(binding.listCollections(storeOf(step.store), commandText(testCase, step, command)))
             }
+            case 'createIndexes': {
+                const command = { createIndexes: step.collection }
+                if (step.omitIndexes !== true) command.indexes = step.indexes
+                return JSON.parse(binding.createIndexes(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'listIndexes': {
+                const command = { listIndexes: step.collection }
+                return JSON.parse(binding.listIndexes(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'dropIndexes': {
+                const command = { dropIndexes: step.collection }
+                if (step.index !== undefined) command.index = step.index
+                return JSON.parse(binding.dropIndexes(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'listDatabases':
                 return JSON.parse(binding.listDatabases(storeOf(step.store)))
             case 'hello':

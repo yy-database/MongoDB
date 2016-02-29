@@ -508,6 +508,22 @@ def run_case(case):
                 command["filter"] = step["filter"]
             reply = mongo.list_collections(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "createIndexes":
+            command = {"createIndexes": step["collection"]}
+            if not step.get("omitIndexes"):
+                command["indexes"] = step["indexes"]
+            reply = mongo.create_indexes(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "listIndexes":
+            command = {"listIndexes": step["collection"]}
+            reply = mongo.list_indexes(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "dropIndexes":
+            command = {"dropIndexes": step["collection"]}
+            if "index" in step:
+                command["index"] = step["index"]
+            reply = mongo.drop_indexes(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "listDatabases":
             return json.loads(mongo.list_databases(store_of(step.get("store"))))
         if op == "hello":
