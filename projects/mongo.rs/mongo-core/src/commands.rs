@@ -354,7 +354,8 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         _ => true,
     };
 
-    let unique_indexes: Vec<IndexSpec> = store.index_specs(&namespace).into_iter().filter(|index| index.unique).collect();
+    let index_specs: Vec<IndexSpec> = store.index_specs(&namespace);
+    let unique_indexes: Vec<IndexSpec> = index_specs.iter().filter(|index| index.unique).cloned().collect();
     let mut candidates: Vec<(usize, BsonDocument, BsonValue)> = Vec::with_capacity(documents.len());
     let mut write_errors: Vec<WriteError> = Vec::new();
 
@@ -370,6 +371,13 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         let mut stored = sub_document.clone();
         if !stored.fields.iter().any(|(field, _)| field == "_id") {
             stored.push("_id".to_string(), BsonValue::ObjectId(generate_object_id()));
+        }
+        if let Some(error) = parallel_array_error(&stored, &index_specs) {
+            write_errors.push(WriteError::plain(index, error.code, error.message));
+            if ordered {
+                break;
+            }
+            continue;
         }
         let Some(identifier) = stored.fields.iter().find(|(field, _)| field == "_id").map(|(_, value)| value.clone())
         else {
@@ -417,7 +425,9 @@ fn commit_insert(
         existing.insert(key);
         let Ok(document) = parse_bson(&payload) else { continue };
         for (position, specification) in unique_indexes.iter().enumerate() {
-            indexed[position].insert(index_tuple(&index_values(&document, specification)));
+            for tuple in index_entries(&document, specification) {
+                indexed[position].insert(index_tuple(&tuple));
+            }
         }
     }
 
@@ -433,11 +443,12 @@ fn commit_insert(
             continue;
         }
         let mut conflict: Option<(&IndexSpec, Vec<BsonValue>)> = None;
-        for (position, specification) in unique_indexes.iter().enumerate() {
-            let values = index_values(document, specification);
-            if indexed[position].contains(&index_tuple(&values)) {
-                conflict = Some((specification, values));
-                break;
+        'specification: for (position, specification) in unique_indexes.iter().enumerate() {
+            for values in index_entries(document, specification) {
+                if indexed[position].contains(&index_tuple(&values)) {
+                    conflict = Some((specification, values));
+                    break 'specification;
+                }
             }
         }
         if let Some((specification, values)) = conflict {
@@ -449,7 +460,9 @@ fn commit_insert(
         }
         staged.insert(id_key.clone());
         for (position, specification) in unique_indexes.iter().enumerate() {
-            indexed[position].insert(index_tuple(&index_values(document, specification)));
+            for tuple in index_entries(document, specification) {
+                indexed[position].insert(index_tuple(&tuple));
+            }
         }
         accepted.push((id_key, encode_bson(document)));
     }
@@ -476,17 +489,116 @@ fn id_duplicate_error(namespace: &str, index: usize, identifier: &BsonValue) -> 
     )
 }
 
-/// The values a document contributes to one index key, in key order.
+/// The index values one field contributes, expanding an array one level.
+fn field_values(document: &BsonDocument, field: &str) -> Vec<BsonValue> {
+    let candidates = collect_field(document, field);
+    if candidates.is_empty() {
+        // A missing field is indexed as `null`, which is what makes `{a: null}`
+        // and an absent `a` collide in a unique index.
+        return vec![BsonValue::Null];
+    }
+    let mut values = Vec::new();
+    for candidate in candidates {
+        match candidate {
+            BsonValue::Array(items) => {
+                if items.is_empty() {
+                    // `mongod 8.0.9` indexes an empty array as BSON undefined:
+                    // `{a: []}` twice collides as `dup key: { a: undefined }`.
+                    values.push(BsonValue::Undefined);
+                } else {
+                    // Only one level is expanded, so a nested array stays one
+                    // element: `{a: [[1, 2]]}` keys on the array `[1, 2]` itself.
+                    values.extend(items.iter().cloned());
+                }
+            }
+            other => values.push(other.clone()),
+        }
+    }
+    values
+}
+
+/// Whether one key field is array-valued, which is what makes the index multikey.
+fn field_array_valued(document: &BsonDocument, field: &str) -> bool {
+    collect_field(document, field).iter().any(|candidate| matches!(candidate, BsonValue::Array(_)))
+        || (field.contains('.') && path_traverses_array(document, field))
+}
+
+/// Whether a dotted path descends through an array before reaching its leaf.
+fn path_traverses_array(document: &BsonDocument, path: &str) -> bool {
+    let segments: Vec<&str> = path.split('.').collect();
+    match document.get(segments[0]) {
+        Some(value) => traverses_array(value, &segments[1..]),
+        None => false,
+    }
+}
+
+fn traverses_array(value: &BsonValue, segments: &[&str]) -> bool {
+    if segments.is_empty() {
+        return false;
+    }
+    match value {
+        BsonValue::Array(_) => true,
+        BsonValue::Document(document) => {
+            document.get(segments[0]).map(|next| traverses_array(next, &segments[1..])).unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+/// Every index key one document contributes, in key order and element order.
 ///
-/// A missing field is indexed as `null`, which is what makes `{a: null}` and an
-/// absent `a` collide in a unique index.
-fn index_values(document: &BsonDocument, specification: &IndexSpec) -> Vec<BsonValue> {
-    specification
-        .key
-        .fields
-        .iter()
-        .map(|(field, _)| collect_field(document, field).first().cloned().cloned().unwrap_or(BsonValue::Null))
-        .collect()
+/// A compound key is the cartesian product of its fields. Duplicate elements
+/// inside one document are collapsed, which is why `{a: [3, 3]}` can be stored
+/// under a unique index while a second document with `a: 3` cannot.
+fn index_entries(document: &BsonDocument, specification: &IndexSpec) -> Vec<Vec<BsonValue>> {
+    let mut tuples: Vec<Vec<BsonValue>> = vec![Vec::new()];
+    for (field, _) in &specification.key.fields {
+        let values = field_values(document, field);
+        let mut expanded = Vec::with_capacity(tuples.len() * values.len());
+        for tuple in &tuples {
+            for value in &values {
+                let mut next = tuple.clone();
+                next.push(value.clone());
+                expanded.push(next);
+            }
+        }
+        tuples = expanded;
+    }
+    let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
+    tuples.retain(|tuple| seen.insert(index_tuple(tuple)));
+    tuples
+}
+
+/// Every encoded key one document contributes under one index.
+fn tuples_of(document: &BsonDocument, specification: &IndexSpec) -> BTreeSet<Vec<u8>> {
+    index_entries(document, specification).into_iter().map(|tuple| index_tuple(&tuple)).collect()
+}
+
+/// Code `171` for two array-valued fields under one compound index.
+///
+/// `mongod 8.0.9` names the two array fields in reverse key order: index
+/// `{a: 1, b: 1}` over `{a: [1], b: [2]}` reports `[b] [a]` even when a third
+/// field is also an array.
+fn parallel_array_error(document: &BsonDocument, indexes: &[IndexSpec]) -> Option<CommandError> {
+    for specification in indexes.iter().filter(|index| index.key.fields.len() >= 2) {
+        let array_fields: Vec<&str> = specification
+            .key
+            .fields
+            .iter()
+            .map(|(field, _)| field.as_str())
+            .filter(|field| field_array_valued(document, *field))
+            .collect();
+        if array_fields.len() >= 2 {
+            return Some(CommandError::new(
+                171,
+                format!(
+                    "cannot index parallel arrays [{}] [{}]",
+                    array_fields[1], array_fields[0]
+                ),
+            ));
+        }
+    }
+    None
 }
 
 /// Length-prefixed key so two adjacent tuples can never be confused.
@@ -753,12 +865,13 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
     let mut matched: i64 = 0;
     let mut modified: i64 = 0;
-    let unique_indexes: Vec<IndexSpec> = store.index_specs(&namespace).into_iter().filter(|index| index.unique).collect();
-    let mut indexed: BTreeMap<Vec<u8>, Vec<Vec<u8>>> = BTreeMap::new();
+    let index_specs: Vec<IndexSpec> = store.index_specs(&namespace);
+    let unique_indexes: Vec<IndexSpec> = index_specs.iter().filter(|index| index.unique).cloned().collect();
+    let mut indexed: BTreeMap<Vec<u8>, Vec<BTreeSet<Vec<u8>>>> = BTreeMap::new();
     if !unique_indexes.is_empty() {
         for (key, value) in store.scan(&namespace) {
             if let Ok(document) = parse_bson(&value) {
-                indexed.insert(key, unique_indexes.iter().map(|spec| index_tuple(&index_values(&document, spec))).collect());
+                indexed.insert(key, unique_indexes.iter().map(|spec| tuples_of(&document, spec)).collect());
             }
         }
     }
@@ -808,6 +921,14 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
             };
+            if let Some(error) = parallel_array_error(&updated, &index_specs) {
+                // A parallel-array key cannot be indexed at all, so the real
+                // server reports a zeroed counter pair plus `writeErrors`.
+                if !changes.is_empty() {
+                    store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                }
+                return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message)]));
+            }
             if !unique_indexes.is_empty() {
                 if let Some((specification, values)) = find_unique_conflict(&unique_indexes, &updated, &key, &indexed) {
                     // Same shape as a failing multi-update: already applied writes
@@ -822,7 +943,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     ));
                 }
                 if let Some(entry) = indexed.get_mut(&key) {
-                    *entry = unique_indexes.iter().map(|spec| index_tuple(&index_values(&updated, spec))).collect();
+                    *entry = unique_indexes.iter().map(|spec| tuples_of(&updated, spec)).collect();
                 }
             }
             let payload = encode_bson(&updated);
@@ -842,20 +963,21 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     Ok(write_reply(matched, Some(modified), &[]))
 }
 
-/// Finds the first unique index whose key tuple of `document` is already held
-/// by a different stored document.
+/// Finds the first unique index key of `document` already held by a different
+/// stored document.
 fn find_unique_conflict<'a>(
     indexes: &'a [IndexSpec],
     document: &BsonDocument,
     key: &[u8],
-    current: &BTreeMap<Vec<u8>, Vec<Vec<u8>>>,
+    current: &BTreeMap<Vec<u8>, Vec<BTreeSet<Vec<u8>>>>,
 ) -> Option<(&'a IndexSpec, Vec<BsonValue>)> {
     for (position, specification) in indexes.iter().enumerate() {
-        let values = index_values(document, specification);
-        let tuple = index_tuple(&values);
-        for (other, tuples) in current {
-            if other.as_slice() != key && tuples.get(position) == Some(&tuple) {
-                return Some((specification, values));
+        for values in index_entries(document, specification) {
+            let tuple = index_tuple(&values);
+            for (other, sets) in current {
+                if other.as_slice() != key && sets.get(position).is_some_and(|set| set.contains(&tuple)) {
+                    return Some((specification, values));
+                }
             }
         }
     }
@@ -1069,6 +1191,7 @@ fn render_shell_value(value: &BsonValue) -> String {
         BsonValue::Double(number) => number.to_string(),
         BsonValue::Bool(flag) => if *flag { "true" } else { "false" }.to_string(),
         BsonValue::Null => "null".to_string(),
+        BsonValue::Undefined => "undefined".to_string(),
         BsonValue::ObjectId(bytes) => format!("ObjectId('{}')", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()),
         other => format!("{other:?}"),
     }
@@ -1097,6 +1220,7 @@ fn bson_type_name(value: &BsonValue) -> &'static str {
         BsonValue::Double(_) => "double",
         BsonValue::Bool(_) => "bool",
         BsonValue::Null => "null",
+        BsonValue::Undefined => "undefined",
         BsonValue::ObjectId(_) => "objectId",
         BsonValue::Binary(_) => "binData",
     }
@@ -1368,27 +1492,28 @@ fn verify_unique_build(store: &Store, namespace: &str, specification: &IndexSpec
         else {
             continue;
         };
-        let values = index_values(&document, specification);
-        if !seen.insert(index_tuple(&values)) {
-            let key_value = specification.key.fields.iter().zip(values.iter()).fold(
-                BsonDocument::new(),
-                |mut document, ((field, _), value)| {
-                    document.push(field.clone(), value.clone());
-                    document
-                },
-            );
-            return Err(CommandError::new(
-                11000,
-                format!(
-                    "Index build failed: {}: Collection {} ( {} ) :: caused by :: {}",
-                    seeded_uuid(&format!("{namespace}|{}|build", specification.name)),
-                    namespace,
-                    seeded_uuid(namespace),
-                    duplicate_message(namespace, specification, &values)
-                ),
-            )
-            .with_detail("keyPattern", BsonValue::Document(specification.key.clone()))
-            .with_detail("keyValue", BsonValue::Document(key_value)));
+        for values in index_entries(&document, specification) {
+            if !seen.insert(index_tuple(&values)) {
+                let key_value = specification.key.fields.iter().zip(values.iter()).fold(
+                    BsonDocument::new(),
+                    |mut document, ((field, _), value)| {
+                        document.push(field.clone(), value.clone());
+                        document
+                    },
+                );
+                return Err(CommandError::new(
+                    11000,
+                    format!(
+                        "Index build failed: {}: Collection {} ( {} ) :: caused by :: {}",
+                        seeded_uuid(&format!("{namespace}|{}|build", specification.name)),
+                        namespace,
+                        seeded_uuid(namespace),
+                        duplicate_message(namespace, specification, &values)
+                    ),
+                )
+                .with_detail("keyPattern", BsonValue::Document(specification.key.clone()))
+                .with_detail("keyValue", BsonValue::Document(key_value)));
+            }
         }
     }
     Ok(())
@@ -1456,13 +1581,26 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     entry.push("name".to_string(), BsonValue::String("_id_".to_string()));
     first_batch.push(BsonValue::Document(entry));
 
+    let documents: Vec<BsonDocument> =
+        store.scan(&namespace).into_iter().filter_map(|(_, payload)| parse_bson(&payload).ok()).collect();
+
     for specification in store.index_specs(&namespace) {
+        let multikey = documents.iter().any(|document| {
+            specification
+                .key
+                .fields
+                .iter()
+                .any(|(field, _)| field_array_valued(document, field))
+        });
         let mut entry = BsonDocument::new();
         entry.push("v".to_string(), BsonValue::Int32(2));
         entry.push("key".to_string(), BsonValue::Document(specification.key));
         entry.push("name".to_string(), BsonValue::String(specification.name));
         if specification.unique {
             entry.push("unique".to_string(), BsonValue::Bool(true));
+        }
+        if multikey {
+            entry.push("multikey".to_string(), BsonValue::Bool(true));
         }
         first_batch.push(BsonValue::Document(entry));
     }
@@ -2717,6 +2855,7 @@ fn number_of(value: &BsonValue) -> Option<f64> {
 /// BSON sort order between the value types this store can hold.
 fn value_rank(value: &BsonValue) -> u8 {
     match value {
+        BsonValue::Undefined => 0,
         BsonValue::Null => 1,
         BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => 2,
         BsonValue::String(_) => 3,

@@ -279,7 +279,13 @@ const collections = {
     idxKeyless: 'oracle_idx_keyless',
     idxBuildDup: 'oracle_idx_build_dup',
     idxDropPattern: 'oracle_idx_drop_pattern',
-    idxEmpty: 'oracle_idx_empty'
+    idxEmpty: 'oracle_idx_empty',
+    multiKey: 'oracle_idx_multikey',
+    multiCompound: 'oracle_idx_multicompound',
+    multiNested: 'oracle_idx_multikey_nested',
+    multiParallel: 'oracle_idx_multikey_parallel',
+    multiList: 'oracle_idx_multikey_list',
+    multiBuild: 'oracle_idx_multikey_build'
 }
 
 const probes = [
@@ -1577,6 +1583,223 @@ const probes = [
         command: dropIndexes(collections.idxDropPattern, 5),
         pick: indexErrorShape,
         errorProbe: true
+    },
+    {
+        id: 'index.multikey.duplicate_across_documents',
+        note: 'a unique index expands array elements, so {a: [1, 2]} collides with {a: 2}',
+        setup: [
+            insert(collections.multiKey, [{ _id: 1, a: [1, 2] }]),
+            dropIndexes(collections.multiKey, '*'),
+            createIndexes(collections.multiKey, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiKey, [{ _id: 2, a: 2 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.duplicate_element_within_document',
+        note: 'repeated elements in one document do not collide, but a later document with that element does',
+        setup: [
+            insert(collections.multiKey, [{ _id: 1, a: [3, 3] }]),
+            dropIndexes(collections.multiKey, '*'),
+            createIndexes(collections.multiKey, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiKey, [{ _id: 2, a: 3 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true,
+        also: { name: 'first_insert_outcome', pick: null, fromSetup: 0 }
+    },
+    {
+        id: 'index.multikey.empty_array_undefined',
+        note: 'an empty array is indexed as BSON undefined, so two {a: []} documents collide',
+        setup: [
+            insert(collections.multiKey, [{ _id: 1, a: [] }]),
+            dropIndexes(collections.multiKey, '*'),
+            createIndexes(collections.multiKey, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiKey, [{ _id: 2, a: [] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.null_element',
+        note: '{a: [null]} and {a: null} share the null index key',
+        setup: [
+            insert(collections.multiKey, [{ _id: 1, a: null }]),
+            dropIndexes(collections.multiKey, '*'),
+            createIndexes(collections.multiKey, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiKey, [{ _id: 2, a: [null] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.nested_object_element',
+        note: 'a document element is indexed as a whole, so {a: [ {b: 1} ]} collides with {a: {b: 1}}',
+        setup: [
+            insert(collections.multiKey, [{ _id: 1, a: { b: 1 } }]),
+            dropIndexes(collections.multiKey, '*'),
+            createIndexes(collections.multiKey, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiKey, [{ _id: 2, a: [{ b: 1 }] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.nested_array_not_expanded',
+        note: 'only one level expands, so {a: [[1, 2]]} does not collide with {a: [1, 2]}',
+        setup: [
+            insert(collections.multiNested, [{ _id: 1, a: [[1, 2]] }]),
+            dropIndexes(collections.multiNested, '*'),
+            createIndexes(collections.multiNested, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiNested, [{ _id: 2, a: [1, 2] }]),
+        pick: insertOutcome,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.nested_array_duplicate',
+        note: 'the nested array itself is the key, so two {a: [[1, 2]]} documents collide',
+        setup: [
+            insert(collections.multiNested, [{ _id: 1, a: [[1, 2]] }]),
+            dropIndexes(collections.multiNested, '*'),
+            createIndexes(collections.multiNested, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiNested, [{ _id: 2, a: [[1, 2]] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.empty_nested_array_duplicate',
+        note: 'a nested empty array keys on [] rather than undefined',
+        setup: [
+            insert(collections.multiNested, [{ _id: 1, a: [[]] }]),
+            dropIndexes(collections.multiNested, '*'),
+            createIndexes(collections.multiNested, [{ key: { a: 1 }, name: 'a_1', unique: true }])
+        ],
+        command: insert(collections.multiNested, [{ _id: 2, a: [[]] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.compound_missing_field_null',
+        note: 'the compound key of an expanded array pairs each element with null for a missing field',
+        setup: [
+            insert(collections.multiCompound, [{ _id: 1, a: [1, 2] }]),
+            dropIndexes(collections.multiCompound, '*'),
+            createIndexes(collections.multiCompound, [{ key: { a: 1, b: 1 }, name: 'ab', unique: true }])
+        ],
+        command: insert(collections.multiCompound, [{ _id: 2, a: 1 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.compound_empty_array',
+        note: 'a compound key over an empty array renders both fields, the first as undefined',
+        setup: [
+            insert(collections.multiCompound, [{ _id: 1, a: [], b: 1 }]),
+            dropIndexes(collections.multiCompound, '*'),
+            createIndexes(collections.multiCompound, [{ key: { a: 1, b: 1 }, name: 'ab', unique: true }])
+        ],
+        command: insert(collections.multiCompound, [{ _id: 2, a: [], b: 1 }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.parallel_arrays_insert',
+        note: 'two array fields under one compound index are rejected with code 171, later field first',
+        setup: [
+            insert(collections.multiParallel, [{ _id: 1, a: 1 }]),
+            dropIndexes(collections.multiParallel, '*'),
+            createIndexes(collections.multiParallel, [{ key: { a: 1, b: 1 }, name: 'ab' }])
+        ],
+        command: insert(collections.multiParallel, [{ _id: 2, a: [1], b: [2] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.parallel_arrays_reversed_key',
+        note: 'the parallel-array message lists the key order reversed: {b: 1, a: 1} reports [a] [b]',
+        setup: [
+            insert(collections.multiParallel, [{ _id: 1, a: 1 }]),
+            dropIndexes(collections.multiParallel, '*'),
+            createIndexes(collections.multiParallel, [{ key: { b: 1, a: 1 }, name: 'ba' }])
+        ],
+        command: insert(collections.multiParallel, [{ _id: 2, a: [1], b: [2] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.parallel_arrays_empty',
+        note: 'an empty array still counts as a parallel array',
+        setup: [
+            insert(collections.multiParallel, [{ _id: 1, a: 1 }]),
+            dropIndexes(collections.multiParallel, '*'),
+            createIndexes(collections.multiParallel, [{ key: { a: 1, b: 1 }, name: 'ab' }])
+        ],
+        command: insert(collections.multiParallel, [{ _id: 2, a: [], b: [2] }]),
+        pick: (reply) => reply.writeErrors,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.parallel_arrays_update',
+        note: 'an update that produces two array fields answers n: 0 with writeErrors and nModified: 0',
+        setup: [
+            insert(collections.multiParallel, [{ _id: 1, a: 1, b: 2 }]),
+            dropIndexes(collections.multiParallel, '*'),
+            createIndexes(collections.multiParallel, [{ key: { a: 1, b: 1 }, name: 'ab' }])
+        ],
+        command: update(collections.multiParallel, [{ q: { _id: 1 }, u: { $set: { a: [1], b: [2] } } }]),
+        pick: (reply) => reply,
+        exactOrder: true
+    },
+    {
+        id: 'index.multikey.build_duplicate',
+        note: 'building a unique multikey index over an array element that collides keeps the UUID template',
+        setup: [insert(collections.multiBuild, [{ _id: 1, a: [8, 9] }, { _id: 2, a: 8 }])],
+        command: createIndexes(collections.multiBuild, [{ key: { a: 1 }, name: 'a_1', unique: true }]),
+        pick: (reply) => ({
+            code: reply.code,
+            codeName: reply.codeName,
+            errmsg: maskUuid(reply.errmsg),
+            keyPattern: reply.keyPattern,
+            keyValue: reply.keyValue
+        }),
+        errorProbe: true
+    },
+    {
+        id: 'index.multikey.build_empty_array_duplicate',
+        note: 'building over two empty arrays collides on the undefined index key',
+        setup: [insert(collections.multiBuild, [{ _id: 1, a: [] }, { _id: 2, a: [] }])],
+        command: createIndexes(collections.multiBuild, [{ key: { a: 1 }, name: 'a_1', unique: true }]),
+        pick: (reply) => ({
+            code: reply.code,
+            codeName: reply.codeName,
+            errmsg: maskUuid(reply.errmsg),
+            keyPattern: reply.keyPattern,
+            keyValue: reply.keyValue
+        }),
+        errorProbe: true
+    },
+    {
+        id: 'index.multikey.list_shape',
+        note: 'listIndexes over an array-valued path; multikey itself is asserted by the local corpus',
+        setup: [
+            insert(collections.multiList, [{ _id: 1, a: [1, 2] }, { _id: 2, a: 3 }]),
+            dropIndexes(collections.multiList, '*'),
+            createIndexes(collections.multiList, [{ key: { a: 1, b: 1 }, name: 'ab' }])
+        ],
+        command: listIndexes(collections.multiList),
+        pick: (reply) => ({
+            cursor: {
+                ...reply.cursor,
+                firstBatch: reply.cursor.firstBatch.map((document) =>
+                    Object.fromEntries(Object.entries(document).filter(([key]) => key !== 'multikey'))
+                )
+            },
+            ok: reply.ok
+        }),
+        exactOrder: true
     }
 ]
 

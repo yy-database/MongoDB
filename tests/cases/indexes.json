@@ -713,6 +713,302 @@
                 { "at": "/r1/codeName", "equals": "InvalidOptions" },
                 { "at": "/r1/errmsg", "equals": "cannot drop _id index" }
             ]
+        },
+        {
+            "id": "index.multikey.insert_cross_document_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 2 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: 2 }" },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/writeErrors/0/#", "equals": 5 }
+            ]
+        },
+        {
+            "id": "index.multikey.duplicate_element_within_document",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [3, 3] }], "as": "r1" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 3 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: 3 }" }
+            ]
+        },
+        {
+            "id": "index.multikey.empty_array_undefined",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: undefined }" },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$undefined": true } },
+                { "at": "/r3/writeErrors/0/#", "equals": 5 }
+            ]
+        },
+        {
+            "id": "index.multikey.null_element_collides",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [null] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: null }" },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": null }
+            ]
+        },
+        {
+            "id": "index.multikey.nested_object_element",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": { "b": 1 } }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [{ "b": 1 }] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: { b: 1 } }" },
+                { "at": "/r3/writeErrors/0/keyValue/a/b", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "index.multikey.nested_array_not_expanded",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [[1, 2]] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [1, 2] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors", "absent": true }
+            ]
+        },
+        {
+            "id": "index.multikey.nested_array_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [[1, 2]] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [[1, 2]] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: [ 1, 2 ] }" },
+                { "at": "/r3/writeErrors/0/keyValue/a/0", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/writeErrors/0/keyValue/a/1", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "index.multikey.empty_nested_array_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [[]] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [[]] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: a_1 dup key: { a: [] }" },
+                { "at": "/r3/writeErrors/0/keyValue/a/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "index.multikey.compound_missing_field_null",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": 1 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: ab dup key: { a: 1, b: null }" },
+                { "at": "/r3/writeErrors/0/keyValue/b", "equals": null }
+            ]
+        },
+        {
+            "id": "index.multikey.compound_empty_array",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [], "b": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab", "unique": true }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [], "b": 1 }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "E11000 duplicate key error collection: app.items index: ab dup key: { a: undefined, b: 1 }" },
+                { "at": "/r3/writeErrors/0/keyValue/a", "equals": { "$undefined": true } },
+                { "at": "/r3/writeErrors/0/keyValue/b", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "index.multikey.parallel_arrays_insert",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab" }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [1], "b": [2] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/index", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "171" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "cannot index parallel arrays [b] [a]" },
+                { "at": "/r3/writeErrors/0/keyPattern", "absent": true },
+                { "at": "/r3/writeErrors/0/keyValue", "absent": true },
+                { "at": "/r3/writeErrors/0/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "index.multikey.parallel_arrays_store_key_order",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "b": 1, "a": 1 }, "name": "ba" }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [1], "b": [2] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "cannot index parallel arrays [a] [b]" }
+            ]
+        },
+        {
+            "id": "index.multikey.parallel_arrays_empty",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab" }] },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "a": [], "b": [2] }], "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "171" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "cannot index parallel arrays [b] [a]" }
+            ]
+        },
+        {
+            "id": "index.multikey.parallel_arrays_update",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a": [1], "b": [2] } } }], "as": "r3" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/nModified", "equals": { "$numberInt": "0" } },
+                { "at": "/r3/writeErrors/0/code", "equals": { "$numberInt": "171" } },
+                { "at": "/r3/writeErrors/0/errmsg", "equals": "cannot index parallel arrays [b] [a]" },
+                { "at": "/r4/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "index.multikey.build_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [8, 9] }, { "_id": 2, "a": 8 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r1/codeName", "equals": "DuplicateKey" },
+                { "at": "/r1/errmsg", "matches": ":: caused by :: E11000 duplicate key error collection: app\\.items index: a_1 dup key: \\{ a: 8 \\}$" },
+                { "at": "/r1/keyValue/a", "equals": { "$numberInt": "8" } },
+                { "at": "/r1/#", "equals": 6 }
+            ]
+        },
+        {
+            "id": "index.multikey.build_empty_array_duplicate",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [] }, { "_id": 2, "a": [] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1", "unique": true }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r1/errmsg", "matches": "dup key: \\{ a: undefined \\}$" },
+                { "at": "/r1/keyValue/a", "equals": { "$undefined": true } }
+            ]
+        },
+        {
+            "id": "index.multikey.list_marks_array_path",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }, { "_id": 2, "a": 3 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true },
+                { "at": "/r2/cursor/firstBatch/1/#", "equals": 4 }
+            ]
+        },
+        {
+            "id": "index.multikey.list_omits_scalar_path",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/1/multikey", "absent": true },
+                { "at": "/r2/cursor/firstBatch/1/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "index.multikey.list_compound_one_array_field",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1], "b": 1 }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab" }] },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true }
+            ]
+        },
+        {
+            "id": "index.multikey.list_dotted_path_through_array",
+            "surface": "index",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [{ "b": 1 }] }] },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a.b": 1 }, "name": "a.b_1" }] },
+                { "op": "listIndexes", "collection": "items", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true }
+            ]
         }
     ]
 }

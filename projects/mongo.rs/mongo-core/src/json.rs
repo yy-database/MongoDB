@@ -2,7 +2,8 @@
 //!
 //! BSON loses precision if it is flattened to plain JSON, so values use the
 //! MongoDB extended-JSON forms: `{"$oid": ...}`, `{"$numberInt": ...}`,
-//! `{"$numberLong": ...}`, `{"$numberDouble": ...}`, `{"$binary": {...}}`.
+//! `{"$numberLong": ...}`, `{"$numberDouble": ...}`, `{"$binary": {...}}`,
+//! and the legacy `{"$undefined": true}`.
 
 use crate::bson::{BinaryData, BsonDocument, BsonValue};
 use serde_json::{Map, Value};
@@ -18,6 +19,11 @@ pub fn to_json(value: &BsonValue) -> Value {
         BsonValue::Double(number) => tagged("$numberDouble", format!("{number:?}")),
         BsonValue::Bool(flag) => Value::Bool(*flag),
         BsonValue::Null => Value::Null,
+        BsonValue::Undefined => {
+            let mut wrapper = Map::new();
+            wrapper.insert("$undefined".to_string(), Value::Bool(true));
+            Value::Object(wrapper)
+        }
         BsonValue::ObjectId(bytes) => tagged("$oid", hex_encode(bytes)),
         BsonValue::Binary(binary) => {
             let mut payload = Map::new();
@@ -132,6 +138,12 @@ fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String>
             let text = payload.as_str().ok_or_else(|| "`$numberDouble` must be a string".to_string())?;
             let number: f64 = text.parse().map_err(|_| format!("invalid `$numberDouble` value `{text}`"))?;
             Ok(Some(BsonValue::Double(number)))
+        }
+        "$undefined" => {
+            if payload.as_bool() != Some(true) {
+                return Err("`$undefined` must be true".to_string());
+            }
+            Ok(Some(BsonValue::Undefined))
         }
         "$binary" => {
             let object = payload.as_object().ok_or_else(|| "`$binary` must be an object".to_string())?;

@@ -3,7 +3,8 @@
 //!
 //! Only the element types we actually need are covered: Document (0x03),
 //! Array (0x04), String (0x02), Int32 (0x10), Int64 (0x12), Double (0x01),
-//! Bool (0x08), Null (0x0A), ObjectId (0x07), and Binary (0x05).
+//! Bool (0x08), Null (0x0A), Undefined (0x06), ObjectId (0x07), and Binary
+//! (0x05).
 
 use std::io::{self, Cursor, Read, Write};
 
@@ -46,6 +47,12 @@ pub enum BsonValue {
     Bool(bool),
     /// Null placeholder (0x0A).
     Null,
+    /// Deprecated BSON undefined (0x06).
+    ///
+    /// `mongod` produces this as the index key of an empty array on a multikey
+    /// index, so a unique-index reply (`keyValue: { a: undefined }`) cannot be
+    /// reproduced without it.
+    Undefined,
     /// 12-byte ObjectId (0x07).
     ObjectId([u8; 12]),
     /// Binary payload (0x05) with its subtype.
@@ -184,6 +191,10 @@ fn encode_field<W: Write>(writer: &mut W, key: &str, value: &BsonValue) -> io::R
             writer.write_all(&0x0A_u8.to_le_bytes())?;
             write_cstring(writer, key)?;
         }
+        BsonValue::Undefined => {
+            writer.write_all(&0x06_u8.to_le_bytes())?;
+            write_cstring(writer, key)?;
+        }
         BsonValue::Int32(v) => {
             writer.write_all(&0x10_u8.to_le_bytes())?;
             write_cstring(writer, key)?;
@@ -288,6 +299,7 @@ fn parse_value<R: Read>(cursor: &mut R, elem_type: u8) -> Result<BsonValue, Bson
             }
             Ok(BsonValue::Binary(BinaryData::new(subtype, data)))
         }
+        0x06 => Ok(BsonValue::Undefined),
         0x07 => {
             let mut bytes = [0_u8; 12];
             cursor.read_exact(&mut bytes)?;
@@ -415,6 +427,9 @@ pub fn value_to_key(value: &BsonValue) -> Vec<u8> {
         }
         BsonValue::Null => {
             out.push(b'n');
+        }
+        BsonValue::Undefined => {
+            out.push(b'u');
         }
         other => {
             // Fallback: encode the whole value as BSON bytes for stable hashing.
