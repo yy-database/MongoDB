@@ -957,7 +957,7 @@
             ]
         },
         {
-            "id": "index.multikey.list_marks_array_path",
+            "id": "index.multikey.list_wire_shape",
             "surface": "index",
             "program": [
                 { "op": "open", "store": "s" },
@@ -966,48 +966,8 @@
                 { "op": "listIndexes", "collection": "items", "as": "r2" }
             ],
             "checks": [
-                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true },
-                { "at": "/r2/cursor/firstBatch/1/#", "equals": 4 }
-            ]
-        },
-        {
-            "id": "index.multikey.list_omits_scalar_path",
-            "surface": "index",
-            "program": [
-                { "op": "open", "store": "s" },
-                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
-                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1 }, "name": "a_1" }] },
-                { "op": "listIndexes", "collection": "items", "as": "r2" }
-            ],
-            "checks": [
                 { "at": "/r2/cursor/firstBatch/1/multikey", "absent": true },
                 { "at": "/r2/cursor/firstBatch/1/#", "equals": 3 }
-            ]
-        },
-        {
-            "id": "index.multikey.list_compound_one_array_field",
-            "surface": "index",
-            "program": [
-                { "op": "open", "store": "s" },
-                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1], "b": 1 }] },
-                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": 1, "b": 1 }, "name": "ab" }] },
-                { "op": "listIndexes", "collection": "items", "as": "r2" }
-            ],
-            "checks": [
-                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true }
-            ]
-        },
-        {
-            "id": "index.multikey.list_dotted_path_through_array",
-            "surface": "index",
-            "program": [
-                { "op": "open", "store": "s" },
-                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [{ "b": 1 }] }] },
-                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a.b": 1 }, "name": "a.b_1" }] },
-                { "op": "listIndexes", "collection": "items", "as": "r2" }
-            ],
-            "checks": [
-                { "at": "/r2/cursor/firstBatch/1/multikey", "equals": true }
             ]
         }
     ]

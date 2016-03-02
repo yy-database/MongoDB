@@ -573,6 +573,229 @@
                 { "at": "/r/code", "equals": { "$numberInt": "59" } },
                 { "at": "/r/errmsg", "equals": "unknown $project expression: $literal (supported: $add, $concat, $ifNull)" }
             ]
+        },
+        {
+            "id": "pipe.lookup.equality_form",
+            "surface": "command",
+            "source": "MongoDB manual, $lookup / Equality Match: localField, foreignField and as (https://www.mongodb.com/docs/manual/reference/operator/aggregation/lookup/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, equality form matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "foreign_docs", "documents": [{ "_id": "f1", "b": 1 }, { "_id": "f2", "b": 2 }, { "_id": "f3", "b": [2, 3] }, { "_id": "f4", "b": null }, { "_id": "f5", "tag": "missing-b" }, { "_id": "f6", "b": { "x": 1 } }, { "_id": "f7", "b": [null, 5] }] },
+                { "op": "insert", "collection": "local_docs", "documents": [{ "_id": 1, "a": [2, 2] }, { "_id": 2, "a": null }, { "_id": 3, "tag": "missing-a" }, { "_id": 4, "a": { "x": 1 } }, { "_id": 5, "a": 1, "join": "overwritten" }, { "_id": 6, "a": 99 }, { "_id": 7, "a": [] }] },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "localField": "a", "foreignField": "b", "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }, { "$numberInt": "5" }, { "$numberInt": "6" }, { "$numberInt": "7" }] },
+                { "at": "/r/cursor/firstBatch/0/join/*/_id", "equals": ["f2", "f3"] },
+                { "at": "/r/cursor/firstBatch/1/join/*/_id", "equals": ["f4", "f5", "f7"] },
+                { "at": "/r/cursor/firstBatch/2/join/*/_id", "equals": ["f4", "f5", "f7"] },
+                { "at": "/r/cursor/firstBatch/3/join/*/_id", "equals": ["f6"] },
+                { "at": "/r/cursor/firstBatch/4/join/*/_id", "equals": ["f1"] },
+                { "at": "/r/cursor/firstBatch/4/#", "equals": 3 },
+                { "at": "/r/cursor/firstBatch/5/join/#", "equals": 0 },
+                { "at": "/r/cursor/firstBatch/6/join/*/_id", "equals": ["f4", "f5", "f7"] }
+            ]
+        },
+        {
+            "id": "pipe.lookup.nonexistent_collection",
+            "surface": "command",
+            "source": "MongoDB manual, $lookup / Equality Match: a missing foreign collection produces an empty array (https://www.mongodb.com/docs/manual/reference/operator/aggregation/lookup/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "local_docs", "documents": [{ "_id": 1, "a": 1 }, { "_id": 2, "a": 2 }] },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "absent_docs", "localField": "a", "foreignField": "b", "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/0/join/#", "equals": 0 },
+                { "at": "/r/cursor/firstBatch/1/join/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.lookup.missing_from_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $lookup without from and without pipeline",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "localField": "a", "foreignField": "b", "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "must specify 'pipeline' when 'from' is empty" }
+            ]
+        },
+        {
+            "id": "pipe.lookup.missing_as_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $lookup without as",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "localField": "a", "foreignField": "b" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "must specify 'as' field for a $lookup" }
+            ]
+        },
+        {
+            "id": "pipe.lookup.non_string_local_field_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, numeric localField",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "localField": 1, "foreignField": "b", "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "$lookup argument 'localField' must be a string, found localField: 1: int" }
+            ]
+        },
+        {
+            "id": "pipe.lookup.non_string_as_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, numeric as",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "localField": "a", "foreignField": "b", "as": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "$lookup argument 'as' must be a string, found as: 1: int" }
+            ]
+        },
+        {
+            "id": "pipe.lookup.missing_foreign_field_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, localField without foreignField and without pipeline",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "localField": "a", "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "$lookup requires either 'pipeline' or both 'localField' and 'foreignField' to be specified" }
+            ]
+        },
+        {
+            "id": "pipe.lookup.pipeline_outside_gateway",
+            "surface": "error",
+            "source": "coordinate: the $lookup sub-pipeline form is not implemented in this gateway, so it is reported instead of executed",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "pipeline": [{ "$match": { "b": 2 } }], "as": "join" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "$lookup sub-pipelines are outside this gateway (coordinate: only `from` + `localField` + `foreignField` + `as` is supported)" }
+            ]
+        },
+        {
+            "id": "pipe.sortByCount.whole_value_groups",
+            "surface": "command",
+            "source": "MongoDB manual, $sortByCount: groups by the value and emits {_id, count} (https://www.mongodb.com/docs/manual/reference/operator/aggregation/sortByCount/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, distinct counts matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "x": 3 }, { "_id": 2, "x": 3 }, { "_id": 3, "x": 3 }, { "_id": 4, "x": 3 }, { "_id": 5, "x": 3 }, { "_id": 6, "x": 3 }, { "_id": 10, "x": 2 }, { "_id": 11, "x": 2 }, { "_id": 12, "x": 2 }, { "_id": 13, "x": 2 }, { "_id": 14, "x": 2 }, { "_id": 20, "tag": "missing-x" }, { "_id": 21, "tag": "missing-x" }, { "_id": 22, "x": null }, { "_id": 23, "x": null }, { "_id": 30, "x": [1, 2] }, { "_id": 31, "x": [1, 2] }, { "_id": 32, "x": [1, 2] }, { "_id": 40, "x": [] }, { "_id": 41, "x": [] }, { "_id": 50, "x": { "y": 1 } }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sortByCount": "$x" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "2" }, null, [{ "$numberInt": "1" }, { "$numberInt": "2" }], [], { "y": { "$numberInt": "1" } }] },
+                { "at": "/r/cursor/firstBatch/*/count", "equals": [{ "$numberInt": "6" }, { "$numberInt": "5" }, { "$numberInt": "4" }, { "$numberInt": "3" }, { "$numberInt": "2" }, { "$numberInt": "1" }] },
+                { "at": "/r/cursor/firstBatch/0/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "pipe.sortByCount.empty_collection",
+            "surface": "command",
+            "source": "MongoDB manual, $sortByCount: an empty input returns no documents; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, empty batch matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sortByCount": "$x" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.sortByCount.literal_string_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $sortByCount without the $ prefix",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sortByCount": "x" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "40148" } },
+                { "at": "/r/codeName", "equals": "Location40148" },
+                { "at": "/r/errmsg", "equals": "the sortByCount field must be defined as a $-prefixed path or an expression inside an object" }
+            ]
+        },
+        {
+            "id": "pipe.sortByCount.literal_number_rejected",
+            "surface": "error",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, numeric $sortByCount argument",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sortByCount": 1 }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "40149" } },
+                { "at": "/r/codeName", "equals": "Location40149" },
+                { "at": "/r/errmsg", "equals": "the sortByCount field must be specified as a string or as an object" }
+            ]
+        },
+        {
+            "id": "pipe.sortByCount.expression_outside_gateway",
+            "surface": "error",
+            "source": "coordinate: the $sortByCount expression form is not implemented in this gateway, so it is reported instead of executed",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sortByCount": { "$toLower": "$x" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "$sortByCount expressions are outside this gateway (coordinate: only `$`-prefixed field paths are supported)" }
+            ]
+        },
+        {
+            "id": "pipe.unwind.nested_path",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind / Path: a dotted path addresses the embedded array (https://www.mongodb.com/docs/manual/reference/operator/aggregation/unwind/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, nested path matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": { "b": [1, 2] } }, { "_id": 2, "a": { "b": [] } }, { "_id": 3, "a": { "b": 5 } }, { "_id": 4, "a": { "c": 1 } }, { "_id": 5, "a": { "b": null } }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": "$a.b" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "1" }, { "$numberInt": "3" }] },
+                { "at": "/r/cursor/firstBatch/*/a/b", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
+            "id": "pipe.unwind.positional_path",
+            "surface": "command",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, $unwind of $a.0 resolves no values and returns an empty batch",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [1, 2] }, { "_id": 2, "a": [] }, { "_id": 3, "a": 5 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": "$a.0" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.unwind.empty_collection",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind: an empty input produces no documents; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-06, empty batch matched",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": "$a" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
         }
     ]
 }

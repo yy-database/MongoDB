@@ -205,6 +205,9 @@ function indexErrorShape(reply) {
     return { code: null, codeName: null, errmsg: null }
 }
 
+// Aggregation stage failures use the same `code` / `codeName` / `errmsg` triple.
+const stageErrorShape = indexErrorShape
+
 // Write commands report modifier failures through `writeErrors` on an
 // `ok: 1` reply; compare only the code so message wording does not mask it.
 function writeErrorCode(reply) {
@@ -285,8 +288,26 @@ const collections = {
     multiNested: 'oracle_idx_multikey_nested',
     multiParallel: 'oracle_idx_multikey_parallel',
     multiList: 'oracle_idx_multikey_list',
-    multiBuild: 'oracle_idx_multikey_build'
+    multiBuild: 'oracle_idx_multikey_build',
+    lookupLocal: 'oracle_lookup_local',
+    lookupForeign: 'oracle_lookup_foreign',
+    lookupNone: 'oracle_lookup_none',
+    sortByCount: 'oracle_sort_by_count'
 }
+
+const sortByCountDocuments = [
+    // Six groups with distinct counts: equal counts come back in hash order
+    // from `mongod`, so ties are never asserted.
+    ...Array.from({ length: 6 }, (_, index) => ({ _id: index + 1, x: 3 })),
+    ...Array.from({ length: 5 }, (_, index) => ({ _id: 10 + index, x: 2 })),
+    { _id: 20, tag: 'missing-x' },
+    { _id: 21, tag: 'missing-x' },
+    { _id: 22, x: null },
+    { _id: 23, x: null },
+    ...Array.from({ length: 3 }, (_, index) => ({ _id: 30 + index, x: [1, 2] })),
+    ...Array.from({ length: 2 }, (_, index) => ({ _id: 40 + index, x: [] })),
+    { _id: 50, x: { y: 1 } }
+]
 
 const probes = [
     {
@@ -1783,23 +1804,202 @@ const probes = [
     },
     {
         id: 'index.multikey.list_shape',
-        note: 'listIndexes over an array-valued path; multikey itself is asserted by the local corpus',
+        note: 'listIndexes over an array-valued path is byte-for-byte the real reply, which carries no multikey field',
         setup: [
             insert(collections.multiList, [{ _id: 1, a: [1, 2] }, { _id: 2, a: 3 }]),
             dropIndexes(collections.multiList, '*'),
             createIndexes(collections.multiList, [{ key: { a: 1, b: 1 }, name: 'ab' }])
         ],
         command: listIndexes(collections.multiList),
-        pick: (reply) => ({
-            cursor: {
-                ...reply.cursor,
-                firstBatch: reply.cursor.firstBatch.map((document) =>
-                    Object.fromEntries(Object.entries(document).filter(([key]) => key !== 'multikey'))
-                )
-            },
-            ok: reply.ok
-        }),
+        pick: (reply) => reply,
         exactOrder: true
+    },
+    {
+        id: 'lookup.equality_form',
+        note: 'array local field unions matches in storage order, missing/null matches null and absent, objects match, as replaces an existing field in place',
+        setup: [
+            insert(collections.lookupForeign, [
+                { _id: 'f1', b: 1 },
+                { _id: 'f2', b: 2 },
+                { _id: 'f3', b: [2, 3] },
+                { _id: 'f4', b: null },
+                { _id: 'f5', tag: 'missing-b' },
+                { _id: 'f6', b: { x: 1 } },
+                { _id: 'f7', b: [null, 5] }
+            ]),
+            insert(collections.lookupLocal, [
+                { _id: 1, a: [2, 2] },
+                { _id: 2, a: null },
+                { _id: 3, tag: 'missing-a' },
+                { _id: 4, a: { x: 1 } },
+                { _id: 5, a: 1, join: 'overwritten' },
+                { _id: 6, a: 99 },
+                { _id: 7, a: [] }
+            ])
+        ],
+        command: aggregate(collections.lookupLocal, [
+            {
+                $lookup: {
+                    from: collections.lookupForeign,
+                    localField: 'a',
+                    foreignField: 'b',
+                    as: 'join'
+                }
+            }
+        ]),
+        pick: firstBatch,
+        orderMatters: true,
+        exactOrder: true
+    },
+    {
+        id: 'lookup.nonexistent_from',
+        note: 'a from collection that does not exist yields an empty array instead of an error',
+        setup: [insert(collections.lookupLocal, [{ _id: 1, a: 1 }, { _id: 2, a: 2 }])],
+        command: aggregate(collections.lookupLocal, [
+            {
+                $lookup: {
+                    from: collections.lookupNone,
+                    localField: 'a',
+                    foreignField: 'b',
+                    as: 'join'
+                }
+            }
+        ]),
+        pick: firstBatch,
+        orderMatters: true,
+        exactOrder: true
+    },
+    {
+        id: 'lookup.missing_from_error',
+        note: 'from is required unless a pipeline is given',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { localField: 'a', foreignField: 'b', as: 'join' } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'lookup.missing_as_error',
+        note: 'as is required for the equality form',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { from: collections.lookupForeign, localField: 'a', foreignField: 'b' } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'lookup.non_string_local_field_error',
+        note: 'a numeric localField is rejected with the exact type wording',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { from: collections.lookupForeign, localField: 1, foreignField: 'b', as: 'join' } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'lookup.non_string_from_error',
+        note: 'a numeric from is rejected with the exact type wording',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { from: 1, localField: 'a', foreignField: 'b', as: 'join' } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'lookup.non_string_as_error',
+        note: 'a numeric as is rejected with the exact type wording',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { from: collections.lookupForeign, localField: 'a', foreignField: 'b', as: 1 } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'lookup.missing_foreign_field_error',
+        note: 'localField without foreignField requires a pipeline',
+        setup: [],
+        command: aggregate(collections.lookupLocal, [
+            { $lookup: { from: collections.lookupForeign, localField: 'a', as: 'join' } }
+        ]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'sortByCount.field',
+        note: 'the whole field value is the group key, missing and null share one null group, counts are Int32 and descending',
+        setup: [insert(collections.sortByCount, sortByCountDocuments)],
+        command: aggregate(collections.sortByCount, [{ $sortByCount: '$x' }]),
+        pick: firstBatch,
+        orderMatters: true,
+        exactOrder: true
+    },
+    {
+        id: 'sortByCount.empty_collection',
+        note: 'an empty input returns an empty batch',
+        setup: [],
+        command: aggregate(collections.sortByCount, [{ $sortByCount: '$x' }]),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'sortByCount.literal_string_error',
+        note: 'a field name without the $ prefix is Location40148',
+        setup: [],
+        command: aggregate(collections.sortByCount, [{ $sortByCount: 'x' }]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'sortByCount.literal_number_error',
+        note: 'a numeric argument is Location40149',
+        setup: [],
+        command: aggregate(collections.sortByCount, [{ $sortByCount: 1 }]),
+        pick: stageErrorShape,
+        errorProbe: true
+    },
+    {
+        id: 'unwind.nested_path',
+        note: '$unwind on a dotted path expands the inner array and keeps scalars',
+        setup: [
+            insert(collections.unwind, [
+                { _id: 1, a: { b: [1, 2] } },
+                { _id: 2, a: { b: [] } },
+                { _id: 3, a: { b: 5 } },
+                { _id: 4, a: { c: 1 } },
+                { _id: 5, a: { b: null } }
+            ])
+        ],
+        command: aggregate(collections.unwind, [{ $unwind: '$a.b' }]),
+        pick: firstBatch,
+        orderMatters: true,
+        exactOrder: true
+    },
+    {
+        id: 'unwind.positional_path',
+        note: 'a positional path resolves no values, so the batch is empty',
+        setup: [
+            insert(collections.unwind, [
+                { _id: 1, a: [1, 2] },
+                { _id: 2, a: [] },
+                { _id: 3, a: 5 }
+            ])
+        ],
+        command: aggregate(collections.unwind, [{ $unwind: '$a.0' }]),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'unwind.empty_collection',
+        note: 'an empty input returns an empty batch',
+        setup: [],
+        command: aggregate(collections.unwind, [{ $unwind: '$a' }]),
+        pick: firstBatch,
+        orderMatters: true
     }
 ]
 

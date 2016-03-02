@@ -246,8 +246,9 @@ fn validate_listing_filter(filter: &BsonDocument) -> Result<(), CommandError> {
 /// Result document for a failed command: `{ ok: 0, errmsg, code, codeName, ... }`.
 ///
 /// `codeName` strings below were read from `mongod 8.0.9`, covering every code
-/// the index commands and the index-build duplicate key path can emit. Codes
-/// outside that set keep the three-field shape rather than guessing a name.
+/// the index commands, the index-build duplicate key path and the aggregation
+/// stages can emit. Codes outside that set keep the three-field shape rather
+/// than guessing a name.
 pub fn error_document(error: &CommandError) -> BsonDocument {
     let mut document = BsonDocument::new();
     document.push("ok".to_string(), BsonValue::Int32(0));
@@ -277,6 +278,8 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         86 => "IndexKeySpecsConflict",
         11000 => "DuplicateKey",
         40414 => "IDLFailedToParse",
+        40148 => "Location40148",
+        40149 => "Location40149",
         _ => return None,
     })
 }
@@ -771,6 +774,8 @@ pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, 
                 }
             }
             "$unwind" => documents = unwind_stage(&documents, body)?,
+            "$lookup" => documents = lookup_stage(documents, body, store, &namespace)?,
+            "$sortByCount" => documents = sort_by_count_stage(&documents, body)?,
             "$group" => {
                 let BsonValue::Document(specification) = body
                 else {
@@ -1581,26 +1586,13 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     entry.push("name".to_string(), BsonValue::String("_id_".to_string()));
     first_batch.push(BsonValue::Document(entry));
 
-    let documents: Vec<BsonDocument> =
-        store.scan(&namespace).into_iter().filter_map(|(_, payload)| parse_bson(&payload).ok()).collect();
-
     for specification in store.index_specs(&namespace) {
-        let multikey = documents.iter().any(|document| {
-            specification
-                .key
-                .fields
-                .iter()
-                .any(|(field, _)| field_array_valued(document, field))
-        });
         let mut entry = BsonDocument::new();
         entry.push("v".to_string(), BsonValue::Int32(2));
         entry.push("key".to_string(), BsonValue::Document(specification.key));
         entry.push("name".to_string(), BsonValue::String(specification.name));
         if specification.unique {
             entry.push("unique".to_string(), BsonValue::Bool(true));
-        }
-        if multikey {
-            entry.push("multikey".to_string(), BsonValue::Bool(true));
         }
         first_batch.push(BsonValue::Document(entry));
     }
@@ -1771,7 +1763,7 @@ fn unsupported_stage(stage: &str) -> CommandError {
     CommandError::new(
         59,
         format!(
-            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $group, $project)"
+            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $sortByCount, $group, $project)"
         ),
     )
 }
@@ -1932,6 +1924,167 @@ fn unwind_path(path: &str) -> Result<String, CommandError> {
         Some(rest) if !rest.is_empty() => Ok(rest.to_string()),
         _ => Err(CommandError::new(2, "$unwind path must start with `$`")),
     }
+}
+
+/// `$lookup` equality form (`from` / `localField` / `foreignField` / `as`).
+///
+/// A local array is expanded element by element and the matching foreign
+/// documents are unioned in storage order, which is what `mongod 8.0.9` returns
+/// for the equality form. Sub-pipelines are a different implementation and stay
+/// outside this gateway.
+fn lookup_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    store: &Store,
+    namespace: &str,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(9, "$lookup requires a document"));
+    };
+    if specification.get("pipeline").is_some() || specification.get("let").is_some() {
+        return Err(CommandError::new(
+            59,
+            "$lookup sub-pipelines are outside this gateway (coordinate: only `from` + `localField` + `foreignField` + `as` is supported)",
+        ));
+    }
+
+    let from = match specification.get("from") {
+        Some(BsonValue::String(name)) if !name.is_empty() => name.clone(),
+        Some(BsonValue::String(_)) | None => {
+            return Err(CommandError::new(9, "must specify 'pipeline' when 'from' is empty"));
+        }
+        Some(other) => {
+            return Err(CommandError::new(
+                9,
+                format!("$lookup 'from' field must be a string, but found {}", bson_type_name(other)),
+            ));
+        }
+    };
+    let as_field = match specification.get("as") {
+        Some(BsonValue::String(field)) if !field.is_empty() => field.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                9,
+                format!(
+                    "$lookup argument 'as' must be a string, found as: {}: {}",
+                    render_shell_value(other),
+                    bson_type_name(other)
+                ),
+            ));
+        }
+        None => return Err(CommandError::new(9, "must specify 'as' field for a $lookup")),
+    };
+    let (Some(local_field), Some(foreign_field)) = (specification.get("localField"), specification.get("foreignField"))
+    else {
+        return Err(CommandError::new(
+            9,
+            "$lookup requires either 'pipeline' or both 'localField' and 'foreignField' to be specified",
+        ));
+    };
+    let BsonValue::String(local_field) = local_field else {
+        return Err(CommandError::new(
+            9,
+            format!(
+                "$lookup argument 'localField' must be a string, found localField: {}: {}",
+                render_shell_value(local_field),
+                bson_type_name(local_field)
+            ),
+        ));
+    };
+    let BsonValue::String(foreign_field) = foreign_field else {
+        return Err(CommandError::new(
+            9,
+            format!(
+                "$lookup argument 'foreignField' must be a string, found foreignField: {}: {}",
+                render_shell_value(foreign_field),
+                bson_type_name(foreign_field)
+            ),
+        ));
+    };
+
+    let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+    let foreign_namespace = format!("{database}.{from}");
+    let foreign_documents = collect_matching(store, &foreign_namespace, &BsonDocument::new())?;
+
+    let mut output = Vec::with_capacity(documents.len());
+    for document in documents {
+        let value = lookup_field(&document, local_field).cloned().unwrap_or(BsonValue::Null);
+        let mut matched = vec![false; foreign_documents.len()];
+        let mut joined: Vec<BsonValue> = Vec::new();
+        let local_values: Vec<&BsonValue> = match &value {
+            BsonValue::Array(items) if !items.is_empty() => items.iter().collect(),
+            // An empty local array matches the same foreign values as a missing
+            // or null local field does, which is what `mongod 8.0.9` returns.
+            BsonValue::Array(_) => vec![&BsonValue::Null],
+            other => vec![other],
+        };
+        for (index, foreign_document) in foreign_documents.iter().enumerate() {
+            let candidates = collect_field(foreign_document, foreign_field);
+            if local_values.iter().any(|local| equality_candidates(&candidates, local)) && !matched[index] {
+                matched[index] = true;
+                joined.push(BsonValue::Document(foreign_document.clone()));
+            }
+        }
+        let mut expanded = document;
+        set_field_path(&mut expanded, &as_field, BsonValue::Array(joined));
+        output.push(expanded);
+    }
+    Ok(output)
+}
+
+/// `$sortByCount` over a `$`-prefixed field path.
+///
+/// The whole value is one group key, including an array or an empty array, and a
+/// missing field groups as `null`, matching `mongod 8.0.9`. Expression objects
+/// are a separate implementation and stay outside this gateway.
+fn sort_by_count_stage(documents: &[BsonDocument], body: &BsonValue) -> Result<Vec<BsonDocument>, CommandError> {
+    let path = match body {
+        BsonValue::String(path) if path.starts_with('$') && path.len() > 1 => path[1..].to_string(),
+        BsonValue::String(_) => {
+            return Err(CommandError::new(
+                40148,
+                "the sortByCount field must be defined as a $-prefixed path or an expression inside an object",
+            ));
+        }
+        BsonValue::Document(_) => {
+            return Err(CommandError::new(
+                59,
+                "$sortByCount expressions are outside this gateway (coordinate: only `$`-prefixed field paths are supported)",
+            ));
+        }
+        _ => {
+            return Err(CommandError::new(
+                40149,
+                "the sortByCount field must be specified as a string or as an object",
+            ));
+        }
+    };
+
+    let mut groups: Vec<(BsonValue, i32)> = Vec::new();
+    let mut positions: BTreeMap<Vec<u8>, usize> = BTreeMap::new();
+    for document in documents {
+        let value = lookup_field(document, &path).cloned().unwrap_or(BsonValue::Null);
+        match positions.get(&value_to_key(&value)) {
+            Some(position) => groups[*position].1 += 1,
+            None => {
+                positions.insert(value_to_key(&value), groups.len());
+                groups.push((value, 1));
+            }
+        }
+    }
+    // Descending count, ties in first-appearance order. `mongod` leaves equal
+    // counts in hash order, so equal counts are never asserted.
+    groups.sort_by(|left, right| right.1.cmp(&left.1));
+    Ok(groups
+        .into_iter()
+        .map(|(value, count)| {
+            let mut grouped = BsonDocument::new();
+            grouped.push("_id".to_string(), value);
+            grouped.push("count".to_string(), count_value(i64::from(count)));
+            grouped
+        })
+        .collect())
 }
 
 /// Accumulator kinds backed by a documented behavior sentence.

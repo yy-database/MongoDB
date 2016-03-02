@@ -63,13 +63,13 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档，`writeErrors` 条目按真机顺序带 `index` / `code` / `errmsg` / `keyPattern` / `keyValue`；已建唯一索引同样在写入时生效，重复键的 `errmsg` 为 `index: <name> dup key: {...}`，`keyPattern` / `keyValue` 按键顺序渲染；数组字段按元素逐个生成索引键（多键），空数组按 BSON `undefined` 入键，嵌套数组只展开一层；复合索引出现两个数组字段时回 `writeErrors` 码 `171`（`cannot index parallel arrays [x] [y]`）；`ordered: false` 继续写入后续合法文档；回复 `ok` 为 double `1.0`、`n` 为 int32 |
 | `find` | 已支持 | 过滤算子见“查询算子”一节；`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
 | `count` | 已支持 | 读 `query` 过滤，遵守 `skip` / `limit`；未知算子同上拒绝；回复 `n` 为 int32、`ok` 为 double `1.0` |
-| `aggregate` | 部分支持 | 顺序执行 `$match`、`$sort`、`$limit`、`$skip`、`$count`、`$unwind`、`$group`、`$project`，详见“聚合管道”一节；其他阶段回 `59` 并列出支持清单 |
+| `aggregate` | 部分支持 | 顺序执行 `$match`、`$sort`、`$limit`、`$skip`、`$count`、`$unwind`、`$lookup`（equality form）、`$sortByCount`、`$group`、`$project`，详见“聚合管道”一节；其他阶段回 `59` 并列出支持清单 |
 | `delete` | 已支持 | `deletes[].q` 与 `limit`（`0` 表示全部）；未知算子回 `2`；原始回复只有 `n`（int32）与 `ok`（double `1.0`），`deletedCount` 由驱动层计算 |
 | `update` | 部分支持 | `$set` / `$unset` / `$inc`，`multi` 决定 updateMany；唯一索引冲突同样回 `ok: 1.0` + `writeErrors`，`n`/`nModified` 归零但已接受的改动先落盘（与真机实测同形）；应用阶段失败回 `ok: 1.0` + `writeErrors`，`n`/`nModified` 为 int32；`upsert` 与替换式更新回 `59`，未知修饰符回 `9`，`$inc` 非数值回 `14`，改 `_id` 回 `66`，路径冲突回 `40` |
 | `getMore` / `killCursors` | 已支持 | `find` 未取走的批次保存在进程内游标表 |
 | `listCollections` / `listDatabases` | 已支持 | 供命令行列目录使用，来源是实际存储命名空间 |
 | `createIndexes` | 已支持 | 单字段与复合键、`unique`、显式 `name`；同名同定义幂等成功，同名不同定义回 `86`，同键不同名回 `85`；元数据随 catalog 落盘并在重开后保留；建唯一索引前先扫描已有数据，冲突回 `11000` |
-| `listIndexes` | 已支持 | 先 `_id_` 后用户索引（按创建顺序），`v` 为 int32 `2`，`unique: false` 不输出；含数组值（或多点路径穿数组）的用户索引输出 `multikey: true`（真机 `8.0.9` 实测不输出该字段，见“索引剩余差异”）；缺失命名空间回 `26` |
+| `listIndexes` | 已支持 | 先 `_id_` 后用户索引（按创建顺序），`v` 为 int32 `2`，`unique: false` 不输出；真机 `8.0.9` 不输出 `multikey`，本仓同样不输出（多键事实见“索引能力”）；缺失命名空间回 `26` |
 | `dropIndexes` | 已支持 | 按 `name`、key pattern（如 `{a: 1}`）或 `*`；key pattern 按键顺序与数值等价匹配，`_id_` 回 `72`，未命中回 `27`，非字符串/文档类型回 `14`，缺失命名空间回 `26` |
 | 其他命令 | 拒绝 | `59`，`errmsg: "unsupported"` |
 | 非法集合命名空间 | 拒绝 | `73` |
@@ -104,7 +104,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 
 ### 聚合管道（aggregate）
 
-管道**逐阶段顺序执行**：每个阶段接收上一阶段的输出文档列表，产出的列表作为下一阶段输入；不是先收集所有阶段再一次性匹配。每个阶段文档必须恰好一个字段，否则回 `2`。未知阶段回 `59`，`errmsg` 点名阶段并列出支持清单（`$match, $sort, $limit, $skip, $count, $unwind, $group, $project`），即使前面的 `$match` 已经把文档过滤为空也照样拒绝。
+管道**逐阶段顺序执行**：每个阶段接收上一阶段的输出文档列表，产出的列表作为下一阶段输入；不是先收集所有阶段再一次性匹配。每个阶段文档必须恰好一个字段，否则回 `2`。未知阶段回 `59`，`errmsg` 点名阶段并列出支持清单（`$match, $sort, $limit, $skip, $count, $unwind, $lookup, $sortByCount, $group, $project`），即使前面的 `$match` 已经把文档过滤为空也照样拒绝。
 
 | 阶段 | 行为 | 依据 |
 |------|------|------|
@@ -114,6 +114,8 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | `$skip` | 跳过前 N 个文档，参数必须是正整数；与 `$limit` 顺序敏感（`$skip` 在 `$limit` 前/后结果不同，`tests/cases/pipeline.json` 有对拍） | `.../skip/` |
 | `$count` | 输出单文档 `{<name>: n}`；**空输入不输出任何文档**；字段名不能为空、不能以 `$` 开头、不能含 `.` | `.../count/` |
 | `$unwind` | 字符串形态与 `{path, preserveNullAndEmptyArrays, includeArrayIndex}` 三种选项，见下 | `.../unwind/` |
+| `$lookup` | 仅 equality form：`from` / `localField` / `foreignField` / `as`，见下；子管道回 `59` | `.../lookup/` |
+| `$sortByCount` | 仅 `$` 前缀字段路径：按字段整体值分组，输出 `{_id, count}`，见下；表达式对象回 `59` | `.../sortByCount/` |
 | `$group` | `_id` 支持 `null`（聚合全部）、常量、`"$field"`；累加器 `$sum` / `$avg` / `$min` / `$max` / `$push` / `$addToSet` / `$first` / `$last`；空输入不输出文档；输出顺序未定义 | `.../group/` 及各累加器页 |
 | `$project` | 包含/排除/表达式投影，见下 | `reference/operator/aggregation/project/` |
 
@@ -123,6 +125,23 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 - `preserveNullAndEmptyArrays: true`：缺失字段与空数组的文档保留但**不输出该路径**；值为 `null` 的文档保留且路径**仍为 `null`**。
 - `includeArrayIndex`：数组展开后给出 **0 基下标**；非数组或保留的缺失/空数组文档给出 `null`。
 - 默认（不保留）时非数组标量按单元素展开，不改值。
+
+`$lookup` 的 equality form（`from` / `localField` / `foreignField` / `as`，全部来自 `mongod 8.0.9` 实测）：
+
+- 本地字段是数组时**逐元素展开**并按存储顺序取并集，同一元素重复出现只收集一次（`{a: [2, 2]}` 只命中外键 `2` 的文档一次）。
+- 本地字段**缺失或 `null`** 时命中外部字段为 `null` 与**缺失**的文档，外部字段是含 `null` 的数组时同样命中。
+- 本地字段是**空数组**时行为与缺失/`null` 相同（同样命中外部 `null`/缺失一组），这是真机实测结果，不是“无匹配”。
+- 文档对文档按字段顺序判等（`{a: {x: 1}}` 命中 `{b: {x: 1}}`）。
+- `from` 指向**不存在的集合**时每篇输出空数组，不报错。
+- `as` 覆盖已存在字段时**原位替换**，不追加第二个同名字段，也不改变文档字段数。
+- 参数错误与真机逐字一致：缺 `from` 且无 `pipeline`、缺 `as`、`localField`/`as`/`from` 非字符串、有 `localField` 缺 `foreignField`，均回 `9` 并复用真机消息。
+
+`$sortByCount` 的真实行为（真机实测）：
+
+- 分组键是字段**整体值**：数组 `[1, 2]` 是一组、空数组 `[]` 是一组、对象是一组；缺失字段与显式 `null` 合并为 `_id: null` 一组。
+- 输出只有 `{_id, count}` 两个字段，`count` 为 int32。
+- 按 `count` 降序；**相同 count 的组顺序不确定**（真机为哈希顺序），因此探针与 case 只使用互不相同的计数，不比较并列次序。
+- 空输入回空批次；`$` 前缀缺失回 `40148`（`Location40148`），参数不是字符串/文档回 `40149`（`Location40149`）。
 
 累加器语义（来源为各累加器页面，并且 `$push` / `$addToSet` 的缺失字段行为已在 `mongod 8.0.9` 上对拍）：`$sum` 忽略非数值，全无数值时回 `0`；`$avg` 忽略非数值，全无数值时回 `null`，结果按 double；`$min` / `$max` 只忽略 `null` 与缺失，其余值按 BSON 排序比较（所以字符串会参与比较并可能成为 `min`/`max`）；`$push` 保持输入顺序并**跳过缺失字段**（显式 `null` 照常压入）；`$addToSet` 去重但顺序未定义，同样跳过缺失字段，**文档按字段顺序判等**（`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值）；`$first` / `$last` 按输入顺序取，缺失字段回 `null`，要在 `$group` 前定义顺序需显式 `$sort`。
 
@@ -138,8 +157,10 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 - 其他累加器（`$accumulator`、`$median`、`$percentile`、`$firstN`、`$lastN`、`$maxN`、`$minN`、`$stdDev*`、`$mergeObjects` 等）回 `59`，`errmsg` 列出已支持累加器。
 - `$project` 的其他表达式/投影算子（`$literal`、`$slice`、`$filter`、`$map`、`$cond`、`$switch` 等）回 `59`，`errmsg` 列出 `$add, $concat, $ifNull`。
 - `$avg` 输出类型按手册示例取 double，属文档依据。
-- 点路径 `$unwind`（如 `"$a.b"`）已实现但**未纳入 case**，因为手册该页未给出嵌套路径的确定表述。
+- `$lookup` 只做 equality form：带 `pipeline` 或 `let` 的形态回 `59` 并给出坐标（子管道是另一套实现，不做半实现）。
+- `$sortByCount` 只做 `$` 前缀字段路径：表达式对象形态（如 `{$toLower: "$x"}`）回 `59` 并给出坐标。
 - `$sort` 手册明确**不保证稳定排序**，因此 case 不比较相同键的文档次序，也不把它当作稳定排序输出。
+- `$sortByCount` 并列 count 的组次序在真机为哈希顺序，不属可对齐契约，探针与 case 只用唯一计数。
 
 
 ## 目录
@@ -228,19 +249,20 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - 索引能力：`createIndexes` / `listIndexes` / `dropIndexes` 已实现单字段与复合键、`unique`、显式 `name`、数组多键（multikey），唯一索引在 `insert` 与 `update` 上真实生效，重复键走 `writeErrors` 且 `keyPattern` / `keyValue` 按索引键顺序渲染，与 `_id` 重复键同一构造。全部形态在 `mongod 8.0.9` 上逐条取期望值（探针 `index.*` 共 46 条全 MATCH，case 见 `tests/cases/indexes.json`）。已对齐的边界：
   - `name` 必填：真机不自动生成索引名，缺 `name` 回 `9`（`The 'name' field is a required property of an index specification`），本仓同样拒绝而非自造名字。缺 `key` 回 `9`，空 `key` 回 `67`，空 `name` 回 `67`（渲染时追加 `v: 2`），空 `indexes` 数组回 `2`，缺 `indexes` 字段回 `40414`。
   - 幂等创建：全部已存在回 `note: "all indexes already exist"` 且无 `createdCollectionAutomatically`；部分已存在回 `createdCollectionAutomatically: false` 加 `note: "index already exists"`。
-  - `listIndexes` 的 `_id_` 恒为 `{v: 2, key: {_id: 1}, name: "_id_"}`，用户索引按创建顺序追加，`unique: false` 不出现在回复里；有数组值参与索引时追加 `multikey: true`。
+  - `listIndexes` 的 `_id_` 恒为 `{v: 2, key: {_id: 1}, name: "_id_"}`，用户索引按创建顺序追加，`unique: false` 不出现在回复里；真机 `8.0.9` 对任何索引都不输出 `multikey`，本仓 wire 回复逐字一致、同样不输出。多键事实由唯一索引的逐元素判重 case 证明（`index.multikey.insert_cross_document_duplicate` 等），不靠额外字段自证。
   - 数组多键：字段值数组按元素逐个入键（同一文档内重复元素折叠，所以 `{a: [3, 3]}` 可进唯一索引，跨文档同元素仍回 `11000`）；空数组入键为 BSON `undefined`（`dup key: { a: undefined }`，`keyValue.a` 为 0x06）；嵌套数组只展开一层，`{a: [[1, 2]]}` 以数组 `[ 1, 2 ]` 整体为键、`{a: [[]]}` 以 `[]` 为键；复合键按字段做笛卡尔积，缺失字段按 `null` 参与键；同一复合索引两个及以上字段为数组时回 `writeErrors` 码 `171`，消息按真机反序列出前两个数组字段（`{a: 1, b: 1}` 报 `[b] [a]`，`{b: 1, a: 1}` 报 `[a] [b]`），空数组同样计入，`update` 路径同为 `n: 0` / `nModified: 0`。建索引面对存量并行数组不报 `171`（真机实测成功），本仓一致。
   - `dropIndexes` 的 `*` 回 `msg: "non-_id indexes dropped for collection"`，`_id_` 在任何情况下都不可删；key pattern 支持单字段与复合键，字段顺序不同视为不同索引，`1` 与 `1.0` 视为同值，未命中回 `can't find index with key: { ... }`，类型不是字符串或文档时回 `14` 并带真机 `expected types '[string']` 文案。
   - 索引元数据存在 catalog 的 `indexes` 字段里，无索引时**不写**该字段，保持既有 catalog 字节长度断言不变。
 - 错误回复：`createIndexes` / `dropIndexes` / 重复键相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`26 NamespaceNotFound`、`27 IndexNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
 - 索引剩余差异（坐标，不降级成“返回错误即通过”）：
-  - `listIndexes` 的 `multikey` 是本仓显式补齐的字段：真机 `mongod 8.0.9` 实测（原始回复字节）对任何索引都不输出 `multikey`，`$indexStats` / `collStats` 同样没有，所以探针 `index.multikey.list_shape` 只能比较剔除 `multikey` 后的形状，`multikey: true` 由本地 case 断言。老版本 `mongod` 会输出该字段，本仓按用户要求保留。
+  - `listIndexes` 不暴露多键标识：真机 `mongod 8.0.9` 实测（原始回复字节）对任何索引都不输出 `multikey`，`$indexStats` / `collStats` 同样没有，因此本仓 wire 回复也不输出，探针 `index.multikey.list_shape` 逐字比较完整回复。多键语义只能由行为证明：唯一索引对数组元素逐条判重、重复元素折叠、跨文档重复回 `11000`。
   - 空数组索引键依赖 BSON `undefined`（0x06）：本仓新增 `BsonValue::Undefined` 与 extended JSON `{"$undefined": true}` 才能复现 `dup key: { a: undefined }` 与 `keyValue: {a: undefined}`；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
   - 陈旧索引：`update` 冲突时真机先把 `multi` 已匹配的文档实际持久化，但计数仍报 `n: 0` / `nModified: 0`，本仓行为一致，但这条属真机反直觉语义，单列在此备查。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
-- 聚合管道只覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$group` / `$project`；`$lookup`、`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式也回 `59`（清单见“聚合管道”一节）。
+- 聚合管道覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$lookup`（equality form）/ `$sortByCount` / `$group` / `$project`；`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`，`$lookup` 的子管道与 `$sortByCount` 的表达式对象也回 `59` 并给出坐标；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式同样回 `59`（清单见“聚合管道”一节）。
+- `$lookup` 的 equality form 与 `$sortByCount` 的字段路径形态已逐条对拍 `mongod 8.0.9`（探针 `lookup.*` 8 条、`sortByCount.*` 4 条全部 MATCH，case 见 `tests/cases/pipeline.json`）：数组 local、缺失/`null`/空数组 local、对象对对象、`from` 不存在、`as` 原位覆盖、空集合、`as` 字段冲突与全部参数错误形态均已覆盖。
 - `$count` 空输入不输出文档、`$unwind` 默认丢弃空数组/`null`/缺失、`$sort` 不假设稳定次序、`null`/`$exists`/`$type`/`$all`/`$elemMatch`/点路径数组匹配、`$group` 的 `$avg`/`$min`/`$max`、数组升/降序取最小/最大元素：均在 `mongod 8.0.9` 上对拍一致（探针与 case 见上）。
 - 范围算子按类型分桶：`{a: {$gt: 5}}` 只匹配 int32/int64/double，**不匹配字符串 `"5"`**；`{a: {$gt: null}}` 与 `{a: {$lt: null}}` 在真机上都匹配空集，本仓一致。
 - `$exists: true` 对 `a: []`、`a: [null]`、`a: null` 均匹配；`$size: 0` 只匹配空数组，不匹配缺失或 `null`。

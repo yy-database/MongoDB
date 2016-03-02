@@ -252,8 +252,8 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
         BsonValue::Array(vec![
             BsonValue::Document(document(&[("$match", BsonValue::Document(BsonDocument::new()))])),
             BsonValue::Document(document(&[(
-                "$lookup",
-                BsonValue::Document(document(&[("from", text("other"))])),
+                "$out",
+                BsonValue::String("archive".to_string()),
             )])),
         ]),
     );
@@ -262,7 +262,7 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
     assert_eq!(error.code, 59);
     assert_eq!(
         error.message,
-        "unknown aggregation stage: $lookup (supported: $match, $sort, $limit, $skip, $count, $unwind, $group, $project)"
+        "unknown aggregation stage: $out (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $sortByCount, $group, $project)"
     );
 }
 
