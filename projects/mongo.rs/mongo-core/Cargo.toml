@@ -15,5 +15,6 @@ storage = ["dep:database", "database/types", "database/storage", "database/clust
 
 [dependencies]
 database = { workspace = true, optional = true }
+database-protocol-mongo = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

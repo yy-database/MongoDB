@@ -8,7 +8,7 @@ use std::{
 
 use mongo_core::{
     bson::{BsonDocument, BsonValue, encode_bson, parse_bson},
-    codec::{decode_op_msg_command, encode_op_msg_body},
+    wire::{decode_op_msg_command, encode_op_msg_body},
     commands::{self, CommandError},
     cursor::CursorStore,
     json,

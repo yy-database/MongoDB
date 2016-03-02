@@ -10,8 +10,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use database_protocol_mongo::bson::{BsonDocument, BsonValue, encode_bson, integral_value, parse_bson, value_to_key};
+
 use crate::{
-    bson::{BsonDocument, BsonValue, encode_bson, integral_value, parse_bson, value_to_key},
     cursor::CursorStore,
     store::{IndexSpec, Store},
 };

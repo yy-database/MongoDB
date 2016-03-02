@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use mongo_core::{
     bson::BsonDocument,
-    codec::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
     commands::{self, CommandError},
     cursor::CursorStore,
     json,
     store::Store,
+    wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
 use pyo3::{
     exceptions::PyValueError,
@@ -69,7 +69,7 @@ impl MongoCursors {
 /// Decodes an `OP_MSG` body into extended JSON.
 #[pyfunction]
 fn decode_op_msg(body: &[u8]) -> PyResult<String> {
-    decode_op_msg_command(body).map(|document| reply(&document)).map_err(PyValueError::new_err)
+    decode_op_msg_command(body).map(|document| reply(&document)).map_err(|error| PyValueError::new_err(format!("{error:?}")))
 }
 
 /// Encodes an extended-JSON command into an `OP_MSG` body.
@@ -97,7 +97,7 @@ fn decode_document(bytes: &[u8]) -> PyResult<String> {
 /// Decodes a legacy `OP_QUERY` body into extended JSON.
 #[pyfunction]
 fn decode_op_query(body: &[u8]) -> PyResult<String> {
-    decode_op_query_command(body).map(|document| reply(&document)).map_err(PyValueError::new_err)
+    decode_op_query_command(body).map(|document| reply(&document)).map_err(|error| PyValueError::new_err(format!("{error:?}")))
 }
 
 /// Name of the command in an extended-JSON document.

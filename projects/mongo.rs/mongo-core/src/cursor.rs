@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::bson::BsonValue;
+use database_protocol_mongo::bson::BsonValue;
 
 /// Idle time after which a cursor is reclaimed.
 pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(600);

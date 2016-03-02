@@ -7,11 +7,11 @@ use std::sync::Arc;
 
 use mongo_core::{
     bson::BsonDocument,
-    codec::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
     commands::{self, CommandError},
     cursor::CursorStore,
     json,
     store::Store,
+    wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -75,7 +75,7 @@ impl MongoCursors {
 /// Decodes an `OP_MSG` body into extended JSON.
 #[napi]
 pub fn decode_op_msg(body: Buffer) -> Result<String> {
-    decode_op_msg_command(&body).map(|document| reply(&document)).map_err(|message| Error::new(Status::InvalidArg, message))
+    decode_op_msg_command(&body).map(|document| reply(&document)).map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
 }
 
 /// Encodes an extended-JSON command into an `OP_MSG` body.
@@ -101,7 +101,7 @@ pub fn decode_document(bytes: Buffer) -> Result<String> {
 /// Decodes a legacy `OP_QUERY` body into extended JSON.
 #[napi]
 pub fn decode_op_query(body: Buffer) -> Result<String> {
-    decode_op_query_command(&body).map(|document| reply(&document)).map_err(|message| Error::new(Status::InvalidArg, message))
+    decode_op_query_command(&body).map(|document| reply(&document)).map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
 }
 
 /// Name of the command in an extended-JSON document.

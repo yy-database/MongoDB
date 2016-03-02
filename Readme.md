@@ -173,7 +173,7 @@ scripts/             构建、BSON case 生成、跨语言门禁与独立 `.yyds
 tests/cases/         两种语言共用的声明式 case 语料
 ```
 
-Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
+Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。BSON 与 `OP_MSG` / `OP_QUERY` 编解码直接 re-export 上游 `database-protocol-mongo`（pin 到 `dev` 的完整 40 位 rev），本仓不再维护 `bson.rs` / `codec.rs` / `wire.rs`。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
 
 平台包目录 = `mongo-<os>-<arch>`，包名与目录同构：`mongo-win32-x64` → `@yydb/mongo-win32-x64`；WASM 为 `mongo-unknown-wasm32`。所有包 `private: true`，到产品级之前不发布。
 
@@ -256,7 +256,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - 错误回复：`createIndexes` / `dropIndexes` / 重复键相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`26 NamespaceNotFound`、`27 IndexNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
 - 索引剩余差异（坐标，不降级成“返回错误即通过”）：
   - `listIndexes` 不暴露多键标识：真机 `mongod 8.0.9` 实测（原始回复字节）对任何索引都不输出 `multikey`，`$indexStats` / `collStats` 同样没有，因此本仓 wire 回复也不输出，探针 `index.multikey.list_shape` 逐字比较完整回复。多键语义只能由行为证明：唯一索引对数组元素逐条判重、重复元素折叠、跨文档重复回 `11000`。
-  - 空数组索引键依赖 BSON `undefined`（0x06）：本仓新增 `BsonValue::Undefined` 与 extended JSON `{"$undefined": true}` 才能复现 `dup key: { a: undefined }` 与 `keyValue: {a: undefined}`；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
+  - 空数组索引键依赖 BSON `undefined`（0x06）：该变体由上游 `database-protocol-mongo` 提供（本项目不再自带 BSON 实现），extended JSON 侧用 `{"$undefined": true}`，与上游 82 条字节 fixture 的约定一致；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
   - 陈旧索引：`update` 冲突时真机先把 `multi` 已匹配的文档实际持久化，但计数仍报 `n: 0` / `nModified: 0`，本仓行为一致，但这条属真机反直觉语义，单列在此备查。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。

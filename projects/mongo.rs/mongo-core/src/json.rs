@@ -5,7 +5,7 @@
 //! `{"$numberLong": ...}`, `{"$numberDouble": ...}`, `{"$binary": {...}}`,
 //! and the legacy `{"$undefined": true}`.
 
-use crate::bson::{BinaryData, BsonDocument, BsonValue};
+use database_protocol_mongo::bson::{BinaryData, BsonDocument, BsonValue};
 use serde_json::{Map, Value};
 
 /// Converts a BSON value into its extended-JSON form.

@@ -1,5 +1,5 @@
 # Optional local override. Fresh clones and CI need nothing here: `Cargo.toml`
-# pins the `database` git revision and `cargo test` resolves it directly.
+# pins the `database` and `database-protocol-mongo` git revisions and `cargo test` resolves them directly.
 #
 # Only when you are co-developing `database.rs` in a local checkout, copy this
 # file to `.cargo/config.toml` (gitignored) and point the patch at that
@@ -8,3 +8,4 @@
 #
 # [patch."https://github.com/oovm/database.rs.git"]
 # database = { path = "../database.rs/projects/database/database" }
+# database-protocol-mongo = { path = "../database.rs/projects/database/database.protocol.mongo" }

@@ -3,10 +3,10 @@
 //! This crate ships library primitives only: no binary, no server loop, no CLI.
 //! Hosts (TypeScript and Python in this repository) compose the pieces:
 //!
-//! * [`bson`] — BSON value / document codecs
+//! * [`bson`] — BSON value / document codecs (re-exported from `database-protocol-mongo`)
 //! * [`json`] — extended-JSON bridge for non-Rust hosts
-//! * [`wire`] — frame headers and framed reads / writes over `Read` + `Write`
-//! * [`codec`] — `OP_MSG` / `OP_QUERY` command translation
+//! * [`wire`] — frame headers, framed reads / writes and `OP_MSG` / `OP_QUERY` translation
+//!   (re-exported from `database-protocol-mongo`)
 //! * [`store`] — `.yykv` document store (one shard, namespace-per-collection)
 //! * [`cursor`] — caller-owned cursor table with lazy reclaim
 //! * [`commands`] — one function per supported command, each callable alone
@@ -15,10 +15,8 @@
 #[cfg(feature = "storage")]
 use std::path::Path;
 
-pub mod bson;
-pub mod codec;
+pub use database_protocol_mongo::{bson, wire};
 pub mod json;
-pub mod wire;
 
 #[cfg(feature = "storage")]
 pub mod commands;
