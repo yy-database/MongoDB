@@ -270,8 +270,10 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         2 => "BadValue",
         9 => "FailedToParse",
         14 => "TypeMismatch",
+        16 => "InvalidLength",
         26 => "NamespaceNotFound",
         27 => "IndexNotFound",
+        43 => "CursorNotFound",
         67 => "CannotCreateIndex",
         72 => "InvalidOptions",
         73 => "InvalidNamespace",
@@ -308,6 +310,13 @@ pub fn describe_id(value: &BsonValue) -> String {
         BsonValue::String(text) => format!("\"{text}\""),
         BsonValue::Int32(number) => number.to_string(),
         BsonValue::Int64(number) => number.to_string(),
+        BsonValue::Double(number) => {
+            if number.is_finite() && number.fract() == 0.0 {
+                format!("{number:.1}")
+            } else {
+                number.to_string()
+            }
+        }
         BsonValue::ObjectId(bytes) => {
             let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
             format!("ObjectId('{hex}')")
@@ -352,6 +361,12 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     else {
         return Err(CommandError::new(2, "insert requires a 'documents' array"));
     };
+    if documents.is_empty() || documents.len() > 100_000 {
+        return Err(CommandError::new(
+            16,
+            format!("Write batch sizes must be between 1 and 100000. Got {} operations.", documents.len()),
+        ));
+    }
 
     let ordered = match command.get("ordered") {
         Some(BsonValue::Bool(ordered)) => *ordered,

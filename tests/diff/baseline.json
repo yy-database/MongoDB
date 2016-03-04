@@ -1,0 +1,5002 @@
+{
+  "version": 1,
+  "seed": 20261106,
+  "mongod": "8.0.9",
+  "corpusDigest": "faae47f0b4c32546daff832dd135cd6afd01db3a85d72bdc659ec9c5d18dac84",
+  "replyDigest": "77e681702ecc95df3a311a3de47394080ef927b17875efe09cdec224c98f63c6",
+  "replies": {
+    "diff.find.eq_int": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.eq_string": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.gt_int": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "a": {
+                "b": {
+                  "$numberInt": "11"
+                }
+              },
+              "items": [],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.lte_double": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true,
+              "ratio": {
+                "$numberDouble": "0.5"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.in_list": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.nin_list": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_5"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.exists_true": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true,
+              "opt": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true,
+              "opt": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true,
+              "opt": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_6"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.exists_false": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "7"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "1"
+                  }
+                }
+              ],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "a": {
+                "b": {
+                  "$numberInt": "11"
+                }
+              },
+              "items": [],
+              "active": false
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.type_int": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$numberInt": "7"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_8"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.type_alias": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "seven"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_9"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.regex_anchor": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_10"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.regex_array": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "7"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "1"
+                  }
+                }
+              ],
+              "active": false
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_11"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.array_elem": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_12"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.array_all": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_13"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.array_size": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_14"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.elem_match": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_15"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.dotted_nested": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_16"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.dotted_array": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_17"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.logical_and": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "a": {
+                "b": {
+                  "$numberInt": "11"
+                }
+              },
+              "items": [],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_18"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.logical_or": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "c",
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_19"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.projection_include": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_20"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.projection_exclude": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "grp": "a",
+              "a": {
+                "b": {
+                  "$numberInt": "5"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "2"
+                  }
+                },
+                {
+                  "qty": {
+                    "$numberInt": "5"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "grp": "a",
+              "a": {
+                "b": {
+                  "$numberInt": "7"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "1"
+                  }
+                }
+              ],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "grp": "b",
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "grp": "b",
+              "a": {
+                "b": {
+                  "$numberInt": "11"
+                }
+              },
+              "items": [],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "grp": "c",
+              "a": {
+                "b": {
+                  "$numberInt": "13"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "6"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_21"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.projection_expr_add": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "total": {
+                "$numberInt": "15"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "total": {
+                "$numberInt": "25"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "total": {
+                "$numberInt": "35"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "total": {
+                "$numberInt": "45"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "total": {
+                "$numberInt": "55"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_22"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.find.sort_skip_limit": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "a": {
+                "b": {
+                  "$numberInt": "11"
+                }
+              },
+              "items": [],
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green",
+                "red"
+              ],
+              "a": {
+                "b": {
+                  "$numberInt": "9"
+                }
+              },
+              "items": [
+                {
+                  "qty": {
+                    "$numberInt": "4"
+                  }
+                }
+              ],
+              "active": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_find_23"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.match_sort_project": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta"
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta"
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.limit_skip_order": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_sum": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": "b",
+              "total": {
+                "$numberInt": "70"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_avg": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "average": {
+                "$numberDouble": "48.333333333333336"
+              }
+            },
+            {
+              "_id": "b",
+              "average": {
+                "$numberDouble": "35.0"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_min_max": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "low": {
+                "$numberInt": "10"
+              },
+              "high": {
+                "$numberInt": "80"
+              }
+            },
+            {
+              "_id": "b",
+              "low": {
+                "$numberInt": "30"
+              },
+              "high": {
+                "$numberInt": "40"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_push": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "values": [
+                {
+                  "$numberInt": "10"
+                },
+                {
+                  "$numberInt": "20"
+                },
+                {
+                  "$numberInt": "50"
+                },
+                {
+                  "$numberInt": "60"
+                },
+                {
+                  "$numberInt": "70"
+                },
+                {
+                  "$numberInt": "80"
+                }
+              ]
+            },
+            {
+              "_id": "b",
+              "values": [
+                {
+                  "$numberInt": "30"
+                },
+                {
+                  "$numberInt": "40"
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_5"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_add_to_set": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "values": [
+                {
+                  "$numberInt": "10"
+                },
+                {
+                  "$numberInt": "20"
+                },
+                {
+                  "$numberInt": "50"
+                },
+                {
+                  "$numberInt": "60"
+                },
+                {
+                  "$numberInt": "70"
+                },
+                {
+                  "$numberInt": "80"
+                }
+              ]
+            },
+            {
+              "_id": "b",
+              "values": [
+                {
+                  "$numberInt": "30"
+                },
+                {
+                  "$numberInt": "40"
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_6"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_first_last": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "first": "alpha",
+              "last": "theta"
+            },
+            {
+              "_id": "b",
+              "first": "gamma",
+              "last": "delta"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.count_all": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "n": {
+                "$numberInt": "8"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_8"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.count_empty": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_9"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.unwind_string": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": "green"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": "blue"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_10"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.unwind_preserve": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": "green"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "blue"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "red"
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta",
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": "blue"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_11"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.unwind_index": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "red",
+              "slot": {
+                "$numberLong": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": "blue",
+              "slot": {
+                "$numberLong": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": "blue",
+              "slot": {
+                "$numberLong": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": "green",
+              "slot": {
+                "$numberLong": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": "red",
+              "slot": {
+                "$numberLong": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "red",
+              "slot": {
+                "$numberLong": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": "blue",
+              "slot": {
+                "$numberLong": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": "blue",
+              "slot": {
+                "$numberLong": "0"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_12"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.lookup": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "2"
+                  },
+                  "key": "b",
+                  "label": "second"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "2"
+                  },
+                  "key": "b",
+                  "label": "second"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_13"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.lookup_missing": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "1"
+                  },
+                  "key": "alpha"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "joined": [
+                {
+                  "_id": {
+                    "$numberInt": "2"
+                  },
+                  "key": "beta"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "joined": []
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "joined": []
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "joined": []
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "joined": []
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "joined": []
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "joined": []
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_14"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.sort_by_count": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": [
+                "red"
+              ],
+              "count": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": [
+                "blue"
+              ],
+              "count": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": [
+                "green"
+              ],
+              "count": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_15"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.project_concat": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "label": "alpha-x"
+            },
+            {
+              "label": "beta-x"
+            },
+            {
+              "label": "gamma-x"
+            },
+            {
+              "label": "delta-x"
+            },
+            {
+              "label": "epsilon-x"
+            },
+            {
+              "label": "zeta-x"
+            },
+            {
+              "label": "eta-x"
+            },
+            {
+              "label": "theta-x"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_16"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.project_ifnull": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "tag": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "tag": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "tag": [
+                "green"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "tag": []
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "tag": [
+                "red"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "tag": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "tag": "none"
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "tag": [
+                "blue"
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_17"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.project_add": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "bumped": {
+                "$numberInt": "11"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "bumped": {
+                "$numberInt": "21"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "bumped": {
+                "$numberInt": "31"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "bumped": {
+                "$numberInt": "41"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "bumped": {
+                "$numberInt": "51"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "bumped": {
+                "$numberInt": "61"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "bumped": {
+                "$numberInt": "71"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "bumped": {
+                "$numberInt": "81"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_18"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.group_avg_double": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "average": {
+                "$numberDouble": "48.333333333333336"
+              }
+            },
+            {
+              "_id": "b",
+              "average": {
+                "$numberDouble": "35.0"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_19"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.addfields_basic": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": [
+                "red"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta",
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "tags": null,
+              "extra": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_20"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.addfields_multi": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "20"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "40"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "60"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "80"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": [
+                "red"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "100"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "120"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta",
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "tags": null,
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "140"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "extra": {
+                "$numberInt": "1"
+              },
+              "doubled": {
+                "$numberInt": "160"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_21"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.match_unwind_group": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "blue",
+              "total": {
+                "$numberInt": "140"
+              }
+            },
+            {
+              "_id": "green",
+              "total": {
+                "$numberInt": "30"
+              }
+            },
+            {
+              "_id": "red",
+              "total": {
+                "$numberInt": "110"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_22"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.sort_multi_key": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta",
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "beta",
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_23"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_scalar": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_multi": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "nModified": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_omit_multi": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.inc_positive": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.inc_negative": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "nModified": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.unset_field": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.unset_nested": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_nested": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_array_index": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.no_match": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.push": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pop": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.add_to_set": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pull": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.rename": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.mul": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.upsert": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "upserted": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "_id": {
+              "$numberInt": "99"
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.replacement": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.one_match": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.many_match": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.no_match": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.in_filter": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.regex_filter": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.nested_filter": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.multi_specs": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.delete.one_then_many": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "grp": "a",
+              "score": {
+                "$numberInt": "10"
+              },
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "grp": "a",
+              "score": {
+                "$numberInt": "20"
+              },
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "grp": "c",
+              "score": {
+                "$numberInt": "50"
+              },
+              "tags": []
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_delete_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.plain_batch": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "doc2"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "doc3"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.plain_single": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "doc7"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.ordered_false_dup_within": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_2 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          },
+          {
+            "index": {
+              "$numberInt": "1"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_2 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "doc2"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.ordered_true_dup_within": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_3 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.duplicate_across_commands": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_4 index: _id_ dup key: { _id: 5 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "5"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "doc5"
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "doc6"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.duplicate_int_vs_double": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_5 index: _id_ dup key: { _id: 1.0 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberDouble": "1.0"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_5"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.empty_batch": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Write batch sizes must be between 1 and 100000. Got 0 operations.",
+        "code": {
+          "$numberInt": "16"
+        },
+        "codeName": "InvalidLength"
+      }
+    ],
+    "diff.insert.string_vs_int_id": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            },
+            {
+              "_id": "1",
+              "name": "string-id"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.ordered_false_multi_conflicts": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_8 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          },
+          {
+            "index": {
+              "$numberInt": "1"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_8 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          },
+          {
+            "index": {
+              "$numberInt": "2"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_8 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "doc1"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "name": "doc2"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_8"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.insert.duplicate_extra_fields": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_insert_9 index: _id_ dup key: { _id: 1 }",
+            "keyPattern": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "_id": {
+                "$numberInt": "1"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "first"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_insert_9"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.single_create_list": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_0",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.compound_create_list": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_1",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "-1"
+                }
+              },
+              "name": "ab_1_-1"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_create_clean": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_2",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "a_unique",
+              "unique": true
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_insert_conflict": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_3 index: a_unique dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_compound_conflict": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_4 index: ab_unique dup key: { a: 10, b: \"x\" }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": "x"
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_multikey_conflict": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_multikey_within_doc": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.parallel_arrays": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "171"
+            },
+            "errmsg": "cannot index parallel arrays [right] [left]"
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.drop_by_name_then_list": [
+      {
+        "nIndexesWas": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_8",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.drop_all_then_list": [
+      {
+        "nIndexesWas": {
+          "$numberInt": "3"
+        },
+        "msg": "non-_id indexes dropped for collection",
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_9",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.create_then_conflict_ordered_false": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "1"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_10 index: a_unique dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "a": {
+                "$numberInt": "15"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "10"
+              },
+              "a": {
+                "$numberInt": "25"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_10"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.unique_build_on_duplicates": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.diff_index_11 ( <uuid> ) :: caused by :: E11000 duplicate key error collection: diff.diff_index_11 index: a_unique dup key: { a: 10 }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "a": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "a": {
+            "$numberInt": "10"
+          }
+        }
+      }
+    ],
+    "diff.cursor.batch2_once": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": "c"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "d"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.cursor.batch2_drain": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": "c"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "d"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "v": "e"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_cursor_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.cursor.batch1_three": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": "c"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "d"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.cursor.batch10_all": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": "c"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "d"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "v": "e"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_cursor_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.cursor.limit2_batch1": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "nextBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_cursor_4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.cursor.kill_then_getmore": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            }
+          ],
+          "id": "<cursor>",
+          "ns": "diff.diff_cursor_5"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursorsKilled": [
+          "<cursor>"
+        ],
+        "cursorsNotFound": [],
+        "cursorsAlive": [],
+        "cursorsUnknown": [],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "cursor id <cursor> not found",
+        "code": {
+          "$numberInt": "43"
+        },
+        "codeName": "CursorNotFound"
+      }
+    ],
+    "diff.cursor.getmore_unknown": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "cursor id <cursor> not found",
+        "code": {
+          "$numberInt": "43"
+        },
+        "codeName": "CursorNotFound"
+      }
+    ],
+    "diff.cursor.default_batch": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "b"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": "c"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "d"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "v": "e"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_cursor_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ]
+  }
+}

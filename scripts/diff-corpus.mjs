@@ -1,0 +1,1110 @@
+// Fixed-seed differential corpus for the MongoDB wire surface.
+//
+// The corpus is generated locally from one seed, executed twice — once through
+// this repo's napi binding and once against a real `mongod 8.0.9` started by the
+// operator — and the two replies are compared. Expectations never come from this
+// implementation: matched entries are promoted into gate cases with the replies
+// read from the real server, and stable mismatches are pinned as known-difference
+// cases with the real reply quoted in their `source`.
+//
+// Usage:
+//   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
+//                                [--only <entry-id>] [--write] [--emit-cases] [--verify]
+import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import net from 'node:net'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const repo = resolve(here, '..')
+const require = createRequire(import.meta.url)
+const platform = `mongo-${process.platform}-${process.arch}`
+const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', platform, 'index.js'))
+
+const args = process.argv.slice(2)
+const option = (name, fallback) => {
+    const index = args.indexOf(`--${name}`)
+    return index >= 0 && args[index + 1] ? args[index + 1] : fallback
+}
+const HOST = option('host', '127.0.0.1')
+const PORT = Number(option('port', '28017'))
+const SEED = Number(option('seed', '20261106'))
+const ONLY = option('only', null)
+const VERIFY = args.includes('--verify')
+const WRITE = args.includes('--write')
+const EMIT = args.includes('--emit-cases')
+const DB = 'diff'
+
+const CORPUS_PATH = resolve(repo, 'tests', 'diff', 'corpus.json')
+const BASELINE_PATH = resolve(repo, 'tests', 'diff', 'baseline.json')
+const CASE_PATH = resolve(repo, 'tests', 'cases', 'diff.json')
+const KNOWN_CASE_PATH = resolve(repo, 'tests', 'cases', 'diff-known.json')
+const REPORT_PATH = resolve(repo, '.tmp', 'diff-report.json')
+
+// --- BSON writer (commands only) -------------------------------------------
+function element(value) {
+    if (value === null) return [0x0a, Buffer.alloc(0)]
+    if (typeof value === 'boolean') return [0x08, Buffer.from([value ? 1 : 0])]
+    if (typeof value === 'string') {
+        const text = Buffer.from(value, 'utf8')
+        const size = Buffer.alloc(4)
+        size.writeInt32LE(text.length + 1)
+        return [0x02, Buffer.concat([size, text, Buffer.from([0])])]
+    }
+    if (typeof value === 'number') {
+        if (Number.isInteger(value) && value >= -2147483648 && value <= 2147483647) {
+            const bytes = Buffer.alloc(4)
+            bytes.writeInt32LE(value)
+            return [0x10, bytes]
+        }
+        const bytes = Buffer.alloc(8)
+        bytes.writeDoubleLE(value)
+        return [0x01, bytes]
+    }
+    if (Array.isArray(value)) {
+        const object = {}
+        value.forEach((item, index) => {
+            object[String(index)] = item
+        })
+        return [0x04, document(object)]
+    }
+    if (value && typeof value === 'object') {
+        if (typeof value.$numberInt === 'string') {
+            const bytes = Buffer.alloc(4)
+            bytes.writeInt32LE(Number(value.$numberInt))
+            return [0x10, bytes]
+        }
+        if (typeof value.$numberLong === 'string') {
+            const bytes = Buffer.alloc(8)
+            bytes.writeBigInt64LE(BigInt(value.$numberLong))
+            return [0x12, bytes]
+        }
+        if (typeof value.$numberDouble === 'string') {
+            const bytes = Buffer.alloc(8)
+            bytes.writeDoubleLE(Number(value.$numberDouble))
+            return [0x01, bytes]
+        }
+        if (typeof value.$oid === 'string') return [0x07, Buffer.from(value.$oid, 'hex')]
+        return [0x03, document(value)]
+    }
+    throw new Error(`BSON writer cannot encode ${typeof value}`)
+}
+
+function document(object) {
+    const parts = []
+    for (const [key, value] of Object.entries(object)) {
+        const [type, bytes] = element(value)
+        parts.push(Buffer.from([type]), Buffer.from(`${key}\0`, 'utf8'), bytes)
+    }
+    const size = Buffer.alloc(4)
+    size.writeInt32LE(5 + parts.reduce((total, part) => total + part.length, 0))
+    return Buffer.concat([size, ...parts, Buffer.from([0])])
+}
+
+function frame(command) {
+    const body = Buffer.concat([Buffer.alloc(4), Buffer.from([0]), document(command)])
+    const header = Buffer.alloc(16)
+    header.writeInt32LE(16 + body.length, 0)
+    header.writeInt32LE(1, 4)
+    header.writeInt32LE(0, 8)
+    header.writeInt32LE(2013, 12)
+    return Buffer.concat([header, body])
+}
+
+function oracleCommand(command) {
+    return new Promise((resolvePromise, rejectPromise) => {
+        const socket = net.connect(PORT, HOST)
+        const chunks = []
+        socket.on('connect', () => socket.write(frame(command)))
+        socket.on('data', (chunk) => {
+            chunks.push(chunk)
+            const buffer = Buffer.concat(chunks)
+            if (buffer.length < 4) return
+            const length = buffer.readInt32LE(0)
+            if (buffer.length < length) return
+            socket.end()
+            try {
+                resolvePromise(JSON.parse(binding.decodeOpMsg(buffer.subarray(16, length))))
+            } catch (error) {
+                rejectPromise(error)
+            }
+        })
+        socket.on('error', rejectPromise)
+    })
+}
+
+// --- local execution --------------------------------------------------------
+function localCommand(store, cursors, command) {
+    const name = Object.keys(command)[0]
+    const text = JSON.stringify(command)
+    switch (name) {
+        case 'insert':
+            return JSON.parse(binding.insert(store, text))
+        case 'find':
+            return JSON.parse(binding.find(store, cursors, text))
+        case 'aggregate':
+            return JSON.parse(binding.aggregate(store, text))
+        case 'delete':
+            return JSON.parse(binding.delete(store, text))
+        case 'update':
+            return JSON.parse(binding.update(store, text))
+        case 'createIndexes':
+            return JSON.parse(binding.createIndexes(store, text))
+        case 'listIndexes':
+            return JSON.parse(binding.listIndexes(store, text))
+        case 'dropIndexes':
+            return JSON.parse(binding.dropIndexes(store, text))
+        case 'getMore':
+            return JSON.parse(binding.getMore(cursors, text))
+        case 'killCursors':
+            return JSON.parse(binding.killCursors(cursors, text))
+        default:
+            throw new Error(`unsupported local command ${name}`)
+    }
+}
+
+// --- comparison helpers -----------------------------------------------------
+function stable(value) {
+    if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
+    if (value && typeof value === 'object') {
+        const keys = Object.keys(value).sort()
+        return `{${keys.map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`
+    }
+    return JSON.stringify(value)
+}
+
+function digest(value) {
+    return createHash('sha256').update(stable(value)).digest('hex')
+}
+
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+
+function zeroId(value) {
+    if (value === 0) return true
+    if (!value || typeof value !== 'object') return false
+    return value.$numberInt === '0' || value.$numberLong === '0' || value.$numberDouble === '0' || value.$numberDouble === '0.0'
+}
+
+function numericId(value) {
+    if (!value || typeof value !== 'object') return false
+    return value.$numberInt !== undefined || value.$numberLong !== undefined || value.$numberDouble !== undefined
+}
+
+// Masks server-assigned identifiers (cursor ids, build UUIDs, generated ObjectIds)
+// so the reply template is compared instead of the values. Any mask means the
+// entry cannot become a gate case whose expectation is a literal reply.
+const CURSOR_FIELDS = new Set(['cursorsKilled', 'cursorsNotFound', 'cursorsAlive', 'cursorsUnknown'])
+
+function normalizeReply(reply) {
+    const flags = { cursor: false, uuid: false, oid: false }
+    function walk(node, parentKey) {
+        if (CURSOR_FIELDS.has(parentKey) && numericId(node)) {
+            flags.cursor = true
+            return '<cursor>'
+        }
+        if (Array.isArray(node)) return node.map((item) => walk(item, parentKey))
+        if (node && typeof node === 'object') {
+            const out = {}
+            for (const [key, value] of Object.entries(node)) {
+                if (parentKey === 'cursor' && key === 'id' && !zeroId(value) && numericId(value)) {
+                    flags.cursor = true
+                    out[key] = '<cursor>'
+                    continue
+                }
+                if (key === '$oid') {
+                    flags.oid = true
+                    out[key] = '<oid>'
+                    continue
+                }
+                out[key] = walk(value, key)
+            }
+            return out
+        }
+        if (CURSOR_FIELDS.has(parentKey) && numericId(node)) {
+            flags.cursor = true
+            return '<cursor>'
+        }
+        if (typeof node === 'string') {
+            let replaced = node.replace(UUID_PATTERN, '<uuid>')
+            if (replaced !== node) flags.uuid = true
+            const withCursor = replaced.replace(/cursor id \d+ not found/, 'cursor id <cursor> not found')
+            if (withCursor !== replaced) flags.cursor = true
+            return withCursor
+        }
+        return node
+    }
+    return { value: walk(reply, null), flags }
+}
+
+function numeric(value) {
+    if (!value || typeof value !== 'object') return value
+    if (value.$numberInt !== undefined) return Number(value.$numberInt)
+    if (value.$numberLong !== undefined) return Number(value.$numberLong)
+    if (value.$numberDouble !== undefined) return Number(value.$numberDouble)
+    return value
+}
+
+function semantic(value) {
+    if (Array.isArray(value)) return value.map(semantic)
+    if (value && typeof value === 'object') {
+        const out = {}
+        for (const [key, item] of Object.entries(value)) {
+            out[key] = key === 'ok' ? numeric(item) : semantic(item)
+        }
+        return out
+    }
+    return value
+}
+
+function okEncoding(reply) {
+    const ok = reply?.ok
+    if (!ok || typeof ok !== 'object') return ok === undefined ? 'none' : typeof ok
+    if (ok.$numberInt !== undefined) return 'int32'
+    if (ok.$numberLong !== undefined) return 'int64'
+    if (ok.$numberDouble !== undefined) return 'double'
+    return 'other'
+}
+
+function repliesMatch(oracle, local) {
+    const normalizedOracle = normalizeReply(oracle)
+    const normalizedLocal = normalizeReply(local)
+    return {
+        match: stable(semantic(normalizedOracle.value)) === stable(semantic(normalizedLocal.value)),
+        sameOrder: JSON.stringify(normalizedOracle.value) === JSON.stringify(normalizedLocal.value),
+        flags: {
+            cursor: normalizedOracle.flags.cursor || normalizedLocal.flags.cursor,
+            uuid: normalizedOracle.flags.uuid || normalizedLocal.flags.uuid,
+            oid: normalizedOracle.flags.oid || normalizedLocal.flags.oid
+        },
+        oracle: normalizedOracle.value,
+        local: normalizedLocal.value
+    }
+}
+
+// --- corpus generator -------------------------------------------------------
+function mulberry32(seed) {
+    let state = seed >>> 0
+    return () => {
+        state = (state + 0x6d2b79f5) >>> 0
+        let value = Math.imul(state ^ (state >>> 15), 1 | state)
+        value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+    }
+}
+
+const pick = (rng, values) => values[Math.floor(rng() * values.length)]
+
+const BASE_DOCS = () => [
+    { _id: 1, name: 'alpha', score: 10, grp: 'a', tags: ['red', 'blue'], a: { b: 5 }, items: [{ qty: 2 }, { qty: 5 }], active: true },
+    { _id: 2, name: 'beta', score: 20, grp: 'a', tags: ['blue'], a: { b: 7 }, items: [{ qty: 1 }], active: false },
+    { _id: 3, name: 'gamma', score: 30, grp: 'b', tags: ['green', 'red'], a: { b: 9 }, items: [{ qty: 4 }], active: true },
+    { _id: 4, name: 'delta', score: 40, grp: 'b', tags: [], a: { b: 11 }, items: [], active: false },
+    { _id: 5, name: 'epsilon', score: 50, grp: 'c', tags: ['red'], a: { b: 13 }, items: [{ qty: 6 }], active: true }
+]
+
+function buildFind(seed) {
+    const rng = mulberry32(seed)
+    const entries = []
+    let n = 0
+    function add(suffix, docs, steps) {
+        const collection = `diff_find_${n}`
+        entries.push({
+            id: `diff.find.${suffix}`,
+            cluster: 'find',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs }],
+            steps: steps.map((step) => ({ ...step, collection }))
+        })
+        n += 1
+    }
+    const docs = BASE_DOCS()
+    const score = pick(rng, [10, 20, 30, 40, 50])
+    add('eq_int', BASE_DOCS(), [{ op: 'find', filter: { score }, sort: { _id: 1 } }])
+    add('eq_string', BASE_DOCS(), [{ op: 'find', filter: { name: 'gamma' }, sort: { _id: 1 } }])
+    add('gt_int', BASE_DOCS(), [{ op: 'find', filter: { score: { $gt: 25 } }, sort: { _id: 1 } }])
+    add('lte_double', docs.map((item) => ({ ...item, ratio: { $numberDouble: `${item._id % 3 === 0 ? '0.5' : '1.5'}` } })), [
+        { op: 'find', filter: { ratio: { $lte: { $numberDouble: '1.0' } } }, sort: { _id: 1 } }
+    ])
+    add('in_list', BASE_DOCS(), [{ op: 'find', filter: { score: { $in: [10, 30] } }, sort: { _id: 1 } }])
+    add('nin_list', BASE_DOCS(), [{ op: 'find', filter: { score: { $nin: [20, 40] } }, sort: { _id: 1 } }])
+    add('exists_true', BASE_DOCS().map((item) => (item._id % 2 === 0 ? item : { ...item, opt: 1 })), [
+        { op: 'find', filter: { opt: { $exists: true } }, sort: { _id: 1 } }
+    ])
+    add('exists_false', BASE_DOCS().map((item) => (item._id % 2 === 0 ? item : { ...item, opt: 1 })), [
+        { op: 'find', filter: { opt: { $exists: false } }, sort: { _id: 1 } }
+    ])
+    add('type_int', [
+        { _id: 1, v: 7 },
+        { _id: 2, v: 'seven' },
+        { _id: 3, v: { $numberDouble: '7.5' } },
+        { _id: 4, v: true }
+    ], [{ op: 'find', filter: { v: { $type: 16 } }, sort: { _id: 1 } }])
+    add('type_alias', [
+        { _id: 1, v: 7 },
+        { _id: 2, v: 'seven' },
+        { _id: 3, v: { $numberDouble: '7.5' } },
+        { _id: 4, v: true }
+    ], [{ op: 'find', filter: { v: { $type: 'string' } }, sort: { _id: 1 } }])
+    add('regex_anchor', BASE_DOCS(), [{ op: 'find', filter: { name: { $regex: '^a' } }, sort: { _id: 1 } }])
+    add('regex_array', BASE_DOCS(), [{ op: 'find', filter: { tags: { $regex: '^b' } }, sort: { _id: 1 } }])
+    add('array_elem', BASE_DOCS(), [{ op: 'find', filter: { tags: 'red' }, sort: { _id: 1 } }])
+    add('array_all', BASE_DOCS(), [{ op: 'find', filter: { tags: { $all: ['red', 'blue'] } }, sort: { _id: 1 } }])
+    add('array_size', BASE_DOCS(), [{ op: 'find', filter: { tags: { $size: 2 } }, sort: { _id: 1 } }])
+    add('elem_match', BASE_DOCS(), [{ op: 'find', filter: { items: { $elemMatch: { qty: { $gte: 4 } } } }, sort: { _id: 1 } }])
+    add('dotted_nested', BASE_DOCS(), [{ op: 'find', filter: { 'a.b': 9 }, sort: { _id: 1 } }])
+    add('dotted_array', BASE_DOCS(), [{ op: 'find', filter: { 'items.qty': { $gte: 4 } }, sort: { _id: 1 } }])
+    add('logical_and', BASE_DOCS(), [{ op: 'find', filter: { $and: [{ score: { $gte: 20 } }, { name: { $ne: 'beta' } }] }, sort: { _id: 1 } }])
+    add('logical_or', BASE_DOCS(), [{ op: 'find', filter: { $or: [{ score }, { score: 50 }] }, sort: { _id: 1 } }])
+    add('projection_include', BASE_DOCS(), [{ op: 'find', filter: {}, projection: { name: 1, score: 1 }, sort: { _id: 1 } }])
+    add('projection_exclude', BASE_DOCS(), [{ op: 'find', filter: {}, projection: { score: 0, tags: 0 }, sort: { _id: 1 } }])
+    add('projection_expr_add', BASE_DOCS(), [{ op: 'find', filter: {}, projection: { name: 1, total: { $add: ['$score', 5] } }, sort: { _id: 1 } }])
+    add('sort_skip_limit', BASE_DOCS(), [{ op: 'find', filter: {}, sort: { score: -1, _id: 1 }, skip: 1, limit: 2 }])
+    return entries
+}
+
+function buildAggregate(seed) {
+    const rng = mulberry32(seed)
+    const entries = []
+    let n = 0
+    const docs = [
+        { _id: 1, name: 'alpha', score: 10, grp: 'a', tags: ['red', 'blue'] },
+        { _id: 2, name: 'beta', score: 20, grp: 'a', tags: ['blue'] },
+        { _id: 3, name: 'gamma', score: 30, grp: 'b', tags: ['green'] },
+        { _id: 4, name: 'delta', score: 40, grp: 'b', tags: [] },
+        { _id: 5, name: 'epsilon', score: 50, grp: 'a', tags: ['red'] },
+        { _id: 6, name: 'zeta', score: 60, grp: 'a', tags: ['red', 'blue'] },
+        { _id: 7, name: 'eta', score: 70, grp: 'a', tags: null },
+        { _id: 8, name: 'theta', score: 80, grp: 'a', tags: ['blue'] }
+    ]
+    function add(suffix, pipeline, options = {}) {
+        const collection = `diff_agg_${n}`
+        const entry = {
+            id: `diff.aggregate.${suffix}`,
+            cluster: 'aggregate',
+            collection,
+            setup: [{ op: 'insert', collection, documents: options.docs ?? docs }, ...(options.setup ?? [])],
+            steps: [{ op: 'aggregate', collection, pipeline }]
+        }
+        if (options.unordered) entry.unordered = options.unordered
+        entries.push(entry)
+        n += 1
+    }
+    const threshold = pick(rng, [20, 30, 40])
+    add('match_sort_project', [
+        { $match: { score: { $gte: threshold } } },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, name: 1 } }
+    ])
+    add('limit_skip_order', [{ $limit: 3 }, { $skip: 1 }])
+    add('group_sum', [{ $group: { _id: '$grp', total: { $sum: '$score' } } }, { $sort: { _id: 1 } }])
+    add('group_avg', [{ $group: { _id: '$grp', average: { $avg: '$score' } } }, { $sort: { _id: 1 } }])
+    add('group_min_max', [
+        { $group: { _id: '$grp', low: { $min: '$score' }, high: { $max: '$score' } } },
+        { $sort: { _id: 1 } }
+    ])
+    add('group_push', [{ $group: { _id: '$grp', values: { $push: '$score' } } }, { $sort: { _id: 1 } }])
+    add('group_add_to_set', [{ $group: { _id: '$grp', values: { $addToSet: '$score' } } }, { $sort: { _id: 1 } }], { unordered: ['values'] })
+    add('group_first_last', [
+        { $sort: { _id: 1 } },
+        { $group: { _id: '$grp', first: { $first: '$name' }, last: { $last: '$name' } } },
+        { $sort: { _id: 1 } }
+    ])
+    add('count_all', [{ $count: 'n' }])
+    add('count_empty', [{ $match: { score: { $gte: 1000 } } }, { $count: 'n' }])
+    add('unwind_string', [{ $unwind: '$tags' }, { $sort: { _id: 1, tags: 1 } }])
+    add('unwind_preserve', [{ $unwind: { path: '$tags', preserveNullAndEmptyArrays: true } }, { $sort: { _id: 1, tags: 1 } }])
+    add('unwind_index', [{ $unwind: { path: '$tags', includeArrayIndex: 'slot' } }, { $sort: { _id: 1, slot: 1 } }])
+    add('lookup', [
+        { $lookup: { from: `diff_agg_${n}_foreign`, localField: 'grp', foreignField: 'key', as: 'joined' } },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, joined: 1 } }
+    ], {
+        setup: [{
+            op: 'insert',
+            collection: `diff_agg_${n}_foreign`,
+            documents: [{ _id: 1, key: 'a', label: 'first' }, { _id: 2, key: 'b', label: 'second' }]
+        }]
+    })
+    add('lookup_missing', [
+        { $lookup: { from: `diff_agg_${n}_foreign`, localField: 'name', foreignField: 'key', as: 'joined' } },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, joined: 1 } }
+    ], {
+        setup: [{
+            op: 'insert',
+            collection: `diff_agg_${n}_foreign`,
+            documents: [{ _id: 1, key: 'alpha' }, { _id: 2, key: 'beta' }]
+        }]
+    })
+    add('sort_by_count', [{ $sortByCount: '$tags' }], {
+        docs: [
+            { _id: 1, tags: ['red'] },
+            { _id: 2, tags: ['red'] },
+            { _id: 3, tags: ['red'] },
+            { _id: 4, tags: ['blue'] },
+            { _id: 5, tags: ['blue'] },
+            { _id: 6, tags: ['green'] }
+        ]
+    })
+    add('project_concat', [
+        { $sort: { _id: 1 } },
+        { $project: { label: { $concat: ['$name', '-x'] }, _id: 0 } }
+    ])
+    add('project_ifnull', [
+        { $sort: { _id: 1 } },
+        { $project: { tag: { $ifNull: ['$tags', 'none'] }, _id: 1 } }
+    ])
+    add('project_add', [
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, bumped: { $add: ['$score', 1] } } }
+    ])
+    add('group_avg_double', [
+        { $group: { _id: '$grp', average: { $avg: '$score' } } },
+        { $sort: { _id: 1 } }
+    ])
+    add('addfields_basic', [{ $addFields: { extra: 1 } }, { $sort: { _id: 1 } }])
+    add('addfields_multi', [{ $addFields: { extra: 1, doubled: { $add: ['$score', '$score'] } } }, { $sort: { _id: 1 } }])
+    add('match_unwind_group', [
+        { $match: { score: { $gte: 30 } } },
+        { $unwind: '$tags' },
+        { $group: { _id: '$tags', total: { $sum: '$score' } } },
+        { $sort: { _id: 1 } }
+    ])
+    add('sort_multi_key', [{ $sort: { score: -1, name: 1 } }])
+    return entries
+}
+
+function buildUpdate(seed) {
+    const rng = mulberry32(seed)
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, grp: 'a', score: 10, a: { b: 5 }, items: [{ qty: 2 }, { qty: 5 }], name: 'alpha' },
+        { _id: 2, grp: 'a', score: 20, a: { b: 7 }, items: [{ qty: 1 }], name: 'beta' },
+        { _id: 3, grp: 'b', score: 30, a: { b: 9 }, items: [], name: 'gamma' },
+        { _id: 4, grp: 'b', score: 40, a: { b: 11 }, items: [{ qty: 4 }], name: 'delta' },
+        { _id: 5, grp: 'c', score: 50, a: { b: 13 }, items: [{ qty: 6 }], name: 'epsilon' }
+    ]
+    const target = pick(rng, [1, 2, 3])
+    function add(suffix, updates) {
+        const collection = `diff_update_${n}`
+        entries.push({
+            id: `diff.update.${suffix}`,
+            cluster: 'update',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs() }],
+            steps: [{ op: 'update', collection, updates }]
+        })
+        n += 1
+    }
+    add('set_scalar', [{ q: { _id: target }, u: { $set: { name: 'renamed' } } }])
+    add('set_multi', [{ q: { grp: 'a' }, u: { $set: { score: 99 } }, multi: true }])
+    add('set_omit_multi', [{ q: { grp: 'a' }, u: { $set: { score: 99 } } }])
+    add('inc_positive', [{ q: { _id: target }, u: { $inc: { score: 5 } } }])
+    add('inc_negative', [{ q: { grp: 'a' }, u: { $inc: { score: -5 } }, multi: true }])
+    add('unset_field', [{ q: { _id: target }, u: { $unset: { name: '' } } }])
+    add('unset_nested', [{ q: { _id: target }, u: { $unset: { 'a.b': '' } } }])
+    add('set_nested', [{ q: { _id: target }, u: { $set: { 'a.b': 42 } } }])
+    add('set_array_index', [{ q: { _id: target }, u: { $set: { 'items.0.qty': 7 } } }])
+    add('no_match', [{ q: { _id: 99 }, u: { $set: { name: 'nobody' } } }])
+    add('push', [{ q: { _id: target }, u: { $push: { tags: 'new' } } }])
+    add('pop', [{ q: { _id: target }, u: { $pop: { tags: 1 } } }])
+    add('add_to_set', [{ q: { _id: target }, u: { $addToSet: { tags: 'new' } } }])
+    add('pull', [{ q: { _id: target }, u: { $pull: { tags: 'old' } } }])
+    add('rename', [{ q: { _id: target }, u: { $rename: { name: 'label' } } }])
+    add('mul', [{ q: { _id: target }, u: { $mul: { score: 2 } } }])
+    add('upsert', [{ q: { _id: 99 }, u: { $set: { name: 'fresh' } }, upsert: true }])
+    add('replacement', [{ q: { _id: target }, u: { name: 'replaced', score: 1 } }])
+    return entries
+}
+
+function buildDelete(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, grp: 'a', score: 10, tags: ['red'] },
+        { _id: 2, grp: 'a', score: 20, tags: ['blue'] },
+        { _id: 3, grp: 'b', score: 30, tags: [] },
+        { _id: 4, grp: 'b', score: 40, tags: ['red'] },
+        { _id: 5, grp: 'c', score: 50, tags: [] }
+    ]
+    function add(suffix, deletes, steps) {
+        const collection = `diff_delete_${n}`
+        entries.push({
+            id: `diff.delete.${suffix}`,
+            cluster: 'delete',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs() }],
+            steps: steps ?? [{ op: 'delete', collection, deletes }]
+        })
+        n += 1
+    }
+    add('one_match', [{ q: { grp: 'a' }, limit: 1 }])
+    add('many_match', [{ q: { grp: 'a' }, limit: 0 }])
+    add('no_match', [{ q: { _id: 99 }, limit: 0 }])
+    add('in_filter', [{ q: { score: { $in: [10, 30] } }, limit: 0 }])
+    add('regex_filter', [{ q: { tags: { $regex: '^r' } }, limit: 0 }])
+    add('nested_filter', [{ q: { 'a.b': 9 }, limit: 0 }])
+    add('multi_specs', [
+        { q: { _id: 1 }, limit: 1 },
+        { q: { _id: 2 }, limit: 1 }
+    ])
+    add('one_then_many', [
+        { q: { grp: 'b' }, limit: 1 },
+        { q: { grp: 'b' }, limit: 0 }
+    ], [
+        { op: 'delete', collection: `diff_delete_${n}`, deletes: [{ q: { grp: 'b' }, limit: 1 }] },
+        { op: 'delete', collection: `diff_delete_${n}`, deletes: [{ q: { grp: 'b' }, limit: 0 }] },
+        { op: 'find', collection: `diff_delete_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    return entries
+}
+
+function buildInsert(seed) {
+    const entries = []
+    let n = 0
+    const single = (id) => ({ _id: id, name: `doc${id}` })
+    function add(suffix, documents, steps, setup = []) {
+        const collection = `diff_insert_${n}`
+        entries.push({
+            id: `diff.insert.${suffix}`,
+            cluster: 'insert',
+            collection,
+            setup: [{ op: 'insert', collection, documents }, ...setup],
+            steps: steps ?? [{ op: 'find', collection, filter: {}, sort: { _id: 1 } }]
+        })
+        n += 1
+    }
+    add('plain_batch', [single(1), single(2), single(3)])
+    add('plain_single', [single(7)])
+    add('ordered_false_dup_within', [single(1), single(1), single(2)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [single(1), single(1), single(2)], ordered: false },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('ordered_true_dup_within', [single(1), single(1), single(2)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [single(1), single(1), single(2)], ordered: true },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('duplicate_across_commands', [single(5)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [single(5), single(6)], ordered: false },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('duplicate_int_vs_double', [single(1)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [{ _id: { $numberDouble: '1.0' }, name: 'x' }] },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('empty_batch', [single(1)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [] }
+    ])
+    add('string_vs_int_id', [single(1)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [{ _id: '1', name: 'string-id' }] },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('ordered_false_multi_conflicts', [single(1)], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [single(1), single(1), single(1), single(2)], ordered: false },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('duplicate_extra_fields', [{ _id: 1, name: 'first' }], [
+        { op: 'insert', collection: `diff_insert_${n}`, documents: [{ _id: 1, name: 'second' }] },
+        { op: 'find', collection: `diff_insert_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    return entries
+}
+
+function buildIndexes(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, a: 10, b: 'x', tags: ['red', 'blue'] },
+        { _id: 2, a: 20, b: 'y', tags: ['blue'] },
+        { _id: 3, a: 30, b: 'z', tags: ['green'] }
+    ]
+    function add(suffix, setupIndexes, steps) {
+        const collection = `diff_index_${n}`
+        const setup = [{ op: 'insert', collection, documents: docs() }]
+        if (setupIndexes) setup.push({ op: 'createIndexes', collection, indexes: setupIndexes })
+        entries.push({ id: `diff.index.${suffix}`, cluster: 'indexes', collection, setup, steps })
+        n += 1
+    }
+    add('single_create_list', null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_1' }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    add('compound_create_list', null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1, b: -1 }, name: 'ab_1_-1' }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    add('unique_create_clean', null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_unique', unique: true }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    add('unique_insert_conflict', [{ key: { a: 1 }, name: 'a_unique', unique: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, a: 10, b: 'dup' }] },
+        { op: 'find', collection: `diff_index_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('unique_compound_conflict', [{ key: { a: 1, b: 1 }, name: 'ab_unique', unique: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, a: 10, b: 'x' }] }
+    ])
+    add('unique_multikey_conflict', [{ key: { tags: 1 }, name: 'tags_unique', unique: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, tags: ['blue'] }] }
+    ])
+    add('unique_multikey_within_doc', [{ key: { tags: 1 }, name: 'tags_unique', unique: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, tags: ['solo', 'solo'] }] }
+    ])
+    add('parallel_arrays', null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { left: 1, right: 1 }, name: 'left_right' }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, left: [1, 2], right: ['x', 'y'] }] }
+    ])
+    add('drop_by_name_then_list', [{ key: { a: 1 }, name: 'a_1' }], [
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: 'a_1' },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    add('drop_all_then_list', [{ key: { a: 1 }, name: 'a_1' }, { key: { b: 1 }, name: 'b_1' }], [
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: '*' },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    add('create_then_conflict_ordered_false', [{ key: { a: 1 }, name: 'a_unique', unique: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 8, a: 15 }, { _id: 9, a: 10 }, { _id: 10, a: 25 }], ordered: false },
+        { op: 'find', collection: `diff_index_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    add('unique_build_on_duplicates', null, [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 8, a: 10 }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_unique', unique: true }] }
+    ])
+    return entries
+}
+
+function buildCursor(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, v: 'a' },
+        { _id: 2, v: 'b' },
+        { _id: 3, v: 'c' },
+        { _id: 4, v: 'd' },
+        { _id: 5, v: 'e' }
+    ]
+    function add(suffix, steps) {
+        const collection = `diff_cursor_${n}`
+        entries.push({
+            id: `diff.cursor.${suffix}`,
+            cluster: 'cursor',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs() }],
+            steps: steps.map((step) => ({ ...step, collection }))
+        })
+        n += 1
+    }
+    add('batch2_once', [
+        { op: 'find', filter: {}, sort: { _id: 1 }, batchSize: 2 },
+        { op: 'getMore', batchSize: 2, cursorFrom: 0 }
+    ])
+    add('batch2_drain', [
+        { op: 'find', filter: {}, sort: { _id: 1 }, batchSize: 2 },
+        { op: 'getMore', batchSize: 2, cursorFrom: 0 },
+        { op: 'getMore', batchSize: 2, cursorFrom: 0 }
+    ].map((step, index) => ({ ...step, cursorFrom: index === 0 ? undefined : 0 })))
+    add('batch1_three', [
+        { op: 'find', filter: {}, sort: { _id: 1 }, batchSize: 1 },
+        { op: 'getMore', batchSize: 1, cursorFrom: 0 },
+        { op: 'getMore', batchSize: 1, cursorFrom: 0 },
+        { op: 'getMore', batchSize: 1, cursorFrom: 0 }
+    ])
+    add('batch10_all', [{ op: 'find', filter: {}, sort: { _id: 1 }, batchSize: 10 }])
+    add('limit2_batch1', [
+        { op: 'find', filter: {}, sort: { _id: 1 }, limit: 2, batchSize: 1 },
+        { op: 'getMore', batchSize: 1, cursorFrom: 0 }
+    ])
+    add('kill_then_getmore', [
+        { op: 'find', filter: {}, sort: { _id: 1 }, batchSize: 2 },
+        { op: 'killCursors', cursorsFrom: [0] },
+        { op: 'getMore', batchSize: 2, cursorFrom: 0 }
+    ])
+    add('getmore_unknown', [{ op: 'getMore', batchSize: 2, id: { $numberLong: '999' } }])
+    add('default_batch', [{ op: 'find', filter: {}, sort: { _id: 1 } }])
+    return entries
+}
+
+const CLUSTERS = [
+    ['find', buildFind],
+    ['aggregate', buildAggregate],
+    ['update', buildUpdate],
+    ['delete', buildDelete],
+    ['insert', buildInsert],
+    ['indexes', buildIndexes],
+    ['cursor', buildCursor]
+]
+
+function generate(seed) {
+    const entries = []
+    CLUSTERS.forEach(([name, builder], index) => {
+        const built = builder((seed + index * 7919) >>> 0)
+        for (const entry of built) {
+            entries.push({ ...entry, seed: (seed + index * 7919) >>> 0 })
+        }
+    })
+    // Drop keys that carry `undefined` so the in-memory value and the committed
+    // JSON file hash to the same digest.
+    return JSON.parse(JSON.stringify(entries))
+}
+
+// --- command construction ---------------------------------------------------
+function commandOf(step, replies) {
+    const collection = step.collection
+    const resolveCursor = (index) => {
+        if (step.id) return step.id
+        const reply = replies[index]
+        return reply?.cursor?.id
+    }
+    switch (step.op) {
+        case 'insert': {
+            const command = { insert: collection, documents: step.documents }
+            if (step.ordered !== undefined) command.ordered = step.ordered
+            return { ...command, $db: DB }
+        }
+        case 'find': {
+            const command = { find: collection, filter: step.filter ?? {} }
+            for (const key of ['projection', 'sort', 'skip', 'limit', 'batchSize']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'aggregate':
+            return { aggregate: collection, pipeline: step.pipeline, cursor: {}, $db: DB }
+        case 'update':
+            return { update: collection, updates: step.updates, $db: DB }
+        case 'delete':
+            return { delete: collection, deletes: step.deletes, $db: DB }
+        case 'createIndexes':
+            return { createIndexes: collection, indexes: step.indexes, $db: DB }
+        case 'listIndexes':
+            return { listIndexes: collection, $db: DB }
+        case 'dropIndexes':
+            return { dropIndexes: collection, index: step.index, $db: DB }
+        case 'getMore': {
+            const command = { getMore: resolveCursor(step.cursorFrom), collection }
+            if (step.batchSize !== undefined) command.batchSize = step.batchSize
+            return { ...command, $db: DB }
+        }
+        case 'killCursors':
+            return {
+                killCursors: collection,
+                cursors: step.cursorsFrom.map((index) => resolveCursor(index)),
+                $db: DB
+            }
+        default:
+            throw new Error(`unknown step op ${step.op}`)
+    }
+}
+
+// --- execution --------------------------------------------------------------
+// `$addToSet` and other unordered outputs are canonicalized before the
+// comparison, because the real server does not order them deterministically.
+function canonicalizeReply(reply, entry) {
+    if (!entry.unordered || entry.unordered.length === 0) return reply
+    function walk(node) {
+        if (Array.isArray(node)) return node.map(walk)
+        if (node && typeof node === 'object') {
+            const out = {}
+            for (const [key, value] of Object.entries(node)) {
+                out[key] = entry.unordered.includes(key) && Array.isArray(value)
+                    ? [...value].sort((left, right) => stable(left).localeCompare(stable(right)))
+                    : walk(value)
+            }
+            return out
+        }
+        return node
+    }
+    return walk(JSON.parse(JSON.stringify(reply)))
+}
+
+async function runOnOracle(entry) {
+    for (const collection of new Set(entry.setup.map((step) => step.collection))) {
+        await oracleCommand({ delete: collection, deletes: [{ q: {}, limit: 0 }], $db: DB }).catch(() => {})
+        await oracleCommand({ dropIndexes: collection, index: '*', $db: DB }).catch(() => {})
+    }
+    for (const step of entry.setup) await oracleCommand(commandOf(step, []))
+    const replies = []
+    for (const step of entry.steps) {
+        replies.push(canonicalizeReply(await oracleCommand(commandOf(step, replies)), entry))
+    }
+    return replies
+}
+
+function runOnLocal(entry) {
+    const directory = mkdtempSync(join(tmpdir(), 'mongo-diff-'))
+    const store = new binding.MongoStore(join(directory, 's.yykv'))
+    const cursors = new binding.MongoCursors()
+    try {
+        for (const step of entry.setup) localCommand(store, cursors, commandOf(step, []))
+        const replies = []
+        for (const step of entry.steps) {
+            replies.push(canonicalizeReply(localCommand(store, cursors, commandOf(step, replies)), entry))
+        }
+        return replies
+    } finally {
+        rmSync(directory, { recursive: true, force: true })
+    }
+}
+
+async function classify(entry, oracleReplies, localReplies) {
+    const steps = []
+    let matched = true
+    let gateable = !entry.unordered
+    if (entry.steps.some((step) => step.op === 'killCursors' || (step.op === 'getMore' && step.cursorFrom !== undefined))) {
+        gateable = false
+    }
+    for (let index = 0; index < entry.steps.length; index += 1) {
+        const result = repliesMatch(oracleReplies[index], localReplies[index])
+        const okSame = okEncoding(oracleReplies[index]) === okEncoding(localReplies[index])
+        if (!result.match) matched = false
+        if (result.flags.cursor || result.flags.uuid || result.flags.oid) gateable = false
+        steps.push({
+            index,
+            op: entry.steps[index].op,
+            command: commandOf(entry.steps[index], oracleReplies),
+            match: result.match,
+            sameOrder: result.sameOrder,
+            oracle: result.oracle,
+            local: result.local,
+            okSame,
+            flags: result.flags
+        })
+    }
+    return { matched, gateable: matched && gateable, steps }
+}
+
+async function rerunOracle(entry) {
+    return runOnOracle(entry)
+}
+
+function oracleStable(first, second) {
+    if (first.length !== second.length) return false
+    return first.every((reply, index) => stable(normalizeReply(reply).value) === stable(normalizeReply(second[index]).value))
+}
+
+// --- gate case emission -----------------------------------------------------
+function replyChecks(steps, expectedReplies, referenceReplies) {
+    const checks = []
+    for (let index = 0; index < steps.length; index += 1) {
+        const reply = expectedReplies[index]
+        const reference = referenceReplies[index]
+        const skipOk = okEncoding(reply) !== okEncoding(reference)
+        for (const [key, value] of Object.entries(reply)) {
+            if (key === 'ok' && skipOk) continue
+            checks.push({ at: `/r${index}/${key}`, equals: value })
+        }
+    }
+    return checks
+}
+
+function programForCases(entry, resolvedReplies) {
+    const program = [{ op: 'open', store: 's' }]
+    for (const step of entry.setup) program.push({ ...step })
+    entry.steps.forEach((step, index) => {
+        const copy = { ...step }
+        delete copy.cursorFrom
+        delete copy.cursorsFrom
+        if (step.op === 'killCursors') {
+            copy.ids = step.cursorsFrom.map((from) => resolvedReplies[from]?.cursor?.id)
+        }
+        if (step.op === 'getMore' && !step.id) copy.id = resolvedReplies[step.cursorFrom]?.cursor?.id
+        program.push({ ...copy, as: `r${index}` })
+    })
+    return program
+}
+
+// --- main -------------------------------------------------------------------
+function readJson(path) {
+    return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+function writeJson(path, value) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+}
+
+async function verify() {
+    if (!existsSync(CORPUS_PATH) || !existsSync(BASELINE_PATH)) {
+        console.error('corpus or baseline missing; run with --write first')
+        process.exit(1)
+    }
+    const corpus = readJson(CORPUS_PATH)
+    const baseline = readJson(BASELINE_PATH)
+    const regenerated = generate(SEED)
+    const problems = []
+    if (corpus.seed !== SEED) problems.push(`corpus seed ${corpus.seed} != ${SEED}`)
+    if (stable(regenerated) !== stable(corpus.entries)) problems.push('corpus does not match the generator output for this seed')
+    if (digest(regenerated) !== corpus.digest) problems.push('corpus digest mismatch')
+    if (baseline.corpusDigest !== corpus.digest) problems.push('baseline does not belong to this corpus')
+    if (digest(baseline.replies) !== baseline.replyDigest) problems.push('baseline reply digest mismatch')
+    for (const entry of regenerated) {
+        if (!baseline.replies[entry.id]) problems.push(`baseline misses ${entry.id}`)
+    }
+    console.log(`corpus entries: ${regenerated.length}`)
+    console.log(`corpus digest: ${corpus.digest}`)
+    console.log(`baseline digest: ${baseline.replyDigest}`)
+    if (problems.length > 0) {
+        for (const problem of problems) console.error(`FAIL ${problem}`)
+        process.exit(1)
+    }
+    console.log('VERIFY OK')
+}
+
+async function main() {
+    if (VERIFY) return verify()
+    if (ONLY && (WRITE || EMIT)) {
+        console.error('--only cannot be combined with --write or --emit-cases')
+        process.exit(1)
+    }
+
+    const entries = generate(SEED)
+    const selected = ONLY ? entries.filter((entry) => entry.id === ONLY) : entries
+    if (ONLY && selected.length === 0) {
+        console.error(`no corpus entry ${ONLY}`)
+        process.exit(1)
+    }
+
+    const report = {
+        seed: SEED,
+        mongod: '8.0.9',
+        host: HOST,
+        port: PORT,
+        generated: entries.length,
+        clusters: {},
+        entries: [],
+        matches: 0,
+        gateable: 0,
+        replyEncoding: 0,
+        knownDifferences: 0,
+        unstable: 0
+    }
+    const baselineReplies = {}
+    const knownCases = []
+    const matchedCases = []
+
+    for (const entry of selected) {
+        report.clusters[entry.cluster] = report.clusters[entry.cluster] ?? { entries: 0 }
+        report.clusters[entry.cluster].entries += 1
+
+        const oracleReplies = await runOnOracle(entry)
+        const localReplies = runOnLocal(entry)
+        const result = await classify(entry, oracleReplies, localReplies)
+        if (ONLY) {
+            const recorded = existsSync(BASELINE_PATH) ? readJson(BASELINE_PATH).replies?.[entry.id] : null
+            const fresh = oracleReplies.map((reply) => normalizeReply(reply).value)
+            if (!recorded) {
+                console.log(`no baseline for ${entry.id}`)
+                process.exitCode = 1
+            } else if (stable(fresh) === stable(recorded)) {
+                console.log(`MATCH baseline ${entry.id}`)
+            } else {
+                console.log(`DIFF baseline ${entry.id}`)
+                process.exitCode = 1
+            }
+        }
+        if (result.steps.some((step) => !step.okSame)) report.replyEncoding += 1
+        const record = {
+            id: entry.id,
+            cluster: entry.cluster,
+            matched: result.matched,
+            gateable: result.gateable,
+            classification: result.matched ? 'match' : 'pending',
+            steps: result.steps
+        }
+        report.entries.push(record)
+        baselineReplies[entry.id] = oracleReplies.map((reply) => normalizeReply(reply).value)
+
+        if (result.matched) {
+            report.matches += 1
+            if (result.gateable) {
+                report.gateable += 1
+                if (WRITE || EMIT) {
+                    matchedCases.push({
+                        id: entry.id,
+                        surface: 'diff',
+                        db: DB,
+                        source: `mongod 8.0.9 seed ${SEED} corpus ${entry.id}`,
+                        program: programForCases(entry, localReplies),
+                        checks: replyChecks(entry.steps, oracleReplies, localReplies)
+                    })
+                }
+            }
+        } else {
+            const second = await rerunOracle(entry)
+            const localSecond = runOnLocal(entry)
+            const stableOracle = oracleStable(oracleReplies, second)
+            const stableLocal = oracleStable(localReplies, localSecond)
+            const classification = stableOracle && stableLocal ? 'known-difference' : 'unstable'
+            record.classification = classification
+            if (classification === 'known-difference') {
+                report.knownDifferences += 1
+                if (WRITE || EMIT) {
+                    knownCases.push({
+                        id: entry.id,
+                        surface: 'diff-known',
+                        db: DB,
+                        knownDifference: true,
+                        reason: `stable difference against mongod 8.0.9 (seed ${SEED}); the real reply is quoted in source`,
+                        source: result.steps
+                            .filter((step) => !step.match)
+                            .map((step) => `#${step.index} ${JSON.stringify(step.command)} oracle=${stable(step.oracle)}`)
+                            .join(' | '),
+                        program: programForCases(entry, localReplies),
+                        checks: replyChecks(entry.steps, localReplies, localReplies)
+                    })
+                }
+            } else {
+                report.unstable += 1
+            }
+            for (const step of result.steps) {
+                if (step.match) continue
+                console.log(`DIFF ${entry.id} step#${step.index} ${step.op}`)
+                console.log(`  command ${JSON.stringify(step.command)}`)
+                console.log(`  local   ${stable(step.local)}`)
+                console.log(`  oracle  ${stable(step.oracle)}`)
+                console.log(`  repro   node scripts/diff-corpus.mjs --port ${PORT} --seed ${SEED} --only ${entry.id}`)
+            }
+        }
+    }
+
+    writeJson(REPORT_PATH, report)
+    console.log(`corpus ${report.generated} entries across ${Object.keys(report.clusters).length} clusters`)
+    console.log(`match ${report.matches} gateable ${report.gateable} known-difference ${report.knownDifferences} unstable ${report.unstable}`)
+
+    if (WRITE) {
+        writeJson(CORPUS_PATH, {
+            version: 1,
+            seed: SEED,
+            mongod: '8.0.9',
+            counts: Object.fromEntries(Object.entries(report.clusters).map(([cluster, value]) => [cluster, value.entries])),
+            digest: digest(entries),
+            entries
+        })
+        writeJson(BASELINE_PATH, {
+            version: 1,
+            seed: SEED,
+            mongod: '8.0.9',
+            corpusDigest: digest(entries),
+            replyDigest: digest(baselineReplies),
+            replies: baselineReplies
+        })
+        console.log(`wrote ${CORPUS_PATH}`)
+        console.log(`wrote ${BASELINE_PATH}`)
+    }
+
+    if (EMIT) {
+        writeJson(CASE_PATH, { suite: 'diff corpus', surface: 'diff', cases: matchedCases })
+        writeJson(KNOWN_CASE_PATH, { suite: 'diff known differences', surface: 'diff-known', cases: knownCases })
+        console.log(`wrote ${CASE_PATH} (${matchedCases.length} cases)`)
+        console.log(`wrote ${KNOWN_CASE_PATH} (${knownCases.length} cases)`)
+    }
+}
+
+main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+})

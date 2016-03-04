@@ -169,8 +169,9 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 projects/mongo.rs/   Rust 库原语（mongo-core）与绑定（mongo-napi / mongo-pyo3 / mongo-wasm）
 projects/mongo.ts/   TypeScript 绑定、安装态验收 runner 与最小命令行 `packages/mongo/bin/mongo.mjs`
 projects/mongo.py/   Python 包与同一批 case 的验收 runner
-scripts/             构建、BSON case 生成、跨语言门禁与独立 `.yyds` 字节校验脚本 `scripts/verify-yyds.mjs`
+scripts/             构建、BSON case 生成、跨语言门禁、差分语料与独立 `.yyds` 字节校验脚本 `scripts/verify-yyds.mjs`
 tests/cases/         两种语言共用的声明式 case 语料
+tests/diff/          固定种子差分语料与其真机 baseline（含 digest）
 ```
 
 Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。BSON 与 `OP_MSG` / `OP_QUERY` 编解码直接 re-export 上游 `database-protocol-mongo`（pin 到 `dev` 的完整 40 位 rev），本仓不再维护 `bson.rs` / `codec.rs` / `wire.rs`。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
@@ -190,13 +191,47 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。本轮在 `mongod 8.0.9` 上跑了 **77 个探针：77 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 / 重复键条目 case 标注同一台真机。回复字段顺序敏感的探针用 `exactOrder` 逐字比较，其余按排序后的键比较。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 1006 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。最近一次在 `mongod 8.0.9` 上跑了 **138 个探针：138 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 / 重复键条目 / 索引 case 标注同一台真机。回复字段顺序敏感的探针用 `exactOrder` 逐字比较，其余按排序后的键比较。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 1492 条门禁断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
 ```
 
 其余新增期望值仍**只有官方手册依据**（case 的 `source` 字段指向具体页面/小节）：探针只挑高风险语义，没有复跑全部 case；无法从手册确定语义的空数组形态、累加器与表达式直接拒绝，而不是猜一个恒真/恒假。
+
+### 差分语料（固定种子）
+
+手挑探针到顶后改用固定种子生成的差分语料：`scripts/diff-corpus.mjs` 按簇生成命令，两条路各跑一遍——本仓 napi 原语与真机 `mongod 8.0.9`——再比对归一化后的回复。期望值只来自真机：一致的条目用真机回复写成门禁 case，稳定不一致的写成“已知差异” case 并在 `source` 引用真机回复，不拿本实现当参照。
+
+seed `20261106`、`mongod 8.0.9`，共 **104 条 / 7 簇**：`find` 24、`aggregate` 24、`update` 18、`insert` 10、`indexes` 12、`delete` 8、`cursor` 8。每条独立命名空间 `diff_<cluster>_<n>`，真机侧跑前重置（`delete` 全部 + `dropIndexes *`），本仓侧每条用全新临时存储与游标表，因此长驻 `mongod` 上重跑结果不变。
+
+| 文件 | 内容 | digest |
+|------|------|--------|
+| `tests/diff/corpus.json` | 生成语料（104 条，含 setup / steps / 无序声明） | `faae47f0…` |
+| `tests/diff/baseline.json` | 真机归一化回复，按条目 id 索引 | `77e68170…`（replyDigest） |
+| `tests/cases/diff.json` | 一致且可进门禁的 **85** 条 case，期望值取自真机 | — |
+| `tests/cases/diff-known.json` | **11** 条稳定差异，`knownDifference: true` 并引用真机回复 | — |
+
+```bash
+node scripts/diff-corpus.mjs --verify            # 重生成语料 + 校验两个 digest + 条目完整性
+node scripts/diff-corpus.mjs --only diff.find.sort_skip_limit  # 单条复跑并比对 baseline
+node scripts/diff-corpus.mjs --write --emit-cases  # 全量跑，重写 baseline 与 case
+```
+
+归一化只抹服务端随机量：非零游标 id、`cursorsKilled` 一类数组元素、建索引 build/collection UUID、自动生成 ObjectId、`cursor id N not found` 文案；`$addToSet` 顺序未定义的结果按无序比较，因此该条不进门禁。最近一次全量结果：**93 条一致**（其中 85 条可进门禁）、**11 条稳定差异**、**0 条不稳定**。
+
+差分语料确认并已修正的差异：
+
+- `insert` 空批次：真机回 `16 InvalidLength`（`Write batch sizes must be between 1 and 100000. Got 0 operations.`），本仓原先静默接受。
+- 重复键值为整值 double：真机消息 `dup key: { _id: 1.0 }`，本仓原先渲染 `Double(1.0)`。
+- `getMore` / 已杀游标：真机回 `43 CursorNotFound`，本仓原先缺 `codeName`。
+
+11 条已知差异（全部是能力缺口，真机正常执行、本仓拒绝）：
+
+- `$addFields` 阶段 2 条：真机支持，本仓回 `59`。
+- `update` 9 条：数组下标路径 `$set: {"items.0.qty": 7}` 真机接受并落地、本仓回 `28`；`$push` / `$pop` / `$addToSet` / `$pull` / `$rename` / `$mul` 真机应用、本仓回 `9`；`upsert` 与替换式更新真机执行、本仓回 `59`。
+
+剩余差异（坐标，不降级成“返回错误即通过”）：上述 `$addFields`、数组下标路径与 6 个 update 修饰符、`upsert` / 替换式更新；以及**游标与错误回复的 `ok` 类型**——真机所有回复的 `ok` 都是 double（`1.0` / `0.0`），本仓游标与错误回复仍走共享回复助手的 int32，比对时按数值归一化、生成 case 时跳过该字段，助手改动待裁决。
 
 ## 命令行（最小面）
 
@@ -244,7 +279,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `$in` / `$nin` 含 `null`：已按真机对齐——列表里每个值都复用 `{field: <value>}` 的同一判等谓词，所以 `{a: {$in: [null, 2]}}` 匹配缺失字段（与 `{a: null}` 相同），`$nin: [null]` 因此**排除**缺失字段，且 `$ne: null` 与 `$nin: [null]` 在同一批文档上结果一致（探针 `in.with_null` / `in.null_single_element` / `in.null_on_array_field` / `nin.with_null` / `nin.null_and_value` / `ne.null_on_same_docs` 全部 MATCH，case `op.in.null_matches_missing_field`）。
 - `$group` 的 `$push` / `$addToSet` 对**缺失字段**：已与真机对齐——缺失字段被跳过，显式 `null` 才进数组（探针 `group.push_missing_field` 真机输出 `[1, null, 2]`）。修正前本仓把缺失求值为 `null` 压入（`[1, null, null, 2]`），属静默错数据；2026-11-06 已在 `mongod 8.0.9` 对拍后修正，case `pipe.group.push_and_add_to_set_skip_missing`。
 - `$group` 的 `$addToSet` 对**文档**判等：已与真机对齐——按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；修正前命令 JSON 解析把字段名排序（`serde_json::Map` 按 key 排序），两者被合并成一个，属静默错数据。根因修复是给 `serde_json` 开启 `preserve_order`，让命令文档从解析、存储到比较都保持调用方给出的字段顺序；case `pipe.group.add_to_set_document_field_order`。
-- `update` 修饰符错误通道：已与真机对齐——应用阶段失败先落盘已累计改动，再回 `ok: 1.0` + `writeErrors:[{index, code, errmsg}]` + `n:0`/`nModified:0` 并中止后续 spec（探针 `update.error_channel` / `update.set_dotted_scalar_array` / `update.set_dotted_document_array` 全部 MATCH）。`$set` / `$inc` 穿数组的错误码改为 `28`，消息逐字对齐真机（含 shell 风格值渲染，如 `{a: [ { b: 1 }, { b: 2 } ]}`）。校验阶段错误（未知修饰符 `9`、路径冲突 `40`、改 `_id` `66`）本仓仍回顶层 `ok: 0`，真机走 `writeErrors`，属剩余差异。
+- `update` 修饰符错误通道：已与真机对齐——应用阶段失败先落盘已累计改动，再回 `ok: 1.0` + `writeErrors:[{index, code, errmsg}]` + `n:0`/`nModified:0` 并中止后续 spec（探针 `update.error_channel` / `update.set_dotted_scalar_array` / `update.set_dotted_document_array` 全部 MATCH）。`$set` / `$inc` 穿数组的错误码改为 `28`，消息逐字对齐真机（含 shell 风格值渲染，如 `{a: [ { b: 1 }, { b: 2 } ]}`）。校验阶段错误（未知修饰符 `9`、路径冲突 `40`、改 `_id` `66`）本仓仍回顶层 `ok: 0`，真机走 `writeErrors`，属剩余差异。差分语料另外确认：真机接受数组下标路径（如 `$set: {"items.0.qty": 7}`）并落地修改，本仓按“穿数组”回 `28`，属能力差异（case `diff.update.set_array_index`）；`$push` / `$pop` / `$addToSet` / `$pull` / `$rename` / `$mul` 本仓按未知修饰符回 `9`，真机正常应用（case `diff.update.*`）。
 - 写命令回复类型：已与真机对齐——`insert` / `update` / `delete` / `count` 原始回复的 `ok` 为 double `1.0`，计数字段（`n` / `nModified`）为 int32（探针 `delete.many_no_match` / `delete.one_no_match` / `count.null_filter` / `update.unset_missing` 全部 MATCH）。`delete` 原始回复**不含** `deletedCount`（该字段由驱动层计算），本仓已移除。`insert` 的 `_id` 重复 `writeErrors` 条目已补齐 `keyPattern: {_id: 1}` 与 `keyValue: {_id: <原值>}`，字段顺序与真机一致（探针 `insert.duplicate_key_entry*` 用 `exactOrder` 逐字比较）。
 - 索引能力：`createIndexes` / `listIndexes` / `dropIndexes` 已实现单字段与复合键、`unique`、显式 `name`、数组多键（multikey），唯一索引在 `insert` 与 `update` 上真实生效，重复键走 `writeErrors` 且 `keyPattern` / `keyValue` 按索引键顺序渲染，与 `_id` 重复键同一构造。全部形态在 `mongod 8.0.9` 上逐条取期望值（探针 `index.*` 共 46 条全 MATCH，case 见 `tests/cases/indexes.json`）。已对齐的边界：
   - `name` 必填：真机不自动生成索引名，缺 `name` 回 `9`（`The 'name' field is a required property of an index specification`），本仓同样拒绝而非自造名字。缺 `key` 回 `9`，空 `key` 回 `67`，空 `name` 回 `67`（渲染时追加 `v: 2`），空 `indexes` 数组回 `2`，缺 `indexes` 字段回 `40414`。
@@ -253,7 +288,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
   - 数组多键：字段值数组按元素逐个入键（同一文档内重复元素折叠，所以 `{a: [3, 3]}` 可进唯一索引，跨文档同元素仍回 `11000`）；空数组入键为 BSON `undefined`（`dup key: { a: undefined }`，`keyValue.a` 为 0x06）；嵌套数组只展开一层，`{a: [[1, 2]]}` 以数组 `[ 1, 2 ]` 整体为键、`{a: [[]]}` 以 `[]` 为键；复合键按字段做笛卡尔积，缺失字段按 `null` 参与键；同一复合索引两个及以上字段为数组时回 `writeErrors` 码 `171`，消息按真机反序列出前两个数组字段（`{a: 1, b: 1}` 报 `[b] [a]`，`{b: 1, a: 1}` 报 `[a] [b]`），空数组同样计入，`update` 路径同为 `n: 0` / `nModified: 0`。建索引面对存量并行数组不报 `171`（真机实测成功），本仓一致。
   - `dropIndexes` 的 `*` 回 `msg: "non-_id indexes dropped for collection"`，`_id_` 在任何情况下都不可删；key pattern 支持单字段与复合键，字段顺序不同视为不同索引，`1` 与 `1.0` 视为同值，未命中回 `can't find index with key: { ... }`，类型不是字符串或文档时回 `14` 并带真机 `expected types '[string']` 文案。
   - 索引元数据存在 catalog 的 `indexes` 字段里，无索引时**不写**该字段，保持既有 catalog 字节长度断言不变。
-- 错误回复：`createIndexes` / `dropIndexes` / 重复键相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`26 NamespaceNotFound`、`27 IndexNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
+- 错误回复：`createIndexes` / `dropIndexes` / 重复键 / 空批次 / 游标失效相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`16 InvalidLength`、`26 NamespaceNotFound`、`27 IndexNotFound`、`43 CursorNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
 - 索引剩余差异（坐标，不降级成“返回错误即通过”）：
   - `listIndexes` 不暴露多键标识：真机 `mongod 8.0.9` 实测（原始回复字节）对任何索引都不输出 `multikey`，`$indexStats` / `collStats` 同样没有，因此本仓 wire 回复也不输出，探针 `index.multikey.list_shape` 逐字比较完整回复。多键语义只能由行为证明：唯一索引对数组元素逐条判重、重复元素折叠、跨文档重复回 `11000`。
   - 空数组索引键依赖 BSON `undefined`（0x06）：该变体由上游 `database-protocol-mongo` 提供（本项目不再自带 BSON 实现），extended JSON 侧用 `{"$undefined": true}`，与上游 82 条字节 fixture 的约定一致；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
@@ -261,7 +296,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
-- 聚合管道覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$lookup`（equality form）/ `$sortByCount` / `$group` / `$project`；`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`，`$lookup` 的子管道与 `$sortByCount` 的表达式对象也回 `59` 并给出坐标；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式同样回 `59`（清单见“聚合管道”一节）。
+- 聚合管道覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$lookup`（equality form）/ `$sortByCount` / `$group` / `$project`；`$addFields`、`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`，`$lookup` 的子管道与 `$sortByCount` 的表达式对象也回 `59` 并给出坐标；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式同样回 `59`（清单见“聚合管道”一节）。
 - `$lookup` 的 equality form 与 `$sortByCount` 的字段路径形态已逐条对拍 `mongod 8.0.9`（探针 `lookup.*` 8 条、`sortByCount.*` 4 条全部 MATCH，case 见 `tests/cases/pipeline.json`）：数组 local、缺失/`null`/空数组 local、对象对对象、`from` 不存在、`as` 原位覆盖、空集合、`as` 字段冲突与全部参数错误形态均已覆盖。
 - `$count` 空输入不输出文档、`$unwind` 默认丢弃空数组/`null`/缺失、`$sort` 不假设稳定次序、`null`/`$exists`/`$type`/`$all`/`$elemMatch`/点路径数组匹配、`$group` 的 `$avg`/`$min`/`$max`、数组升/降序取最小/最大元素：均在 `mongod 8.0.9` 上对拍一致（探针与 case 见上）。
 - 范围算子按类型分桶：`{a: {$gt: 5}}` 只匹配 int32/int64/double，**不匹配字符串 `"5"`**；`{a: {$gt: null}}` 与 `{a: {$lt: null}}` 在真机上都匹配空集，本仓一致。
