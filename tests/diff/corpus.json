@@ -1,17 +1,18 @@
 {
   "version": 1,
   "seed": 20261106,
+  "count": 130,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
-    "aggregate": 24,
-    "update": 18,
+    "aggregate": 25,
+    "update": 43,
     "delete": 8,
     "insert": 10,
     "indexes": 12,
     "cursor": 8
   },
-  "digest": "faae47f0b4c32546daff832dd135cd6afd01db3a85d72bdc659ec9c5d18dac84",
+  "digest": "678d48e2c67e10a40d0b426858fe980a7f9df4f0e5d804a89df95e32d3b67f3a",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -5036,7 +5037,7 @@
       "seed": 20269025
     },
     {
-      "id": "diff.aggregate.match_unwind_group",
+      "id": "diff.aggregate.addfields_then_match",
       "cluster": "aggregate",
       "collection": "diff_agg_22",
       "setup": [
@@ -5123,20 +5124,19 @@
           "collection": "diff_agg_22",
           "pipeline": [
             {
-              "$match": {
-                "score": {
-                  "$gte": 30
+              "$addFields": {
+                "bumped": {
+                  "$add": [
+                    "$score",
+                    10
+                  ]
                 }
               }
             },
             {
-              "$unwind": "$tags"
-            },
-            {
-              "$group": {
-                "_id": "$tags",
-                "total": {
-                  "$sum": "$score"
+              "$match": {
+                "bumped": {
+                  "$gte": 40
                 }
               }
             },
@@ -5151,7 +5151,7 @@
       "seed": 20269025
     },
     {
-      "id": "diff.aggregate.sort_multi_key",
+      "id": "diff.aggregate.match_unwind_group",
       "cluster": "aggregate",
       "collection": "diff_agg_23",
       "setup": [
@@ -5238,6 +5238,121 @@
           "collection": "diff_agg_23",
           "pipeline": [
             {
+              "$match": {
+                "score": {
+                  "$gte": 30
+                }
+              }
+            },
+            {
+              "$unwind": "$tags"
+            },
+            {
+              "$group": {
+                "_id": "$tags",
+                "total": {
+                  "$sum": "$score"
+                }
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.sort_multi_key",
+      "cluster": "aggregate",
+      "collection": "diff_agg_24",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_24",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_24",
+          "pipeline": [
+            {
               "$sort": {
                 "score": -1,
                 "name": 1
@@ -5272,7 +5387,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5286,7 +5405,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5296,7 +5418,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5310,7 +5433,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5324,7 +5451,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5373,7 +5504,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5387,7 +5522,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5397,7 +5535,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5411,7 +5550,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5425,7 +5568,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5475,7 +5622,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5489,7 +5640,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5499,7 +5653,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5513,7 +5668,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5527,7 +5686,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5576,7 +5739,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5590,7 +5757,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5600,7 +5770,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5614,7 +5785,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5628,7 +5803,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5677,7 +5856,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5691,7 +5874,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5701,7 +5887,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5715,7 +5902,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5729,7 +5920,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5779,7 +5974,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5793,7 +5992,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5803,7 +6005,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5817,7 +6020,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5831,7 +6038,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5880,7 +6091,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5894,7 +6109,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -5904,7 +6122,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -5918,7 +6137,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -5932,7 +6155,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -5981,7 +6208,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -5995,7 +6226,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6005,7 +6239,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6019,7 +6254,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6033,7 +6272,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6082,7 +6325,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6096,7 +6343,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6106,7 +6356,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6120,7 +6371,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6134,7 +6389,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6183,7 +6442,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6197,7 +6460,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6207,7 +6473,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6221,7 +6488,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6235,7 +6506,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6284,7 +6559,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6298,7 +6577,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6308,7 +6590,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6322,7 +6605,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6336,7 +6623,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6385,7 +6676,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6399,7 +6694,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6409,7 +6707,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6423,7 +6722,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6437,7 +6740,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6486,7 +6793,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6500,7 +6811,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6510,7 +6824,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6524,7 +6839,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6538,7 +6857,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6587,7 +6910,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6601,7 +6928,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6611,7 +6941,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6625,7 +6956,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6639,7 +6974,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6688,7 +7027,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6702,7 +7045,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6712,7 +7058,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6726,7 +7073,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6740,7 +7091,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6789,7 +7144,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6803,7 +7162,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6813,7 +7175,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6827,7 +7190,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6841,7 +7208,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6890,7 +7261,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -6904,7 +7279,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -6914,7 +7292,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -6928,7 +7307,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -6942,7 +7325,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -6992,7 +7379,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -7006,7 +7397,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -7016,7 +7410,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -7030,7 +7425,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -7044,7 +7443,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         }
@@ -7062,6 +7465,2963 @@
                 "name": "replaced",
                 "score": 1
               }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.push_each_position_slice",
+      "cluster": "update",
+      "collection": "diff_update_18",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_18",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_18",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "tags": {
+                    "$each": [
+                      "x",
+                      "y"
+                    ],
+                    "$position": 0,
+                    "$slice": 2
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.push_each_slice_negative",
+      "cluster": "update",
+      "collection": "diff_update_19",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_19",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_19",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "tags": {
+                    "$each": [
+                      "p"
+                    ],
+                    "$slice": -1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.push_missing_field",
+      "cluster": "update",
+      "collection": "diff_update_20",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_20",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_20",
+          "updates": [
+            {
+              "q": {
+                "_id": 3
+              },
+              "u": {
+                "$push": {
+                  "extra": "z"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pop_first",
+      "cluster": "update",
+      "collection": "diff_update_21",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_21",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_21",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pop": {
+                  "tags": -1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pop_zero_error",
+      "cluster": "update",
+      "collection": "diff_update_22",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_22",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_22",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pop": {
+                  "tags": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.add_to_set_each",
+      "cluster": "update",
+      "collection": "diff_update_23",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_23",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_23",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$addToSet": {
+                  "tags": {
+                    "$each": [
+                      "old",
+                      "green"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pull_condition",
+      "cluster": "update",
+      "collection": "diff_update_24",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_24",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_24",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "tags": {
+                    "$in": [
+                      "old",
+                      "mid"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pull_document",
+      "cluster": "update",
+      "collection": "diff_update_25",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_25",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_25",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "items": {
+                    "qty": {
+                      "$gte": 5
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.rename_missing",
+      "cluster": "update",
+      "collection": "diff_update_26",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_26",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_26",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$rename": {
+                  "ghost": "label"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.rename_same_error",
+      "cluster": "update",
+      "collection": "diff_update_27",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_27",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_27",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$rename": {
+                  "name": "name"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.mul_double",
+      "cluster": "update",
+      "collection": "diff_update_28",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_28",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_28",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$mul": {
+                  "score": {
+                    "$numberDouble": "1.5"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.array_index_inc",
+      "cluster": "update",
+      "collection": "diff_update_29",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_29",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_29",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$inc": {
+                  "items.0.qty": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.array_index_unset",
+      "cluster": "update",
+      "collection": "diff_update_30",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_30",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_30",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$unset": {
+                  "items.0.qty": ""
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.array_index_pad",
+      "cluster": "update",
+      "collection": "diff_update_31",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_31",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_31",
+          "updates": [
+            {
+              "q": {
+                "_id": 3
+              },
+              "u": {
+                "$set": {
+                  "items.5.qty": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.array_index_negative_error",
+      "cluster": "update",
+      "collection": "diff_update_32",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_32",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_32",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "items.-1.qty": 3
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.positional_dotted",
+      "cluster": "update",
+      "collection": "diff_update_33",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_33",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_33",
+          "updates": [
+            {
+              "q": {
+                "_id": 1,
+                "items.qty": {
+                  "$gte": 5
+                }
+              },
+              "u": {
+                "$set": {
+                  "items.$.qty": 0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.positional_elem_match",
+      "cluster": "update",
+      "collection": "diff_update_34",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_34",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_34",
+          "updates": [
+            {
+              "q": {
+                "_id": 1,
+                "items": {
+                  "$elemMatch": {
+                    "qty": 2
+                  }
+                }
+              },
+              "u": {
+                "$inc": {
+                  "items.$.qty": 10
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.push_nonarray_error",
+      "cluster": "update",
+      "collection": "diff_update_35",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_35",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_35",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "score": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pull_nonarray_error",
+      "cluster": "update",
+      "collection": "diff_update_36",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_36",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_36",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "score": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_operator_fields",
+      "cluster": "update",
+      "collection": "diff_update_37",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_37",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_37",
+          "updates": [
+            {
+              "q": {
+                "_id": 99,
+                "grp": "z"
+              },
+              "u": {
+                "$inc": {
+                  "score": 1
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_replacement",
+      "cluster": "update",
+      "collection": "diff_update_38",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_38",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_38",
+          "updates": [
+            {
+              "q": {
+                "_id": 98
+              },
+              "u": {
+                "grp": "r",
+                "score": 7
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_match_existing",
+      "cluster": "update",
+      "collection": "diff_update_39",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_39",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_39",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "score": 11
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_keep_id",
+      "cluster": "update",
+      "collection": "diff_update_40",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_40",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_40",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "score": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_alter_id_error",
+      "cluster": "update",
+      "collection": "diff_update_41",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_41",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_41",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "_id": 9,
+                "score": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_empty",
+      "cluster": "update",
+      "collection": "diff_update_42",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_42",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_42",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {}
             }
           ]
         }

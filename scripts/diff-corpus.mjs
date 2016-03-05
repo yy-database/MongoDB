@@ -9,7 +9,14 @@
 //
 // Usage:
 //   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
-//                                [--only <entry-id>] [--write] [--emit-cases] [--verify]
+//                                [--count 130] [--only <entry-id>]
+//                                [--write] [--emit-cases] [--verify] [--check]
+//
+// `--check` is the regression gate: it verifies the fixed seed, count and corpus
+// digest against the committed baseline before starting any engine, then runs
+// every entry. An observed difference the baseline does not explain fails, a
+// difference whose signal changed fails, and a baseline entry that no longer
+// differs fails as stale. Regenerate with `--write --emit-cases`.
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -32,8 +39,10 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
+const COUNT = Number(option('count', '130'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
+const CHECK = args.includes('--check')
 const WRITE = args.includes('--write')
 const EMIT = args.includes('--emit-cases')
 const DB = 'diff'
@@ -467,6 +476,11 @@ function buildAggregate(seed) {
     ])
     add('addfields_basic', [{ $addFields: { extra: 1 } }, { $sort: { _id: 1 } }])
     add('addfields_multi', [{ $addFields: { extra: 1, doubled: { $add: ['$score', '$score'] } } }, { $sort: { _id: 1 } }])
+    add('addfields_then_match', [
+        { $addFields: { bumped: { $add: ['$score', 10] } } },
+        { $match: { bumped: { $gte: 40 } } },
+        { $sort: { _id: 1 } }
+    ])
     add('match_unwind_group', [
         { $match: { score: { $gte: 30 } } },
         { $unwind: '$tags' },
@@ -482,11 +496,11 @@ function buildUpdate(seed) {
     const entries = []
     let n = 0
     const docs = () => [
-        { _id: 1, grp: 'a', score: 10, a: { b: 5 }, items: [{ qty: 2 }, { qty: 5 }], name: 'alpha' },
-        { _id: 2, grp: 'a', score: 20, a: { b: 7 }, items: [{ qty: 1 }], name: 'beta' },
-        { _id: 3, grp: 'b', score: 30, a: { b: 9 }, items: [], name: 'gamma' },
-        { _id: 4, grp: 'b', score: 40, a: { b: 11 }, items: [{ qty: 4 }], name: 'delta' },
-        { _id: 5, grp: 'c', score: 50, a: { b: 13 }, items: [{ qty: 6 }], name: 'epsilon' }
+        { _id: 1, grp: 'a', score: 10, a: { b: 5 }, items: [{ qty: 2 }, { qty: 5 }], name: 'alpha', tags: ['old', 'mid'] },
+        { _id: 2, grp: 'a', score: 20, a: { b: 7 }, items: [{ qty: 1 }], name: 'beta', tags: ['red'] },
+        { _id: 3, grp: 'b', score: 30, a: { b: 9 }, items: [], name: 'gamma', tags: [] },
+        { _id: 4, grp: 'b', score: 40, a: { b: 11 }, items: [{ qty: 4 }], name: 'delta', tags: ['blue', 'old'] },
+        { _id: 5, grp: 'c', score: 50, a: { b: 13 }, items: [{ qty: 6 }], name: 'epsilon', tags: ['mid', 'green'] }
     ]
     const target = pick(rng, [1, 2, 3])
     function add(suffix, updates) {
@@ -518,6 +532,31 @@ function buildUpdate(seed) {
     add('mul', [{ q: { _id: target }, u: { $mul: { score: 2 } } }])
     add('upsert', [{ q: { _id: 99 }, u: { $set: { name: 'fresh' } }, upsert: true }])
     add('replacement', [{ q: { _id: target }, u: { name: 'replaced', score: 1 } }])
+    add('push_each_position_slice', [{ q: { _id: 1 }, u: { $push: { tags: { $each: ['x', 'y'], $position: 0, $slice: 2 } } } }])
+    add('push_each_slice_negative', [{ q: { _id: 1 }, u: { $push: { tags: { $each: ['p'], $slice: -1 } } } }])
+    add('push_missing_field', [{ q: { _id: 3 }, u: { $push: { extra: 'z' } } }])
+    add('pop_first', [{ q: { _id: 1 }, u: { $pop: { tags: -1 } } }])
+    add('pop_zero_error', [{ q: { _id: 1 }, u: { $pop: { tags: 0 } } }])
+    add('add_to_set_each', [{ q: { _id: 1 }, u: { $addToSet: { tags: { $each: ['old', 'green'] } } } }])
+    add('pull_condition', [{ q: { _id: 1 }, u: { $pull: { tags: { $in: ['old', 'mid'] } } } }])
+    add('pull_document', [{ q: { _id: 1 }, u: { $pull: { items: { qty: { $gte: 5 } } } } }])
+    add('rename_missing', [{ q: { _id: 1 }, u: { $rename: { ghost: 'label' } } }])
+    add('rename_same_error', [{ q: { _id: 1 }, u: { $rename: { name: 'name' } } }])
+    add('mul_double', [{ q: { _id: 1 }, u: { $mul: { score: { $numberDouble: '1.5' } } } }])
+    add('array_index_inc', [{ q: { _id: 1 }, u: { $inc: { 'items.0.qty': 1 } } }])
+    add('array_index_unset', [{ q: { _id: 1 }, u: { $unset: { 'items.0.qty': '' } } }])
+    add('array_index_pad', [{ q: { _id: 3 }, u: { $set: { 'items.5.qty': 1 } } }])
+    add('array_index_negative_error', [{ q: { _id: 1 }, u: { $set: { 'items.-1.qty': 3 } } }])
+    add('positional_dotted', [{ q: { _id: 1, 'items.qty': { $gte: 5 } }, u: { $set: { 'items.$.qty': 0 } } }])
+    add('positional_elem_match', [{ q: { _id: 1, items: { $elemMatch: { qty: 2 } } }, u: { $inc: { 'items.$.qty': 10 } } }])
+    add('push_nonarray_error', [{ q: { _id: 1 }, u: { $push: { score: 1 } } }])
+    add('pull_nonarray_error', [{ q: { _id: 1 }, u: { $pull: { score: 1 } } }])
+    add('upsert_operator_fields', [{ q: { _id: 99, grp: 'z' }, u: { $inc: { score: 1 } }, upsert: true }])
+    add('upsert_replacement', [{ q: { _id: 98 }, u: { grp: 'r', score: 7 }, upsert: true }])
+    add('upsert_match_existing', [{ q: { _id: 1 }, u: { $set: { score: 11 } }, upsert: true }])
+    add('replacement_keep_id', [{ q: { _id: 1 }, u: { score: 1 } }])
+    add('replacement_alter_id_error', [{ q: { _id: 1 }, u: { _id: 9, score: 1 } }])
+    add('replacement_empty', [{ q: { _id: 1 }, u: {} }])
     return entries
 }
 
@@ -935,15 +974,7 @@ async function verify() {
     const corpus = readJson(CORPUS_PATH)
     const baseline = readJson(BASELINE_PATH)
     const regenerated = generate(SEED)
-    const problems = []
-    if (corpus.seed !== SEED) problems.push(`corpus seed ${corpus.seed} != ${SEED}`)
-    if (stable(regenerated) !== stable(corpus.entries)) problems.push('corpus does not match the generator output for this seed')
-    if (digest(regenerated) !== corpus.digest) problems.push('corpus digest mismatch')
-    if (baseline.corpusDigest !== corpus.digest) problems.push('baseline does not belong to this corpus')
-    if (digest(baseline.replies) !== baseline.replyDigest) problems.push('baseline reply digest mismatch')
-    for (const entry of regenerated) {
-        if (!baseline.replies[entry.id]) problems.push(`baseline misses ${entry.id}`)
-    }
+    const problems = corpusIdentityProblems(corpus, baseline, regenerated)
     console.log(`corpus entries: ${regenerated.length}`)
     console.log(`corpus digest: ${corpus.digest}`)
     console.log(`baseline digest: ${baseline.replyDigest}`)
@@ -954,8 +985,103 @@ async function verify() {
     console.log('VERIFY OK')
 }
 
+function corpusIdentityProblems(corpus, baseline, regenerated) {
+    const problems = []
+    if (corpus.seed !== SEED) problems.push(`corpus seed ${corpus.seed} != ${SEED}`)
+    if (corpus.count !== undefined && corpus.count !== COUNT) problems.push(`corpus count ${corpus.count} != ${COUNT}`)
+    if (regenerated.length !== COUNT) {
+        problems.push(`generated ${regenerated.length} entries but --count declared ${COUNT}`)
+    }
+    if (stable(regenerated) !== stable(corpus.entries)) problems.push('corpus does not match the generator output for this seed')
+    if (digest(regenerated) !== corpus.digest) problems.push('corpus digest mismatch')
+    if (baseline.seed !== SEED) problems.push(`baseline seed ${baseline.seed} != ${SEED}`)
+    if (baseline.count !== undefined && baseline.count !== COUNT) problems.push(`baseline count ${baseline.count} != ${COUNT}`)
+    if (baseline.corpusDigest !== corpus.digest) problems.push('baseline does not belong to this corpus')
+    if (digest(baseline.replies) !== baseline.replyDigest) problems.push('baseline reply digest mismatch')
+    for (const entry of regenerated) {
+        if (!baseline.replies[entry.id]) problems.push(`baseline misses ${entry.id}`)
+    }
+    for (const id of Object.keys(baseline.replies)) {
+        if (!regenerated.some((entry) => entry.id === id)) problems.push(`baseline has stale entry ${id}`)
+    }
+    return problems
+}
+
+function regenerationCommand() {
+    return `node scripts/diff-corpus.mjs --seed ${SEED} --count ${COUNT} --write --emit-cases`
+}
+
+/// Signature of one stable difference: the normalized oracle and local replies
+/// of every mismatching step. Changing this signal means the difference itself
+/// changed shape.
+function differenceSignal(steps) {
+    return digest(steps.filter((step) => !step.match).map((step) => ({ index: step.index, oracle: step.oracle, local: step.local })))
+}
+
+async function check() {
+    if (!existsSync(CORPUS_PATH) || !existsSync(BASELINE_PATH)) {
+        console.error('corpus or baseline missing; run with --write first')
+        process.exit(1)
+    }
+    const corpus = readJson(CORPUS_PATH)
+    const baseline = readJson(BASELINE_PATH)
+    const regenerated = generate(SEED)
+    const problems = corpusIdentityProblems(corpus, baseline, regenerated)
+    console.log(`corpus entries: ${regenerated.length}`)
+    console.log(`corpus digest: ${corpus.digest}`)
+    if (problems.length > 0) {
+        for (const problem of problems) console.error(`FAIL ${problem}`)
+        console.error(`regenerate with: ${regenerationCommand()}`)
+        process.exit(1)
+    }
+
+    const known = baseline.knownDifferences ?? {}
+    const observed = new Map()
+    for (const entry of regenerated) {
+        const oracleReplies = await runOnOracle(entry)
+        const localReplies = runOnLocal(entry)
+        const result = await classify(entry, oracleReplies, localReplies)
+        if (result.matched) continue
+        const second = await rerunOracle(entry)
+        const localSecond = runOnLocal(entry)
+        if (!oracleStable(oracleReplies, second) || !oracleStable(localReplies, localSecond)) {
+            problems.push(`unstable difference ${entry.id}; the corpus cannot gate a reply that changes between runs`)
+            continue
+        }
+        observed.set(entry.id, differenceSignal(result.steps))
+    }
+
+    for (const [id, signal] of observed) {
+        if (!known[id]) {
+            problems.push(`unexpected difference ${id}; it has no baseline entry (until the corpus labeled it as a known difference)\n  repro: node scripts/diff-corpus.mjs --port ${PORT} --seed ${SEED} --only ${id}`)
+            continue
+        }
+        if (known[id].signal !== signal) {
+            problems.push(`known difference changed shape: ${id}\n  baseline signal ${known[id].signal}\n  current  signal ${signal}`)
+        }
+    }
+    for (const id of Object.keys(known)) {
+        if (!observed.has(id)) problems.push(`stale baseline entry ${id}; the entry no longer differs, remove it from baseline`)
+    }
+
+    console.log(`match ${regenerated.length - observed.size} known-difference ${observed.size} unexpected ${problems.length}`)
+    if (problems.length > 0) {
+        for (const problem of problems) console.error(`FAIL ${problem}`)
+        console.error(`regenerate with: ${regenerationCommand()}`)
+        process.exit(1)
+    }
+    console.log('CORPUS CHECK OK')
+}
+
 async function main() {
     if (VERIFY) return verify()
+    if (CHECK) {
+        if (WRITE || EMIT || ONLY) {
+            console.error('--check cannot be combined with --write, --emit-cases or --only')
+            process.exit(1)
+        }
+        return check()
+    }
     if (ONLY && (WRITE || EMIT)) {
         console.error('--only cannot be combined with --write or --emit-cases')
         process.exit(1)
@@ -983,6 +1109,7 @@ async function main() {
         unstable: 0
     }
     const baselineReplies = {}
+    const baselineKnown = {}
     const knownCases = []
     const matchedCases = []
 
@@ -1042,6 +1169,7 @@ async function main() {
             record.classification = classification
             if (classification === 'known-difference') {
                 report.knownDifferences += 1
+                baselineKnown[entry.id] = { signal: differenceSignal(result.steps) }
                 if (WRITE || EMIT) {
                     knownCases.push({
                         id: entry.id,
@@ -1079,6 +1207,7 @@ async function main() {
         writeJson(CORPUS_PATH, {
             version: 1,
             seed: SEED,
+            count: entries.length,
             mongod: '8.0.9',
             counts: Object.fromEntries(Object.entries(report.clusters).map(([cluster, value]) => [cluster, value.entries])),
             digest: digest(entries),
@@ -1087,9 +1216,11 @@ async function main() {
         writeJson(BASELINE_PATH, {
             version: 1,
             seed: SEED,
+            count: entries.length,
             mongod: '8.0.9',
             corpusDigest: digest(entries),
             replyDigest: digest(baselineReplies),
+            knownDifferences: baselineKnown,
             replies: baselineReplies
         })
         console.log(`wrote ${CORPUS_PATH}`)

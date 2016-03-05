@@ -13,6 +13,8 @@
         "test:ts": "node projects/mongo.ts/packages/mongo/tests/run.mjs",
         "test:py": "python projects/mongo.py/packages/mongo/tests/run.py",
         "gate:test-count": "node scripts/gate-test-count.mjs",
+        "corpus": "node scripts/diff-corpus.mjs",
+        "gate:corpus": "node scripts/diff-corpus.mjs --check",
         "test": "npm run test:rust && npm run test:ts && npm run test:py && npm run gate:test-count"
     },
     "packageManager": "pnpm@10.18.3",

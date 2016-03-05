@@ -162,6 +162,12 @@
             },
             "ns": "diff.diff_find_0"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -319,6 +325,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -524,6 +536,12 @@
             },
             "ns": "diff.diff_find_2"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -703,6 +721,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_3"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -898,6 +922,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_4"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -1119,6 +1149,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_5"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -1350,6 +1386,12 @@
             },
             "ns": "diff.diff_find_6"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -1530,6 +1572,12 @@
             },
             "ns": "diff.diff_find_7"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -1600,6 +1648,12 @@
             },
             "ns": "diff.diff_find_8"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -1667,6 +1721,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_9"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -1832,6 +1892,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_10"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -2023,6 +2089,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_11"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -2240,6 +2312,12 @@
             },
             "ns": "diff.diff_find_12"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -2407,6 +2485,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_13"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -2599,6 +2683,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_14"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -2822,6 +2912,12 @@
             },
             "ns": "diff.diff_find_15"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -2979,6 +3075,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_16"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -3198,6 +3300,12 @@
             },
             "ns": "diff.diff_find_17"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -3411,6 +3519,12 @@
             },
             "ns": "diff.diff_find_18"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -3607,6 +3721,12 @@
             },
             "ns": "diff.diff_find_19"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -3784,6 +3904,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_find_20"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -4017,6 +4143,12 @@
             },
             "ns": "diff.diff_find_21"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4200,6 +4332,12 @@
             },
             "ns": "diff.diff_find_22"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4377,6 +4515,12 @@
             },
             "ns": "diff.diff_find_23"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4539,6 +4683,12 @@
             },
             "ns": "diff.diff_agg_0"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4679,6 +4829,12 @@
             },
             "ns": "diff.diff_agg_1"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4812,6 +4968,12 @@
             },
             "ns": "diff.diff_agg_2"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -4944,6 +5106,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_3"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -5086,6 +5254,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_4"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -5242,6 +5416,12 @@
             },
             "ns": "diff.diff_agg_5"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -5381,6 +5561,12 @@
             },
             "ns": "diff.diff_agg_7"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -5496,6 +5682,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_8"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -5613,6 +5805,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_9"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -5818,6 +6016,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_10"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -6047,6 +6251,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_11"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -6279,6 +6489,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_12"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -6535,6 +6751,12 @@
             },
             "ns": "diff.diff_agg_13"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -6738,6 +6960,12 @@
             },
             "ns": "diff.diff_agg_14"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -6838,6 +7066,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_15"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -6986,6 +7220,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_16"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -7172,6 +7412,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_agg_17"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -7361,6 +7607,12 @@
             },
             "ns": "diff.diff_agg_18"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -7494,14 +7746,550 @@
             },
             "ns": "diff.diff_agg_19"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
     {
-      "id": "diff.aggregate.match_unwind_group",
+      "id": "diff.aggregate.addfields_basic",
       "surface": "diff",
       "db": "diff",
-      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.match_unwind_group",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.addfields_basic",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_20",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_20",
+          "pipeline": [
+            {
+              "$addFields": {
+                "extra": 1
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "name": "alpha",
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "tags": [
+                  "red",
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "name": "beta",
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "tags": [
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "name": "gamma",
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b",
+                "tags": [
+                  "green"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "name": "delta",
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "tags": [],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "name": "epsilon",
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "tags": [
+                  "red"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "name": "zeta",
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "tags": [
+                  "red",
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "name": "eta",
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "tags": null,
+                "extra": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "name": "theta",
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "tags": [
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_20"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.addfields_multi",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.addfields_multi",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_21",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_21",
+          "pipeline": [
+            {
+              "$addFields": {
+                "extra": 1,
+                "doubled": {
+                  "$add": [
+                    "$score",
+                    "$score"
+                  ]
+                }
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "name": "alpha",
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "tags": [
+                  "red",
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "20"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "name": "beta",
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "tags": [
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "40"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "name": "gamma",
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b",
+                "tags": [
+                  "green"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "60"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "name": "delta",
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "tags": [],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "80"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "name": "epsilon",
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "tags": [
+                  "red"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "100"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "name": "zeta",
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "tags": [
+                  "red",
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "120"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "name": "eta",
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "tags": null,
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "140"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "name": "theta",
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "tags": [
+                  "blue"
+                ],
+                "extra": {
+                  "$numberInt": "1"
+                },
+                "doubled": {
+                  "$numberInt": "160"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_21"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.addfields_then_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.addfields_then_match",
       "program": [
         {
           "op": "open",
@@ -7588,20 +8376,19 @@
           "collection": "diff_agg_22",
           "pipeline": [
             {
-              "$match": {
-                "score": {
-                  "$gte": 30
+              "$addFields": {
+                "bumped": {
+                  "$add": [
+                    "$score",
+                    10
+                  ]
                 }
               }
             },
             {
-              "$unwind": "$tags"
-            },
-            {
-              "$group": {
-                "_id": "$tags",
-                "total": {
-                  "$sum": "$score"
+              "$match": {
+                "bumped": {
+                  "$gte": 40
                 }
               }
             },
@@ -7620,21 +8407,96 @@
           "equals": {
             "firstBatch": [
               {
-                "_id": "blue",
-                "total": {
-                  "$numberInt": "140"
-                }
-              },
-              {
-                "_id": "green",
-                "total": {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "name": "gamma",
+                "score": {
                   "$numberInt": "30"
+                },
+                "grp": "b",
+                "tags": [
+                  "green"
+                ],
+                "bumped": {
+                  "$numberInt": "40"
                 }
               },
               {
-                "_id": "red",
-                "total": {
-                  "$numberInt": "110"
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "name": "delta",
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "tags": [],
+                "bumped": {
+                  "$numberInt": "50"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "name": "epsilon",
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "tags": [
+                  "red"
+                ],
+                "bumped": {
+                  "$numberInt": "60"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "name": "zeta",
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "tags": [
+                  "red",
+                  "blue"
+                ],
+                "bumped": {
+                  "$numberInt": "70"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "name": "eta",
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "tags": null,
+                "bumped": {
+                  "$numberInt": "80"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "name": "theta",
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "tags": [
+                  "blue"
+                ],
+                "bumped": {
+                  "$numberInt": "90"
                 }
               }
             ],
@@ -7643,14 +8505,20 @@
             },
             "ns": "diff.diff_agg_22"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
     {
-      "id": "diff.aggregate.sort_multi_key",
+      "id": "diff.aggregate.match_unwind_group",
       "surface": "diff",
       "db": "diff",
-      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.sort_multi_key",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.match_unwind_group",
       "program": [
         {
           "op": "open",
@@ -7735,6 +8603,161 @@
         {
           "op": "aggregate",
           "collection": "diff_agg_23",
+          "pipeline": [
+            {
+              "$match": {
+                "score": {
+                  "$gte": 30
+                }
+              }
+            },
+            {
+              "$unwind": "$tags"
+            },
+            {
+              "$group": {
+                "_id": "$tags",
+                "total": {
+                  "$sum": "$score"
+                }
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": "blue",
+                "total": {
+                  "$numberInt": "140"
+                }
+              },
+              {
+                "_id": "green",
+                "total": {
+                  "$numberInt": "30"
+                }
+              },
+              {
+                "_id": "red",
+                "total": {
+                  "$numberInt": "110"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_23"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.sort_multi_key",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.sort_multi_key",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_24",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_24",
           "pipeline": [
             {
               "$sort": {
@@ -7857,7 +8880,13 @@
             "id": {
               "$numberLong": "0"
             },
-            "ns": "diff.diff_agg_23"
+            "ns": "diff.diff_agg_24"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -7891,7 +8920,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -7905,7 +8938,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -7915,7 +8951,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -7929,7 +8966,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -7943,7 +8984,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8015,7 +9060,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8029,7 +9078,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8039,7 +9091,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8053,7 +9106,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8067,7 +9124,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8140,7 +9201,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8154,7 +9219,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8164,7 +9232,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8178,7 +9247,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8192,7 +9265,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8264,7 +9341,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8278,7 +9359,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8288,7 +9372,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8302,7 +9387,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8316,7 +9405,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8388,7 +9481,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8402,7 +9499,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8412,7 +9512,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8426,7 +9527,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8440,7 +9545,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8513,7 +9622,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8527,7 +9640,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8537,7 +9653,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8551,7 +9668,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8565,7 +9686,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8637,7 +9762,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8651,7 +9780,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8661,7 +9793,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8675,7 +9808,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8689,7 +9826,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8761,7 +9902,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8775,7 +9920,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8785,7 +9933,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8799,7 +9948,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8813,7 +9966,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8828,6 +9985,146 @@
               "u": {
                 "$set": {
                   "a.b": 42
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.set_array_index",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.set_array_index",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_8",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_8",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "items.0.qty": 7
                 }
               }
             }
@@ -8885,7 +10182,11 @@
                   "qty": 5
                 }
               ],
-              "name": "alpha"
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
             },
             {
               "_id": 2,
@@ -8899,7 +10200,10 @@
                   "qty": 1
                 }
               ],
-              "name": "beta"
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
             },
             {
               "_id": 3,
@@ -8909,7 +10213,8 @@
                 "b": 9
               },
               "items": [],
-              "name": "gamma"
+              "name": "gamma",
+              "tags": []
             },
             {
               "_id": 4,
@@ -8923,7 +10228,11 @@
                   "qty": 4
                 }
               ],
-              "name": "delta"
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
             },
             {
               "_id": 5,
@@ -8937,7 +10246,11 @@
                   "qty": 6
                 }
               ],
-              "name": "epsilon"
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
             }
           ]
         },
@@ -8970,6 +10283,4781 @@
           "at": "/r0/nModified",
           "equals": {
             "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.push",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.push",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_10",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_10",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "tags": "new"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pop",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pop",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_11",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_11",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pop": {
+                  "tags": 1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.add_to_set",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.add_to_set",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_12",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_12",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$addToSet": {
+                  "tags": "new"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pull",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pull",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_13",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_13",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "tags": "old"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.rename",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.rename",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_14",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_14",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$rename": {
+                  "name": "label"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.mul",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.mul",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_15",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_15",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$mul": {
+                  "score": 2
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.upsert",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.upsert",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_16",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_16",
+          "updates": [
+            {
+              "q": {
+                "_id": 99
+              },
+              "u": {
+                "$set": {
+                  "name": "fresh"
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/upserted",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "_id": {
+                "$numberInt": "99"
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.replacement",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.replacement",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_17",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_17",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "name": "replaced",
+                "score": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.push_each_position_slice",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.push_each_position_slice",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_18",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_18",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "tags": {
+                    "$each": [
+                      "x",
+                      "y"
+                    ],
+                    "$position": 0,
+                    "$slice": 2
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.push_each_slice_negative",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.push_each_slice_negative",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_19",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_19",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "tags": {
+                    "$each": [
+                      "p"
+                    ],
+                    "$slice": -1
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.push_missing_field",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.push_missing_field",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_20",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_20",
+          "updates": [
+            {
+              "q": {
+                "_id": 3
+              },
+              "u": {
+                "$push": {
+                  "extra": "z"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pop_first",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pop_first",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_21",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_21",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pop": {
+                  "tags": -1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pop_zero_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pop_zero_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_22",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_22",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pop": {
+                  "tags": 0
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "9"
+              },
+              "errmsg": "$pop expects 1 or -1, found: 0"
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.add_to_set_each",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.add_to_set_each",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_23",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_23",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$addToSet": {
+                  "tags": {
+                    "$each": [
+                      "old",
+                      "green"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pull_condition",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pull_condition",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_24",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_24",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "tags": {
+                    "$in": [
+                      "old",
+                      "mid"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pull_document",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pull_document",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_25",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_25",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "items": {
+                    "qty": {
+                      "$gte": 5
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.rename_missing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.rename_missing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_26",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_26",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$rename": {
+                  "ghost": "label"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.rename_same_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.rename_same_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_27",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_27",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$rename": {
+                  "name": "name"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "2"
+              },
+              "errmsg": "The source and target field for $rename must differ: name: \"name\""
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.mul_double",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.mul_double",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_28",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_28",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$mul": {
+                  "score": {
+                    "$numberDouble": "1.5"
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.array_index_inc",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.array_index_inc",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_29",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_29",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$inc": {
+                  "items.0.qty": 1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.array_index_unset",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.array_index_unset",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_30",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_30",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$unset": {
+                  "items.0.qty": ""
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.array_index_pad",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.array_index_pad",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_31",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_31",
+          "updates": [
+            {
+              "q": {
+                "_id": 3
+              },
+              "u": {
+                "$set": {
+                  "items.5.qty": 1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.array_index_negative_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.array_index_negative_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_32",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_32",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "items.-1.qty": 3
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "28"
+              },
+              "errmsg": "Cannot create field '-1' in element {items: [ { qty: 2 }, { qty: 5 } ]}"
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.positional_dotted",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.positional_dotted",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_33",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_33",
+          "updates": [
+            {
+              "q": {
+                "_id": 1,
+                "items.qty": {
+                  "$gte": 5
+                }
+              },
+              "u": {
+                "$set": {
+                  "items.$.qty": 0
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.positional_elem_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.positional_elem_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_34",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_34",
+          "updates": [
+            {
+              "q": {
+                "_id": 1,
+                "items": {
+                  "$elemMatch": {
+                    "qty": 2
+                  }
+                }
+              },
+              "u": {
+                "$inc": {
+                  "items.$.qty": 10
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.push_nonarray_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.push_nonarray_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_35",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_35",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "score": 1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "2"
+              },
+              "errmsg": "The field 'score' must be an array but is of type int in document {_id: 1}"
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.pull_nonarray_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.pull_nonarray_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_36",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_36",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "score": 1
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "2"
+              },
+              "errmsg": "Cannot apply $pull to a non-array value"
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.upsert_operator_fields",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.upsert_operator_fields",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_37",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_37",
+          "updates": [
+            {
+              "q": {
+                "_id": 99,
+                "grp": "z"
+              },
+              "u": {
+                "$inc": {
+                  "score": 1
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/upserted",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "_id": {
+                "$numberInt": "99"
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.upsert_replacement",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.upsert_replacement",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_38",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_38",
+          "updates": [
+            {
+              "q": {
+                "_id": 98
+              },
+              "u": {
+                "grp": "r",
+                "score": 7
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/upserted",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "_id": {
+                "$numberInt": "98"
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.upsert_match_existing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.upsert_match_existing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_39",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_39",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "score": 11
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.replacement_keep_id",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.replacement_keep_id",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_40",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_40",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "score": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.replacement_alter_id_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.replacement_alter_id_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_41",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_41",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "_id": 9,
+                "score": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "66"
+              },
+              "errmsg": "After applying the update, the (immutable) field '_id' was found to have been altered to _id: 9"
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.update.replacement_empty",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.update.replacement_empty",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_update_42",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "diff_update_42",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {}
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
           }
         },
         {
@@ -9717,6 +15805,12 @@
             },
             "ns": "diff.diff_delete_7"
           }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -9787,6 +15881,12 @@
             },
             "ns": "diff.diff_insert_0"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -9836,6 +15936,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_insert_1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -9976,6 +16082,12 @@
             },
             "ns": "diff.diff_insert_2"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -10090,6 +16202,12 @@
             },
             "ns": "diff.diff_insert_3"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -10198,6 +16316,12 @@
             },
             "ns": "diff.diff_insert_4"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -10297,6 +16421,12 @@
             },
             "ns": "diff.diff_insert_5"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -10328,6 +16458,12 @@
         }
       ],
       "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
         {
           "at": "/r0/errmsg",
           "equals": "Write batch sizes must be between 1 and 100000. Got 0 operations."
@@ -10417,6 +16553,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_insert_7"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -10572,6 +16714,12 @@
             },
             "ns": "diff.diff_insert_8"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -10668,6 +16816,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_insert_9"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -11209,6 +17363,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_index_3"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]
@@ -12026,6 +18186,12 @@
             },
             "ns": "diff.diff_index_10"
           }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -12117,6 +18283,12 @@
             },
             "ns": "diff.diff_cursor_3"
           }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
         }
       ]
     },
@@ -12206,6 +18378,12 @@
               "$numberLong": "0"
             },
             "ns": "diff.diff_cursor_7"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
           }
         }
       ]

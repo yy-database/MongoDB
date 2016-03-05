@@ -1,9 +1,11 @@
 {
   "version": 1,
   "seed": 20261106,
+  "count": 130,
   "mongod": "8.0.9",
-  "corpusDigest": "faae47f0b4c32546daff832dd135cd6afd01db3a85d72bdc659ec9c5d18dac84",
-  "replyDigest": "77e681702ecc95df3a311a3de47394080ef927b17875efe09cdec224c98f63c6",
+  "corpusDigest": "678d48e2c67e10a40d0b426858fe980a7f9df4f0e5d804a89df95e32d3b67f3a",
+  "replyDigest": "dbb71ec9fda59a57ab0cc6e47081c3e21ff1d07be9d8fe9263eacb73fcb217aa",
+  "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
       {
@@ -3108,6 +3110,114 @@
         }
       }
     ],
+    "diff.aggregate.addfields_then_match": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "name": "gamma",
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "tags": [
+                "green"
+              ],
+              "bumped": {
+                "$numberInt": "40"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "name": "delta",
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "tags": [],
+              "bumped": {
+                "$numberInt": "50"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "name": "epsilon",
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "tags": [
+                "red"
+              ],
+              "bumped": {
+                "$numberInt": "60"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "name": "zeta",
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "bumped": {
+                "$numberInt": "70"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "name": "eta",
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "tags": null,
+              "bumped": {
+                "$numberInt": "80"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "name": "theta",
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "tags": [
+                "blue"
+              ],
+              "bumped": {
+                "$numberInt": "90"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_22"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
     "diff.aggregate.match_unwind_group": [
       {
         "cursor": {
@@ -3134,7 +3244,7 @@
           "id": {
             "$numberLong": "0"
           },
-          "ns": "diff.diff_agg_22"
+          "ns": "diff.diff_agg_23"
         },
         "ok": {
           "$numberDouble": "1.0"
@@ -3251,7 +3361,7 @@
           "id": {
             "$numberLong": "0"
           },
-          "ns": "diff.diff_agg_23"
+          "ns": "diff.diff_agg_24"
         },
         "ok": {
           "$numberDouble": "1.0"
@@ -3407,7 +3517,7 @@
           "$numberInt": "1"
         },
         "nModified": {
-          "$numberInt": "0"
+          "$numberInt": "1"
         },
         "ok": {
           "$numberDouble": "1.0"
@@ -3433,7 +3543,7 @@
           "$numberInt": "1"
         },
         "nModified": {
-          "$numberInt": "0"
+          "$numberInt": "1"
         },
         "ok": {
           "$numberDouble": "1.0"
@@ -3490,6 +3600,417 @@
       }
     ],
     "diff.update.replacement": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.push_each_position_slice": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.push_each_slice_negative": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.push_missing_field": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pop_first": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pop_zero_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "9"
+            },
+            "errmsg": "$pop expects 1 or -1, found: 0"
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.add_to_set_each": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pull_condition": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pull_document": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.rename_missing": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.rename_same_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "2"
+            },
+            "errmsg": "The source and target field for $rename must differ: name: \"name\""
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.mul_double": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.array_index_inc": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.array_index_unset": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.array_index_pad": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.array_index_negative_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "28"
+            },
+            "errmsg": "Cannot create field '-1' in element {items: [ { qty: 2 }, { qty: 5 } ]}"
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.positional_dotted": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.positional_elem_match": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.push_nonarray_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "2"
+            },
+            "errmsg": "The field 'score' must be an array but is of type int in document {_id: 1}"
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.pull_nonarray_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "2"
+            },
+            "errmsg": "Cannot apply $pull to a non-array value"
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.upsert_operator_fields": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "upserted": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "_id": {
+              "$numberInt": "99"
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.upsert_replacement": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "upserted": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "_id": {
+              "$numberInt": "98"
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.upsert_match_existing": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.replacement_keep_id": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.replacement_alter_id_error": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "66"
+            },
+            "errmsg": "After applying the update, the (immutable) field '_id' was found to have been altered to _id: 9"
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.replacement_empty": [
       {
         "n": {
           "$numberInt": "1"

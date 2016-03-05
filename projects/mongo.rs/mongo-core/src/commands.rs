@@ -28,7 +28,8 @@ pub const FILTER_OPERATORS: [&str; 16] = [
 pub const LOGICAL_OPERATORS: [&str; 3] = ["$and", "$or", "$nor"];
 
 /// Update operators this gateway implements.
-pub const UPDATE_OPERATORS: [&str; 3] = ["$set", "$unset", "$inc"];
+pub const UPDATE_OPERATORS: [&str; 9] =
+    ["$set", "$unset", "$inc", "$mul", "$rename", "$push", "$pop", "$addToSet", "$pull"];
 
 /// Command failure carrying the MongoDB error code.
 #[derive(Debug, Clone, PartialEq)]
@@ -799,6 +800,13 @@ pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, 
                 };
                 documents = group_stage(&documents, specification)?;
             }
+            "$addFields" => {
+                let BsonValue::Document(specification) = body
+                else {
+                    return Err(CommandError::new(2, "$addFields requires a document"));
+                };
+                documents = add_fields_stage(&documents, specification)?;
+            }
             "$project" => {
                 let BsonValue::Document(specification) = body
                 else {
@@ -872,10 +880,8 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     Ok(write_reply(deleted, None, &[]))
 }
 
-/// `update` with `$set`, `$unset` and `$inc`; `multi` toggles updateMany.
-///
-/// `upsert` and replacement documents are rejected instead of being silently
-/// ignored.
+/// `update` with the documented update operators, replacement documents and
+/// `upsert`; `multi` toggles updateMany.
 pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "update")
         .ok_or_else(|| CommandError::new(73, "update command missing collection name"))?;
@@ -912,11 +918,18 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         else {
             return Err(CommandError::new(2, "update specification requires a 'u' document"));
         };
-        validate_update_document(update_document)?;
-
-        if matches!(specification.get("upsert"), Some(BsonValue::Bool(true))) {
-            return Err(CommandError::new(59, "update upsert is not supported"));
+        let operator_update = update_document.fields.iter().any(|(field, _)| field.starts_with('$'));
+        let replacement = !operator_update;
+        if operator_update {
+            if let Some((field, _)) = update_document.fields.iter().find(|(field, _)| !field.starts_with('$')) {
+                return Err(CommandError::new(
+                    9,
+                    format!("Unknown modifier: {field}. Expected a valid update modifier or pipeline-style update specified as an array"),
+                ));
+            }
+            validate_update_document(update_document)?;
         }
+        let upsert = matches!(specification.get("upsert"), Some(BsonValue::Bool(true)));
         let multi = matches!(specification.get("multi"), Some(BsonValue::Bool(true)));
 
         let mut changes = Vec::new();
@@ -929,8 +942,15 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                 continue;
             }
             matched += 1;
-            let identifier = document.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
-            let updated = match apply_update(&document, update_document, &identifier) {
+            let identifier_value = document.get("_id").cloned();
+            let identifier = identifier_value.as_ref().map(describe_id).unwrap_or_else(|| "<missing>".to_string());
+            let applied = if replacement {
+                build_replacement(update_document, identifier_value.as_ref())
+            }
+            else {
+                apply_update(&document, update_document, &identifier, filter)
+            };
+            let updated = match applied {
                 Ok(updated) => updated,
                 Err(error) => {
                     // The real server keeps the writes already applied, reports a
@@ -979,9 +999,112 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         if !changes.is_empty() {
             store.replace(&namespace, &changes).map_err(|error| CommandError::new(2, error.to_string()))?;
         }
+        if matched == 0 && upsert {
+            let applied = if replacement {
+                let query_identifier = match filter.get("_id") {
+                    Some(BsonValue::Document(operators)) if has_operator(operators) => None,
+                    Some(value) => Some(value.clone()),
+                    None => None,
+                };
+                build_replacement(update_document, query_identifier.as_ref())
+            }
+            else {
+                let base = upsert_base(filter);
+                let identifier = base.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
+                apply_update(&base, update_document, &identifier, filter)
+            };
+            let mut inserted = match applied {
+                Ok(document) => document,
+                Err(error) => {
+                    return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message)]));
+                }
+            };
+            if inserted.get("_id").is_none() {
+                inserted.fields.insert(0, ("_id".to_string(), BsonValue::ObjectId(generate_object_id())));
+            }
+            let Some(identifier) = inserted.get("_id").cloned() else {
+                return Ok(write_reply(0, Some(0), &[]));
+            };
+            if let Some(error) = parallel_array_error(&inserted, &index_specs) {
+                return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message)]));
+            }
+            let candidates = vec![(index, inserted, identifier.clone())];
+            let mut write_errors = Vec::new();
+            let inserted_count = commit_insert(store, &namespace, &candidates, &unique_indexes, true, &mut write_errors)?;
+            if inserted_count == 1 {
+                return Ok(upsert_reply(index, &identifier));
+            }
+            return Ok(write_reply(0, Some(0), &write_errors));
+        }
     }
 
     Ok(write_reply(matched, Some(modified), &[]))
+}
+
+/// Base document for an operator upsert: the equality clauses of the filter,
+/// in filter order. Operator clauses and logical clauses are skipped, matching
+/// the server's upsert construction.
+fn upsert_base(filter: &BsonDocument) -> BsonDocument {
+    let mut base = BsonDocument::new();
+    for (field, value) in &filter.fields {
+        if field.starts_with('$') {
+            continue;
+        }
+        if let BsonValue::Document(operators) = value {
+            if has_operator(operators) {
+                continue;
+            }
+        }
+        let segments: Vec<&str> = field.split('.').collect();
+        let _ = set_segments(&mut base, &segments, value.clone());
+    }
+    base
+}
+
+/// Replacement document rule: `_id` is kept from the matched or queried
+/// document unless the replacement repeats it, and an attempt to change it is
+/// rejected with code `66`. Other fields are replaced wholesale.
+fn build_replacement(
+    specification: &BsonDocument,
+    identifier: Option<&BsonValue>,
+) -> Result<BsonDocument, CommandError> {
+    let replacement_identifier = specification.get("_id");
+    if let (Some(current), Some(replacement)) = (identifier, replacement_identifier) {
+        if !values_equal(Some(current), replacement) {
+            return Err(CommandError::new(
+                66,
+                format!(
+                    "After applying the update, the (immutable) field '_id' was found to have been altered to _id: {}",
+                    describe_id(replacement)
+                ),
+            ));
+        }
+    }
+    let chosen = identifier.cloned().or_else(|| replacement_identifier.cloned());
+    let mut result = BsonDocument::new();
+    if let Some(identifier) = chosen {
+        result.push("_id".to_string(), identifier);
+    }
+    for (field, value) in &specification.fields {
+        if field != "_id" {
+            result.push(field.clone(), value.clone());
+        }
+    }
+    Ok(result)
+}
+
+/// Reply for an upsert that inserted one document: `n`, `upserted` and a zero
+/// `nModified`, in the order the server emits them.
+fn upsert_reply(index: usize, identifier: &BsonValue) -> BsonDocument {
+    let mut response = BsonDocument::new();
+    response.push("n".to_string(), count_value(1));
+    let mut entry = BsonDocument::new();
+    entry.push("index".to_string(), BsonValue::Int32(index as i32));
+    entry.push("_id".to_string(), identifier.clone());
+    response.push("upserted".to_string(), BsonValue::Array(vec![BsonValue::Document(entry)]));
+    response.push("nModified".to_string(), count_value(0));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response
 }
 
 /// Finds the first unique index key of `document` already held by a different
@@ -1048,7 +1171,7 @@ fn validate_update_document(document: &BsonDocument) -> Result<(), CommandError>
         if !operator.starts_with('$') {
             return Err(CommandError::new(
                 59,
-                "replacement updates are not supported; `u` must use $set, $unset or $inc",
+                "replacement updates are not supported; `u` must use an update operator",
             ));
         }
         if !UPDATE_OPERATORS.contains(&operator.as_str()) {
@@ -1058,7 +1181,7 @@ fn validate_update_document(document: &BsonDocument) -> Result<(), CommandError>
         else {
             return Err(CommandError::new(9, format!("update operator {operator} requires a document")));
         };
-        for (path, _) in &operand.fields {
+        for (path, value) in &operand.fields {
             if path == "_id" || path.starts_with("_id.") {
                 return Err(CommandError::new(
                     66,
@@ -1072,6 +1195,20 @@ fn validate_update_document(document: &BsonDocument) -> Result<(), CommandError>
                 ));
             }
             paths.push(path.as_str());
+            if operator == "$rename" {
+                let BsonValue::String(target) = value
+                else {
+                    return Err(CommandError::new(2, format!("The 'to' field for $rename must be a string: {path}")));
+                };
+                if target == "_id" || target.starts_with("_id.") {
+                    return Err(CommandError::new(
+                        66,
+                        format!(
+                            "Performing an update on the path '{target}' would modify the immutable field '_id'"
+                        ),
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -1081,18 +1218,32 @@ fn apply_update(
     document: &BsonDocument,
     specification: &BsonDocument,
     identifier: &str,
+    filter: &BsonDocument,
 ) -> Result<BsonDocument, CommandError> {
     let mut updated = document.clone();
     for (operator, operand) in &specification.fields {
         let BsonValue::Document(operand) = operand
         else { continue };
+        if matches!(operator.as_str(), "$set" | "$inc" | "$mul") {
+            for path in operand.fields.iter().map(|(path, _)| path) {
+                let segments = resolve_segments(path, document, filter)?;
+                let path_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
+                validate_negative_index(document, &path_refs)?;
+            }
+        }
         for (path, value) in &operand.fields {
+            let segments = resolve_segments(path, &updated, filter)?;
+            let path_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
             match operator.as_str() {
-                "$set" => set_path(&mut updated, path, value.clone())?,
-                "$unset" => {
-                    unset_path(&mut updated, path);
-                }
-                "$inc" => inc_path(&mut updated, path, value, identifier)?,
+                "$set" => set_segments(&mut updated, &path_refs, value.clone())?,
+                "$unset" => unset_segments(&mut updated, &path_refs),
+                "$inc" => numeric_segments(&mut updated, &path_refs, value, path, identifier, false)?,
+                "$mul" => numeric_segments(&mut updated, &path_refs, value, path, identifier, true)?,
+                "$rename" => rename_path(&mut updated, &path_refs, value, path)?,
+                "$push" => push_path(&mut updated, &path_refs, value, path, identifier)?,
+                "$pop" => pop_path(&mut updated, &path_refs, value, path)?,
+                "$addToSet" => add_to_set_path(&mut updated, &path_refs, value, path, identifier)?,
+                "$pull" => pull_path(&mut updated, &path_refs, value, path)?,
                 _ => {}
             }
         }
@@ -1100,87 +1251,552 @@ fn apply_update(
     Ok(updated)
 }
 
-fn set_path(document: &mut BsonDocument, path: &str, value: BsonValue) -> Result<(), CommandError> {
-    match path.split_once('.') {
-        None => {
-            if let Some(existing) = document.fields.iter_mut().find(|(field, _)| field == path) {
-                existing.1 = value;
-            }
-            else {
-                document.push(path.to_string(), value);
-            }
-            Ok(())
-        }
-        Some((head, tail)) => {
-            if !document.fields.iter().any(|(field, _)| field == head) {
-                document.push(head.to_string(), BsonValue::Document(BsonDocument::new()));
-            }
-            let index = document.fields.iter().position(|(field, _)| field == head).expect("head was inserted");
-            if let BsonValue::Document(child) = &mut document.fields[index].1 {
-                set_path(child, tail, value)
-            }
-            else {
-                Err(cannot_create_field(document, head, tail))
-            }
-        }
-    }
-}
-
-fn unset_path(document: &mut BsonDocument, path: &str) {
-    match path.split_once('.') {
-        None => document.fields.retain(|(field, _)| field != path),
-        Some((head, tail)) => {
-            if let Some(BsonValue::Document(child)) =
-                document.fields.iter_mut().find(|(field, _)| field == head).map(|(_, value)| value)
-            {
-                unset_path(child, tail);
-            }
-        }
-    }
-}
-
-fn inc_path(
-    document: &mut BsonDocument,
+/// Resolves the positional `$` segment against the document and filter that
+/// produced the match. Only the first matching array element is supported.
+fn resolve_segments(
     path: &str,
+    document: &BsonDocument,
+    filter: &BsonDocument,
+) -> Result<Vec<String>, CommandError> {
+    let segments: Vec<String> = path.split('.').map(str::to_string).collect();
+    if !segments.iter().any(|segment| segment == "$") {
+        return Ok(segments);
+    }
+    let mut resolved = Vec::with_capacity(segments.len());
+    for (position, segment) in segments.iter().enumerate() {
+        if segment == "$" {
+            let index = positional_index(document, &resolved, filter);
+            resolved.push(index.to_string());
+        }
+        else {
+            resolved.push(segment.clone());
+        }
+        let _ = position;
+    }
+    Ok(resolved)
+}
+
+/// Index of the first array element selected by the filter clause for the array
+/// that precedes the positional operator.
+fn positional_index(document: &BsonDocument, prefix: &[String], filter: &BsonDocument) -> usize {
+    let prefix_refs: Vec<&str> = prefix.iter().map(String::as_str).collect();
+    let Some(BsonValue::Array(items)) = value_at(document, &prefix_refs).cloned() else { return 0 };
+    let key = prefix.join(".");
+    if let Some(predicate) = filter.get(&key) {
+        if let BsonValue::Document(operators) = predicate {
+            if has_operator(operators) {
+                if let Some(BsonValue::Document(specification)) = operators.get("$elemMatch") {
+                    for (index, item) in items.iter().enumerate() {
+                        if let BsonValue::Document(element) = item {
+                            if document_matches(element, specification).unwrap_or(false) {
+                                return index;
+                            }
+                        }
+                    }
+                }
+                else {
+                    for (index, item) in items.iter().enumerate() {
+                        if operator_matches(&[item], operators, &key, 0).unwrap_or(false) {
+                            return index;
+                        }
+                    }
+                }
+                return 0;
+            }
+        }
+        for (index, item) in items.iter().enumerate() {
+            if values_equal(Some(item), predicate) {
+                return index;
+            }
+        }
+    }
+    let mut clauses = BsonDocument::new();
+    let mut has_clause = false;
+    for (field, expected) in &filter.fields {
+        if let Some(rest) = field.strip_prefix(&format!("{key}.")) {
+            clauses.push(rest.to_string(), expected.clone());
+            has_clause = true;
+        }
+    }
+    if has_clause {
+        for (index, item) in items.iter().enumerate() {
+            if let BsonValue::Document(element) = item {
+                if document_matches(element, &clauses).unwrap_or(false) {
+                    return index;
+                }
+            }
+        }
+    }
+    0
+}
+
+fn validate_negative_index(document: &BsonDocument, segments: &[&str]) -> Result<(), CommandError> {
+    for position in 1..segments.len() {
+        let Some(BsonValue::Array(items)) = value_at(document, &segments[..position]) else { continue };
+        let Ok(number) = segments[position].parse::<i64>() else { continue };
+        if number < 0 {
+            return Err(cannot_create_field_in_array(items, segments[position - 1], segments[position]));
+        }
+    }
+    Ok(())
+}
+
+fn value_at<'a>(document: &'a BsonDocument, segments: &[&str]) -> Option<&'a BsonValue> {
+    let head = segments.first()?;
+    let value = document.get(head)?;
+    if segments.len() == 1 {
+        return Some(value);
+    }
+    descend_value(value, &segments[1..])
+}
+
+fn descend_value<'a>(value: &'a BsonValue, segments: &[&str]) -> Option<&'a BsonValue> {
+    if segments.is_empty() {
+        return Some(value);
+    }
+    match value {
+        BsonValue::Document(document) => document.get(segments[0]).and_then(|next| descend_value(next, &segments[1..])),
+        BsonValue::Array(items) => {
+            let index = segments[0].parse::<usize>().ok()?;
+            items.get(index).and_then(|next| descend_value(next, &segments[1..]))
+        }
+        _ => None,
+    }
+}
+
+fn value_at_mut<'a>(document: &'a mut BsonDocument, segments: &[&str]) -> Option<&'a mut BsonValue> {
+    let head = *segments.first()?;
+    let position = document.fields.iter().position(|(field, _)| field == head)?;
+    if segments.len() == 1 {
+        return Some(&mut document.fields[position].1);
+    }
+    descend_value_mut(&mut document.fields[position].1, &segments[1..])
+}
+
+fn descend_value_mut<'a>(value: &'a mut BsonValue, segments: &[&str]) -> Option<&'a mut BsonValue> {
+    if segments.is_empty() {
+        return Some(value);
+    }
+    match value {
+        BsonValue::Document(document) => {
+            let position = document.fields.iter().position(|(field, _)| field == segments[0])?;
+            descend_value_mut(&mut document.fields[position].1, &segments[1..])
+        }
+        BsonValue::Array(items) => {
+            let index = segments[0].parse::<usize>().ok()?;
+            let next = items.get_mut(index)?;
+            descend_value_mut(next, &segments[1..])
+        }
+        _ => None,
+    }
+}
+
+fn set_segments(document: &mut BsonDocument, segments: &[&str], value: BsonValue) -> Result<(), CommandError> {
+    let head = segments[0];
+    if segments.len() == 1 {
+        if let Some(existing) = document.fields.iter_mut().find(|(field, _)| field == head) {
+            existing.1 = value;
+        }
+        else {
+            document.push(head.to_string(), value);
+        }
+        return Ok(());
+    }
+    let tail = &segments[1..];
+    if !document.fields.iter().any(|(field, _)| field == head) {
+        let mut child = BsonDocument::new();
+        set_segments(&mut child, tail, value)?;
+        document.push(head.to_string(), BsonValue::Document(child));
+        return Ok(());
+    }
+    let position = document.fields.iter().position(|(field, _)| field == head).expect("head exists");
+    match &mut document.fields[position].1 {
+        BsonValue::Document(child) => set_segments(child, tail, value),
+        BsonValue::Array(items) => set_array_segments(items, head, tail, value),
+        other => {
+            let rendered = render_shell_value(other);
+            Err(CommandError::new(28, format!("Cannot create field '{}' in element {{{head}: {rendered}}}", tail[0])))
+        }
+    }
+}
+
+fn set_array_segments(
+    items: &mut Vec<BsonValue>,
+    field: &str,
+    segments: &[&str],
+    value: BsonValue,
+) -> Result<(), CommandError> {
+    let part = segments[0];
+    let Ok(number) = part.parse::<i64>() else {
+        return Err(cannot_create_field_in_array(items, field, part));
+    };
+    if number < 0 {
+        return Err(cannot_create_field_in_array(items, field, part));
+    }
+    let index = number as usize;
+    if index >= items.len() {
+        items.resize(index + 1, BsonValue::Null);
+    }
+    if segments.len() == 1 {
+        items[index] = value;
+        return Ok(());
+    }
+    if matches!(items[index], BsonValue::Null) {
+        items[index] = BsonValue::Document(BsonDocument::new());
+    }
+    match &mut items[index] {
+        BsonValue::Document(child) => set_segments(child, &segments[1..], value),
+        BsonValue::Array(inner) => set_array_segments(inner, part, &segments[1..], value),
+        other => {
+            let rendered = render_shell_value(other);
+            Err(CommandError::new(28, format!("Cannot create field '{}' in element {rendered}", segments[1])))
+        }
+    }
+}
+
+fn cannot_create_field_in_array(items: &[BsonValue], field: &str, child: &str) -> CommandError {
+    let rendered = render_shell_value(&BsonValue::Array(items.to_vec()));
+    CommandError::new(28, format!("Cannot create field '{child}' in element {{{field}: {rendered}}}"))
+}
+
+fn unset_segments(document: &mut BsonDocument, segments: &[&str]) {
+    let head = segments[0];
+    if segments.len() == 1 {
+        document.fields.retain(|(field, _)| field != head);
+        return;
+    }
+    let position = match document.fields.iter().position(|(field, _)| field == head) {
+        Some(position) => position,
+        None => return,
+    };
+    match &mut document.fields[position].1 {
+        BsonValue::Document(child) => unset_segments(child, &segments[1..]),
+        BsonValue::Array(items) => unset_array_segments(items, &segments[1..]),
+        _ => {}
+    }
+}
+
+fn unset_array_segments(items: &mut Vec<BsonValue>, segments: &[&str]) {
+    let Ok(index) = segments[0].parse::<usize>() else { return };
+    if index >= items.len() {
+        return;
+    }
+    if segments.len() == 1 {
+        items[index] = BsonValue::Null;
+        return;
+    }
+    match &mut items[index] {
+        BsonValue::Document(child) => unset_segments(child, &segments[1..]),
+        BsonValue::Array(inner) => unset_array_segments(inner, &segments[1..]),
+        _ => {}
+    }
+}
+
+fn numeric_segments(
+    document: &mut BsonDocument,
+    segments: &[&str],
     amount: &BsonValue,
+    path: &str,
+    identifier: &str,
+    multiply: bool,
+) -> Result<(), CommandError> {
+    let current = value_at(document, segments).cloned();
+    let result = match current {
+        Some(value) => {
+            if multiply {
+                multiply_value(&value, amount).ok_or_else(|| {
+                    CommandError::new(
+                        14,
+                        format!(
+                            "Cannot apply $mul to a value of non-numeric type. {{_id: {identifier}}} has the field '{path}' of non-numeric type {}",
+                            bson_type_name(&value)
+                        ),
+                    )
+                })?
+            }
+            else {
+                increment_value(&value, amount).ok_or_else(|| {
+                    CommandError::new(
+                        14,
+                        format!("Cannot apply $inc to a value of non-numeric type (field: \"{path}\", _id: {identifier})"),
+                    )
+                })?
+            }
+        }
+        None => {
+            if multiply {
+                zero_of(amount)
+            }
+            else {
+                if number_of(amount).is_none() {
+                    return Err(CommandError::new(
+                        14,
+                        format!("Cannot apply $inc to a value of non-numeric type (field: \"{path}\", _id: {identifier})"),
+                    ));
+                }
+                amount.clone()
+            }
+        }
+    };
+    set_segments(document, segments, result)
+}
+
+fn rename_path(
+    document: &mut BsonDocument,
+    source: &[&str],
+    value: &BsonValue,
+    path: &str,
+) -> Result<(), CommandError> {
+    let BsonValue::String(target) = value
+    else { return Ok(()) };
+    if path == target {
+        return Err(CommandError::new(2, format!("The source and target field for $rename must differ: {path}: \"{target}\"")));
+    }
+    let Some(source_value) = take_path(document, source) else { return Ok(()) };
+    let target_segments: Vec<&str> = target.split('.').collect();
+    unset_segments(document, &target_segments);
+    set_segments(document, &target_segments, source_value)
+}
+
+fn take_path(document: &mut BsonDocument, segments: &[&str]) -> Option<BsonValue> {
+    let head = *segments.first()?;
+    let position = document.fields.iter().position(|(field, _)| field == head)?;
+    if segments.len() == 1 {
+        return Some(document.fields.remove(position).1);
+    }
+    match &mut document.fields[position].1 {
+        BsonValue::Document(child) => take_path(child, &segments[1..]),
+        _ => None,
+    }
+}
+
+fn push_path(
+    document: &mut BsonDocument,
+    segments: &[&str],
+    value: &BsonValue,
+    path: &str,
     identifier: &str,
 ) -> Result<(), CommandError> {
-    match path.split_once('.') {
-        None => {
-            let current = document.get(path).cloned();
-            match current {
-                Some(value) => {
-                    let sum = increment_value(&value, amount).ok_or_else(|| {
-                        CommandError::new(
-                            14,
-                            format!("Cannot apply $inc to a value of non-numeric type (field: \"{path}\", _id: {identifier})"),
-                        )
-                    })?;
-                    set_path(document, path, sum)
+    let items = ensure_array(document, segments, path, identifier)?;
+    if let BsonValue::Document(modifiers) = value {
+        if has_operator(modifiers) {
+            let values = match modifiers.get("$each") {
+                Some(BsonValue::Array(values)) => values.clone(),
+                Some(_) => return Err(CommandError::new(2, "$each requires an array")),
+                None => return Err(CommandError::new(2, "$slice and $position require $each")),
+            };
+            for (key, _) in &modifiers.fields {
+                if !matches!(key.as_str(), "$each" | "$slice" | "$position") {
+                    return Err(CommandError::new(9, format!("Unrecognized clause in $push: {key}")));
                 }
-                None => {
-                    if number_of(amount).is_none() {
-                        return Err(CommandError::new(
-                            14,
-                            format!("Cannot apply $inc to a value of non-numeric type (field: \"{path}\", _id: {identifier})"),
-                        ));
+            }
+            let position = match modifiers.get("$position") {
+                Some(operand) => match integer_of(operand) {
+                    Some(position) => {
+                        if position < 0 {
+                            let from_end = items.len() as i128 + position;
+                            Some(from_end.max(0) as usize)
+                        }
+                        else {
+                            Some((position as usize).min(items.len()))
+                        }
                     }
-                    set_path(document, path, amount.clone())
+                    None => return Err(CommandError::new(2, "$position must be an integer")),
+                },
+                None => None,
+            };
+            match position {
+                Some(position) => {
+                    let tail = items.split_off(position);
+                    items.extend(values);
+                    items.extend(tail);
+                }
+                None => items.extend(values),
+            }
+            if let Some(operand) = modifiers.get("$slice") {
+                let Some(slice) = integer_of(operand) else {
+                    return Err(CommandError::new(2, "$slice must be an integer"));
+                };
+                if slice >= 0 {
+                    items.truncate(slice as usize);
+                }
+                else {
+                    let keep = (-slice) as usize;
+                    if items.len() > keep {
+                        let drop = items.len() - keep;
+                        items.drain(0..drop);
+                    }
                 }
             }
+            return Ok(());
         }
-        Some((head, tail)) => {
-            if !document.fields.iter().any(|(field, _)| field == head) {
-                document.push(head.to_string(), BsonValue::Document(BsonDocument::new()));
-            }
-            let index = document.fields.iter().position(|(field, _)| field == head).expect("head was inserted");
-            if let BsonValue::Document(child) = &mut document.fields[index].1 {
-                inc_path(child, tail, amount, identifier)
-            }
-            else {
-                Err(cannot_create_field(document, head, tail))
+    }
+    items.push(value.clone());
+    Ok(())
+}
+
+fn add_to_set_path(
+    document: &mut BsonDocument,
+    segments: &[&str],
+    value: &BsonValue,
+    path: &str,
+    identifier: &str,
+) -> Result<(), CommandError> {
+    ensure_array_with_message(
+        document,
+        segments,
+        path,
+        identifier,
+        |field, kind| format!("Cannot apply $addToSet to non-array field. Field named '{field}' has non-array type {kind}"),
+    )
+    .and_then(|items| {
+        if let BsonValue::Document(modifiers) = value {
+            if has_operator(modifiers) {
+                for (key, _) in &modifiers.fields {
+                    if key != "$each" {
+                        return Err(CommandError::new(9, format!("Found unexpected fields after $each in $addToSet: {key}")));
+                    }
+                }
+                let Some(BsonValue::Array(values)) = modifiers.get("$each") else {
+                    return Err(CommandError::new(2, "$each requires an array"));
+                };
+                for item in values {
+                    if !items.iter().any(|existing| values_equal(Some(existing), item)) {
+                        items.push(item.clone());
+                    }
+                }
+                return Ok(());
             }
         }
+        if !items.iter().any(|existing| values_equal(Some(existing), value)) {
+            items.push(value.clone());
+        }
+        Ok(())
+    })
+}
+
+fn pop_path(
+    document: &mut BsonDocument,
+    segments: &[&str],
+    value: &BsonValue,
+    path: &str,
+) -> Result<(), CommandError> {
+    let direction = match value {
+        BsonValue::Int32(number) => *number,
+        BsonValue::Int64(number) => *number as i32,
+        _ => 0,
+    };
+    if direction != 1 && direction != -1 {
+        return Err(CommandError::new(9, format!("$pop expects 1 or -1, found: {}", render_shell_value(value))));
+    }
+    let Some(current) = value_at(document, segments).cloned() else { return Ok(()) };
+    let BsonValue::Array(items) = current
+    else {
+        return Err(CommandError::new(
+            14,
+            format!("Path '{path}' contains an element of non-array type '{}'", bson_type_name(&current)),
+        ));
+    };
+    if items.is_empty() {
+        return Ok(());
+    }
+    let mut items = items;
+    if direction == 1 {
+        items.pop();
+    }
+    else {
+        items.remove(0);
+    }
+    set_segments(document, segments, BsonValue::Array(items))
+}
+
+fn pull_path(
+    document: &mut BsonDocument,
+    segments: &[&str],
+    value: &BsonValue,
+    path: &str,
+) -> Result<(), CommandError> {
+    let Some(current) = value_at(document, segments).cloned() else { return Ok(()) };
+    let BsonValue::Array(items) = current
+    else { return Err(CommandError::new(2, "Cannot apply $pull to a non-array value")) };
+    let mut kept = Vec::with_capacity(items.len());
+    for item in items {
+        if !pull_matches(&item, value, path)? {
+            kept.push(item);
+        }
+    }
+    set_segments(document, segments, BsonValue::Array(kept))
+}
+
+fn pull_matches(item: &BsonValue, operand: &BsonValue, _path: &str) -> Result<bool, CommandError> {
+    if let BsonValue::Document(operand) = operand {
+        if has_operator(operand) {
+            return operator_matches(&[item], operand, "pull", 0);
+        }
+        return match item {
+            BsonValue::Document(element) => document_matches(element, operand),
+            _ => Ok(false),
+        };
+    }
+    Ok(values_equal(Some(item), operand))
+}
+
+fn ensure_array<'a>(
+    document: &'a mut BsonDocument,
+    segments: &[&str],
+    path: &str,
+    identifier: &str,
+) -> Result<&'a mut Vec<BsonValue>, CommandError> {
+    ensure_array_with_message(document, segments, path, identifier, |field, kind| {
+        format!("The field '{field}' must be an array but is of type {kind} in document {{_id: {identifier}}}")
+    })
+}
+
+fn ensure_array_with_message<'a>(
+    document: &'a mut BsonDocument,
+    segments: &[&str],
+    path: &str,
+    identifier: &str,
+    message: impl Fn(&str, &str) -> String,
+) -> Result<&'a mut Vec<BsonValue>, CommandError> {
+    let _ = identifier;
+    if value_at(document, segments).is_none() {
+        set_segments(document, segments, BsonValue::Array(Vec::new()))?;
+    }
+    let value = value_at_mut(document, segments).expect("array path was created");
+    match value {
+        BsonValue::Array(items) => Ok(items),
+        other => {
+            let kind = bson_type_name(other);
+            Err(CommandError::new(2, message(path, kind)))
+        }
+    }
+}
+
+fn zero_of(amount: &BsonValue) -> BsonValue {
+    match amount {
+        BsonValue::Int32(_) => BsonValue::Int32(0),
+        BsonValue::Int64(_) => BsonValue::Int64(0),
+        BsonValue::Double(_) => BsonValue::Double(0.0),
+        other => other.clone(),
+    }
+}
+
+fn multiply_value(current: &BsonValue, amount: &BsonValue) -> Option<BsonValue> {
+    let left = number_of(current)?;
+    let right = number_of(amount)?;
+    let product = left * right;
+    if matches!(current, BsonValue::Double(_)) || matches!(amount, BsonValue::Double(_)) {
+        return Some(BsonValue::Double(product));
+    }
+    if matches!(current, BsonValue::Int64(_)) || matches!(amount, BsonValue::Int64(_)) {
+        return Some(BsonValue::Int64(product as i64));
+    }
+    if let Ok(value) = i32::try_from(product as i64) {
+        Some(BsonValue::Int32(value))
+    }
+    else {
+        Some(BsonValue::Int64(product as i64))
     }
 }
 
@@ -1245,14 +1861,6 @@ fn bson_type_name(value: &BsonValue) -> &'static str {
         BsonValue::ObjectId(_) => "objectId",
         BsonValue::Binary(_) => "binData",
     }
-}
-
-/// Code `28` plus the message shape the real server uses for a dotted path
-/// that runs through a non-document value.
-fn cannot_create_field(document: &BsonDocument, head: &str, tail: &str) -> CommandError {
-    let child = tail.split('.').next().unwrap_or(tail);
-    let value = document.get(head).map(render_shell_value).unwrap_or_else(|| "null".to_string());
-    CommandError::new(28, format!("Cannot create field '{child}' in element {{{head}: {value}}}"))
 }
 
 fn increment_value(current: &BsonValue, amount: &BsonValue) -> Option<BsonValue> {
@@ -2294,6 +2902,29 @@ fn accumulate(accumulator: &Accumulator, documents: &[BsonDocument], members: &[
         AccumulatorKind::First => Ok(values.first().cloned().unwrap_or(BsonValue::Null)),
         AccumulatorKind::Last => Ok(values.last().cloned().unwrap_or(BsonValue::Null)),
     }
+}
+
+/// `$addFields`: keeps every input field and adds or replaces the specified
+/// paths. Expressions are evaluated against the input document, so fields in
+/// the same specification never observe each other.
+fn add_fields_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, CommandError> {
+    let mut output = Vec::with_capacity(documents.len());
+    for document in documents {
+        let mut result = document.clone();
+        for (field, expression) in &specification.fields {
+            if field.starts_with('$') {
+                return Err(CommandError::new(
+                    2,
+                    "FieldPath field names may not start with '$'. Consider using $getField or $setField.",
+                ));
+            }
+            let value = evaluate_expression(document, expression)?;
+            let segments: Vec<&str> = field.split('.').collect();
+            set_segments(&mut result, &segments, value)?;
+        }
+        output.push(result);
+    }
+    Ok(output)
 }
 
 fn project_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, CommandError> {

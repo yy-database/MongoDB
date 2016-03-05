@@ -187,35 +187,48 @@
             "surface": "error",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$push": { "n": 1 } } }], "as": "r" }
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$bogus": { "n": 1 } } }], "as": "r" }
             ],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "9" } },
-                { "at": "/r/errmsg", "equals": "Unknown modifier: $push (operatorIndex: 0)" }
+                { "at": "/r/errmsg", "equals": "Unknown modifier: $bogus (operatorIndex: 0)" }
             ]
         },
         {
-            "id": "update.replacement_rejected",
-            "surface": "error",
+            "id": "update.replacement_document",
+            "surface": "update",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "v": 1 } }], "as": "r" }
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "a": 9 } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "replacement updates are not supported; `u` must use $set, $unset or $inc" }
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/upserted", "absent": true },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "9" } },
+                { "at": "/r2/cursor/firstBatch/0/b", "absent": true }
             ]
         },
         {
-            "id": "update.upsert_rejected",
-            "surface": "error",
+            "id": "update.upsert_insert",
+            "surface": "update",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 9 }, "u": { "$set": { "v": 1 } }, "upsert": true }], "as": "r" }
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 9 }, "u": { "$set": { "v": 1 } }, "upsert": true }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 9 }, "as": "r2" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "update upsert is not supported" }
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/upserted", "equals": [{ "index": { "$numberInt": "0" }, "_id": { "$numberInt": "9" } }] },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "9" } },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": { "$numberInt": "1" } }
             ]
         },
         {
