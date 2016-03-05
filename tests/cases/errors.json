@@ -192,7 +192,7 @@
             "surface": "error",
             "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "bad$name", "filter": {}, "as": "r" }],
             "checks": [
-                { "at": "/r/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r/code", "equals": { "$numberInt": "73" } }
             ]
         },
@@ -320,7 +320,7 @@
                 { "op": "aggregate", "collection": "items", "pipeline": "x", "as": "r1" }
             ],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r1/code", "equals": { "$numberInt": "2" } }
             ]
         },
@@ -350,7 +350,7 @@
                 { "op": "getMore", "id": { "$numberLong": "99" }, "collection": "items", "as": "r1" }
             ],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r1/code", "equals": { "$numberInt": "43" } }
             ]
         },

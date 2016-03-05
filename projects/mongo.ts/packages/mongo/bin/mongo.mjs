@@ -97,7 +97,7 @@ function json(value) {
 
 function errorLine(error) {
     const code = error instanceof CliError ? error.code : 2
-    return json({ ok: { $numberInt: '0' }, code: { $numberInt: String(code) }, errmsg: String((error && error.message) || error) })
+    return json({ ok: { $numberDouble: '0.0' }, code: { $numberInt: String(code) }, errmsg: String((error && error.message) || error) })
 }
 
 function unknownCommand(label) {

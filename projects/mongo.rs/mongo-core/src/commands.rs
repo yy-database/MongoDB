@@ -252,7 +252,7 @@ fn validate_listing_filter(filter: &BsonDocument) -> Result<(), CommandError> {
 /// than guessing a name.
 pub fn error_document(error: &CommandError) -> BsonDocument {
     let mut document = BsonDocument::new();
-    document.push("ok".to_string(), BsonValue::Int32(0));
+    document.push("ok".to_string(), BsonValue::Double(0.0));
     document.push("errmsg".to_string(), BsonValue::String(error.message.clone()));
     document.push("code".to_string(), BsonValue::Int32(error.code));
     if let Some(name) = code_name(error.code) {
@@ -293,14 +293,14 @@ pub fn hello() -> BsonDocument {
     document.push("isWritablePrimary".to_string(), BsonValue::Bool(true));
     document.push("maxWireVersion".to_string(), BsonValue::Int32(17));
     document.push("minWireVersion".to_string(), BsonValue::Int32(0));
-    document.push("ok".to_string(), BsonValue::Int32(1));
+    document.push("ok".to_string(), BsonValue::Double(1.0));
     document
 }
 
 /// `ping` answer.
 pub fn ping() -> BsonDocument {
     let mut document = BsonDocument::new();
-    document.push("ok".to_string(), BsonValue::Int32(1));
+    document.push("ok".to_string(), BsonValue::Double(1.0));
     document
 }
 
@@ -1305,7 +1305,7 @@ pub fn kill_cursors(command: &BsonDocument, cursors: &mut CursorStore) -> Result
     response.push("cursorsNotFound".to_string(), BsonValue::Array(not_found.into_iter().map(BsonValue::Int64).collect()));
     response.push("cursorsAlive".to_string(), BsonValue::Array(Vec::new()));
     response.push("cursorsUnknown".to_string(), BsonValue::Array(Vec::new()));
-    response.push("ok".to_string(), BsonValue::Int32(1));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(response)
 }
 
@@ -1367,7 +1367,7 @@ pub fn list_databases(store: &Store) -> BsonDocument {
     response.push("databases".to_string(), BsonValue::Array(databases));
     response.push("totalSize".to_string(), BsonValue::Int64(0));
     response.push("totalSizeMb".to_string(), BsonValue::Int64(0));
-    response.push("ok".to_string(), BsonValue::Int32(1));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
     response
 }
 
@@ -1727,7 +1727,7 @@ fn cursor_reply(namespace: &str, batch_key: &str, batch: Vec<BsonValue>, cursor_
     cursor.push("ns".to_string(), BsonValue::String(namespace.to_string()));
 
     let mut response = BsonDocument::new();
-    response.push("ok".to_string(), BsonValue::Int32(1));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
     response.push("cursor".to_string(), BsonValue::Document(cursor));
     response
 }

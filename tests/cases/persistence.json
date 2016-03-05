@@ -138,7 +138,7 @@
             ],
             "checks": [
                 { "at": "/r1/cursor/firstBatch/#", "equals": 0 },
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 0 },
                 { "at": "/r3/databases/#", "equals": 0 }
             ]

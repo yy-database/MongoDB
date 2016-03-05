@@ -9,7 +9,7 @@
                 { "at": "/r1/isWritablePrimary", "equals": true },
                 { "at": "/r1/maxWireVersion", "equals": { "$numberInt": "17" } },
                 { "at": "/r1/minWireVersion", "equals": { "$numberInt": "0" } },
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
                 { "at": "/r1/#", "equals": 4 }
             ]
         },
@@ -18,7 +18,7 @@
             "surface": "command",
             "program": [{ "op": "ping", "as": "r1" }],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
                 { "at": "/r1/#", "equals": 1 }
             ]
         },
@@ -27,7 +27,7 @@
             "surface": "command",
             "program": [{ "op": "errorReply", "code": 11000, "message": "duplicate key", "as": "r1" }],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
                 { "at": "/r1/errmsg", "equals": "duplicate key" },
                 { "at": "/r1/codeName", "equals": "DuplicateKey" },
@@ -39,7 +39,7 @@
             "surface": "command",
             "program": [{ "op": "errorReply", "code": 43, "message": "cursor not found", "as": "r1" }],
             "checks": [
-                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r1/code", "equals": { "$numberInt": "43" } }
             ]
         },
@@ -125,7 +125,7 @@
                 { "at": "/r2/databases/#", "equals": 1 },
                 { "at": "/r2/databases/0/name", "equals": "app" },
                 { "at": "/r2/databases/0/empty", "equals": false },
-                { "at": "/r2/ok", "equals": { "$numberInt": "1" } }
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         },
         {
@@ -254,7 +254,7 @@
                 { "at": "/r1/cursorsNotFound/#", "equals": 2 },
                 { "at": "/r1/cursorsAlive/#", "equals": 0 },
                 { "at": "/r1/cursorsUnknown/#", "equals": 0 },
-                { "at": "/r1/ok", "equals": { "$numberInt": "1" } }
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         },
         {
@@ -285,6 +285,59 @@
                 { "at": "/r3/cursor/nextBatch/#", "equals": 4 },
                 { "at": "/r3/cursor/id", "equals": { "$numberLong": "0" } },
                 { "at": "/r4", "equals": 0 }
+            ]
+        },
+        {
+            "id": "cmd.reply_shape.families",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "insert" },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "v": 1 } } }], "as": "update" },
+                { "op": "count", "collection": "items", "as": "count" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "find" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$match": {} }], "as": "aggregate" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "_id": 2 }, "limit": 1 }], "as": "delete" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "v": 1 }, "name": "v_1" }], "as": "create" },
+                { "op": "listIndexes", "collection": "items", "as": "listIndexes" },
+                { "op": "dropIndexes", "collection": "items", "index": "*", "as": "dropIndexes" },
+                { "op": "listCollections", "as": "listCollections" },
+                { "op": "listDatabases", "as": "listDatabases" },
+                { "op": "hello", "as": "hello" },
+                { "op": "ping", "as": "ping" },
+                { "op": "errorReply", "code": 2, "message": "boom", "as": "error" },
+                { "op": "getMore", "id": { "$numberLong": "999" }, "collection": "items", "as": "getMore" },
+                { "op": "killCursors", "collection": "items", "ids": [{ "$numberLong": "999" }], "as": "kill" }
+            ],
+            "checks": [
+                { "at": "/insert/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/insert/n", "equals": { "$numberInt": "2" } },
+                { "at": "/update/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/update/n", "equals": { "$numberInt": "1" } },
+                { "at": "/update/nModified", "equals": { "$numberInt": "1" } },
+                { "at": "/count/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/count/n", "equals": { "$numberInt": "2" } },
+                { "at": "/find/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/find/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/aggregate/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/aggregate/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/delete/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/delete/n", "equals": { "$numberInt": "1" } },
+                { "at": "/delete/deletedCount", "absent": true },
+                { "at": "/create/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/create/numIndexesBefore", "equals": { "$numberInt": "1" } },
+                { "at": "/create/numIndexesAfter", "equals": { "$numberInt": "2" } },
+                { "at": "/listIndexes/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/listIndexes/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/dropIndexes/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/listCollections/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/listCollections/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/listDatabases/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/hello/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/ping/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/error/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/getMore/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/kill/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         }
     ]

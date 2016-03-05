@@ -93,7 +93,7 @@
                 { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "a": -1 }, "name": "a_1" }], "as": "r2" }
             ],
             "checks": [
-                { "at": "/r2/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r2/code", "equals": { "$numberInt": "86" } },
                 { "at": "/r2/errmsg", "equals": "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, key: { a: -1 }, name: \"a_1\" }, existing index: { v: 2, key: { a: 1 }, name: \"a_1\" }" }
             ]
@@ -195,7 +195,7 @@
             ],
             "checks": [
                 { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
-                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
             ]
         },

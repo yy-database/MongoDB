@@ -26,7 +26,7 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "1.0" } },
                 { "at": "/out/lines/2/databases/#", "equals": 1 },
                 { "at": "/out/lines/2/databases/0/name", "equals": "app" },
                 { "at": "/out/lines/2/totalSize", "equals": { "$numberLong": "0" } }
@@ -48,7 +48,7 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/3/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/3/ok", "equals": { "$numberDouble": "1.0" } },
                 { "at": "/out/lines/3/cursor/firstBatch/#", "equals": 2 },
                 { "at": "/out/lines/3/cursor/firstBatch/*/name", "equals": ["items", "logs"] },
                 { "at": "/out/lines/3/cursor/ns", "equals": "app.$cmd.listCollections" }
@@ -320,7 +320,7 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/1/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/out/lines/1/code", "equals": { "$numberInt": "59" } },
                 { "at": "/out/lines/1/errmsg", "matches": "unknown command: dropDatabase" },
                 { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } }
@@ -410,7 +410,7 @@
                 }
             ],
             "checks": [
-                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/2/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/out/lines/2/code", "equals": { "$numberInt": "66" } },
                 { "at": "/out/lines/2/errmsg", "matches": "immutable field '_id'" }
             ]

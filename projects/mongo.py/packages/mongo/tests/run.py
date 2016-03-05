@@ -402,7 +402,7 @@ def run_cli(directory, step):
         try:
             outcome = session.run(line)
         except CliError as error:
-            lines.append({"ok": {"$numberInt": "0"}, "code": {"$numberInt": str(error.code)}, "errmsg": str(error)})
+            lines.append({"ok": {"$numberDouble": "0.0"}, "code": {"$numberInt": str(error.code)}, "errmsg": str(error)})
             continue
         if outcome is None:
             continue

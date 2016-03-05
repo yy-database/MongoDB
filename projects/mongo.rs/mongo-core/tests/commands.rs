@@ -50,6 +50,7 @@ fn int(value: &BsonDocument, key: &str) -> i64 {
     match value.get(key) {
         Some(BsonValue::Int32(number)) => *number as i64,
         Some(BsonValue::Int64(number)) => *number,
+        Some(BsonValue::Double(number)) => *number as i64,
         _ => 0,
     }
 }
