@@ -176,6 +176,36 @@ pub fn kill_cursors(cursors: &mut MongoCursors, command: String) -> Result<Strin
     Ok(command_reply(commands::kill_cursors(&decode_command(&command)?, &mut cursors.inner)))
 }
 
+/// `findAndModify` reply.
+#[napi]
+pub fn find_and_modify(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::find_and_modify(&decode_command(&command)?, store_of(store))))
+}
+
+/// `distinct` reply.
+#[napi]
+pub fn distinct(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::distinct(&decode_command(&command)?, store_of(store))))
+}
+
+/// `bulkWrite` reply.
+#[napi]
+pub fn bulk_write(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::bulk_write(&decode_command(&command)?, store_of(store))))
+}
+
+/// `create` reply.
+#[napi]
+pub fn create(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::create(&decode_command(&command)?, store_of(store))))
+}
+
+/// `collMod` reply.
+#[napi]
+pub fn coll_mod(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::coll_mod(&decode_command(&command)?, store_of(store))))
+}
+
 /// `listCollections` reply.
 #[napi]
 pub fn list_collections(store: &MongoStore, command: String) -> Result<String> {

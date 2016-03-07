@@ -502,10 +502,53 @@ def run_case(case):
             command = {"killCursors": step["collection"], "cursors": step["ids"]}
             reply = mongo.kill_cursors(cursor_table(), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "findAndModify":
+            command = {"findAndModify": step["collection"]}
+            for key in ("query", "sort", "remove", "update", "new", "fields", "upsert"):
+                if key in step:
+                    command[key] = step[key]
+            reply = mongo.find_and_modify(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "distinct":
+            command = {"distinct": step["collection"], "key": step["key"]}
+            if "query" in step:
+                command["query"] = step["query"]
+            reply = mongo.distinct(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "bulkWrite":
+            command = {"bulkWrite": 1, "ops": step["ops"]}
+            if "nsInfo" in step:
+                command["nsInfo"] = step["nsInfo"]
+            if "ordered" in step:
+                command["ordered"] = step["ordered"]
+            if "errorsOnly" in step:
+                command["errorsOnly"] = step["errorsOnly"]
+            # `bulkWrite` is only accepted against `admin`; the namespaces it
+            # writes are taken from `nsInfo`.
+            reply = mongo.bulk_write(
+                store_of(step.get("store")),
+                json.dumps(command_of(case, {**step, "db": step.get("db", "admin")}, command)),
+            )
+            return json.loads(reply)
+        if op == "create":
+            command = {"create": step["collection"]}
+            for key in ("validator", "validationLevel", "validationAction"):
+                if key in step:
+                    command[key] = step[key]
+            reply = mongo.create(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "collMod":
+            command = {"collMod": step["collection"]}
+            for key in ("validator", "validationLevel", "validationAction"):
+                if key in step:
+                    command[key] = step[key]
+            reply = mongo.coll_mod(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "listCollections":
             command = {"listCollections": 1}
-            if "filter" in step:
-                command["filter"] = step["filter"]
+            for key in ("filter", "nameOnly", "authorizedCollections"):
+                if key in step:
+                    command[key] = step[key]
             reply = mongo.list_collections(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
         if op == "createIndexes":

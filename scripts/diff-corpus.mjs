@@ -9,7 +9,7 @@
 //
 // Usage:
 //   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
-//                                [--count 130] [--only <entry-id>]
+//                                [--count 198] [--only <entry-id>]
 //                                [--write] [--emit-cases] [--verify] [--check]
 //
 // `--check` is the regression gate: it verifies the fixed seed, count and corpus
@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '130'))
+const COUNT = Number(option('count', '198'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -170,6 +170,18 @@ function localCommand(store, cursors, command) {
             return JSON.parse(binding.getMore(cursors, text))
         case 'killCursors':
             return JSON.parse(binding.killCursors(cursors, text))
+        case 'findAndModify':
+            return JSON.parse(binding.findAndModify(store, text))
+        case 'distinct':
+            return JSON.parse(binding.distinct(store, text))
+        case 'bulkWrite':
+            return JSON.parse(binding.bulkWrite(store, text))
+        case 'create':
+            return JSON.parse(binding.create(store, text))
+        case 'collMod':
+            return JSON.parse(binding.collMod(store, text))
+        case 'listCollections':
+            return JSON.parse(binding.listCollections(store, text))
         default:
             throw new Error(`unsupported local command ${name}`)
     }
@@ -226,6 +238,12 @@ function normalizeReply(reply) {
                 if (key === '$oid') {
                     flags.oid = true
                     out[key] = '<oid>'
+                    continue
+                }
+                // `listCollections` reports a server-assigned collection UUID.
+                if (key === 'uuid' && value && typeof value === 'object' && value.$binary) {
+                    flags.uuid = true
+                    out[key] = '<uuid>'
                     continue
                 }
                 out[key] = walk(value, key)
@@ -767,6 +785,347 @@ function buildCursor(seed) {
     return entries
 }
 
+function buildFindAndModify(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, name: 'alpha', score: 10, grp: 'a' },
+        { _id: 2, name: 'beta', score: 20, grp: 'a' },
+        { _id: 3, name: 'gamma', score: 30, grp: 'b' },
+        { _id: 4, name: 'delta', score: 40, grp: 'b' },
+        { _id: 5, name: 'epsilon', score: 50, grp: 'c' }
+    ]
+    function add(suffix, steps) {
+        const collection = `diff_famod_${n}`
+        entries.push({
+            id: `diff.findAndModify.${suffix}`,
+            cluster: 'findAndModify',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs() }],
+            steps: steps.map((step) => ({ ...step, collection }))
+        })
+        n += 1
+    }
+    add('update_old', [{ op: 'findAndModify', query: { _id: 1 }, update: { $set: { score: 11 } } }])
+    add('update_new', [{ op: 'findAndModify', query: { _id: 1 }, update: { $set: { score: 11 } }, new: true }])
+    add('update_inc', [{ op: 'findAndModify', query: { _id: 2 }, update: { $inc: { score: 5 } }, new: true }])
+    add('fields_include', [
+        { op: 'findAndModify', query: { _id: 3 }, update: { $set: { score: 31 } }, fields: { name: 1, score: 1 }, new: true }
+    ])
+    add('fields_exclude', [
+        { op: 'findAndModify', query: { _id: 4 }, update: { $set: { score: 41 } }, fields: { grp: 0 }, new: true }
+    ])
+    add('sort_desc', [
+        { op: 'findAndModify', query: { grp: 'a' }, sort: { score: -1 }, update: { $set: { picked: true } }, new: true }
+    ])
+    add('sort_asc_fields', [
+        { op: 'findAndModify', query: { grp: 'b' }, sort: { score: 1 }, update: { $set: { picked: true } }, fields: { score: 1 } }
+    ])
+    add('no_match', [{ op: 'findAndModify', query: { _id: 99 }, update: { $set: { name: 'nobody' } } }])
+    add('upsert_new', [
+        { op: 'findAndModify', query: { _id: 99 }, update: { $set: { score: 7 } }, upsert: true, new: true },
+        { op: 'find', filter: { _id: 99 } }
+    ])
+    add('upsert_old_null', [
+        { op: 'findAndModify', query: { _id: 98 }, update: { $set: { score: 8 } }, upsert: true }
+    ])
+    add('upsert_equality_fields', [
+        { op: 'findAndModify', query: { name: 'zeta' }, update: { $set: { score: 9 } }, upsert: true, new: true }
+    ])
+    add('upsert_replacement', [
+        { op: 'findAndModify', query: { _id: 97 }, update: { score: 5, grp: 'z' }, upsert: true, new: true }
+    ])
+    add('remove_old', [{ op: 'findAndModify', query: { _id: 3 }, remove: true }, { op: 'find', filter: { _id: 3 } }])
+    add('remove_no_match', [{ op: 'findAndModify', query: { _id: 99 }, remove: true }])
+    add('remove_fields', [{ op: 'findAndModify', query: { _id: 4 }, remove: true, fields: { grp: 1 } }])
+    add('error_update_and_remove', [
+        { op: 'findAndModify', query: { _id: 1 }, update: { $set: { score: 1 } }, remove: true }
+    ])
+    add('error_remove_new', [{ op: 'findAndModify', query: { _id: 1 }, remove: true, new: true }])
+    add('error_missing_update', [{ op: 'findAndModify', query: { _id: 1 } }])
+    return entries
+}
+
+function buildDistinct(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, tags: ['red', 'blue'], a: { b: 1 }, items: [{ qty: 2 }, { qty: 5 }], grp: 'a' },
+        { _id: 2, tags: ['blue', 'red'], a: { b: 2 }, items: [{ qty: 2 }], grp: 'b' },
+        { _id: 3, tags: [], a: { b: 3 }, items: [], grp: 'a' },
+        { _id: 4, tags: 'green', grp: 'b' },
+        { _id: 5, a: { b: 1 }, grp: 'a' }
+    ]
+    function add(suffix, steps, collectionDocs = docs()) {
+        const collection = `diff_distinct_${n}`
+        entries.push({
+            id: `diff.distinct.${suffix}`,
+            cluster: 'distinct',
+            collection,
+            setup: [{ op: 'insert', collection, documents: collectionDocs }],
+            steps: steps.map((step) => ({ ...step, collection }))
+        })
+        n += 1
+    }
+    add('array_flatten', [{ op: 'distinct', key: 'tags' }])
+    add('array_reversed', [
+        { op: 'distinct', key: 'tags' },
+        { op: 'find', filter: { _id: 2 }, projection: { tags: 1 } }
+    ])
+    add('nested_path', [{ op: 'distinct', key: 'a.b' }])
+    add('missing_key', [{ op: 'distinct', key: 'ghost' }])
+    add('query_filter', [{ op: 'distinct', key: 'tags', query: { grp: 'a' } }])
+    add('query_no_match', [{ op: 'distinct', key: 'tags', query: { grp: 'z' } }])
+    add('dotted_into_array', [{ op: 'distinct', key: 'items.qty' }])
+    add('empty_and_scalar', [{ op: 'distinct', key: 'items' }])
+    add('numeric_equivalence', [{ op: 'distinct', key: 'v' }], [
+        { _id: 1, v: 1 },
+        { _id: 2, v: { $numberDouble: '1.0' } },
+        { _id: 3, v: { $numberLong: '1' } },
+        { _id: 4, v: { $numberDouble: '2.5' } }
+    ])
+    add('nested_arrays', [{ op: 'distinct', key: 'n' }], [
+        { _id: 1, n: [[1, 2], [3]] },
+        { _id: 2, n: [[2], 4] }
+    ])
+    add('bad_key_type', [{ op: 'distinct', key: 5 }])
+    return entries
+}
+
+function buildBulkWrite(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, score: 10, grp: 'a' },
+        { _id: 2, score: 20, grp: 'a' },
+        { _id: 3, score: 30, grp: 'b' }
+    ]
+    function add(suffix, steps, setupDocs = docs()) {
+        const collection = `diff_bulk_${n}`
+        const nsInfo = [{ ns: `${DB}.${collection}` }]
+        entries.push({
+            id: `diff.bulkWrite.${suffix}`,
+            cluster: 'bulkWrite',
+            collection,
+            setup: setupDocs.length > 0 ? [{ op: 'insert', collection, documents: setupDocs }] : [],
+            steps: steps.map((step) => ({ collection, nsInfo, ...step }))
+        })
+        n += 1
+    }
+    add('insert_single', [{ op: 'bulkWrite', ops: [{ insert: 0, document: { _id: 10, score: 100 } }] }])
+    add('insert_batch', [
+        { op: 'bulkWrite', ops: [{ insert: 0, document: { _id: 11, score: 110 } }, { insert: 0, document: { _id: 12, score: 120 } }] },
+        { op: 'find', filter: { _id: { $gte: 11 } }, sort: { _id: 1 } }
+    ])
+    add('mixed_ops', [
+        { op: 'bulkWrite', ops: [
+            { insert: 0, document: { _id: 4, score: 40 } },
+            { update: 0, filter: { _id: 1 }, updateMods: { $inc: { score: 1 } } },
+            { delete: 0, filter: { _id: 3 } }
+        ] },
+        { op: 'find', filter: {}, sort: { _id: 1 } }
+    ])
+    add('update_multi', [
+        { op: 'bulkWrite', ops: [{ update: 0, filter: { grp: 'a' }, updateMods: { $set: { flag: true } }, multi: true }] },
+        { op: 'find', filter: {}, sort: { _id: 1 } }
+    ])
+    add('update_no_match', [
+        { op: 'bulkWrite', ops: [{ update: 0, filter: { _id: 99 }, updateMods: { $set: { flag: true } } }] }
+    ])
+    add('upsert_missing', [{ op: 'bulkWrite', ops: [{ update: 0, filter: { _id: 7 }, updateMods: { $set: { score: 70 } }, upsert: true }] }])
+    add('upsert_match_existing', [
+        { op: 'bulkWrite', ops: [{ update: 0, filter: { _id: 2 }, updateMods: { $set: { score: 21 } }, upsert: true }] }
+    ])
+    add('ordered_duplicate_stops', [
+        { op: 'bulkWrite', ordered: true, ops: [
+            { insert: 0, document: { _id: 1 } },
+            { insert: 0, document: { _id: 20 } },
+            { insert: 0, document: { _id: 21 } }
+        ] }
+    ])
+    add('unordered_continues', [
+        { op: 'bulkWrite', ordered: false, ops: [
+            { insert: 0, document: { _id: 1 } },
+            { insert: 0, document: { _id: 20 } },
+            { update: 0, filter: { _id: 2 }, updateMods: { $set: { score: 21 } } },
+            { delete: 0, filter: { _id: 3 } }
+        ] },
+        { op: 'find', filter: {}, sort: { _id: 1 } }
+    ])
+    add('errors_only', [
+        { op: 'bulkWrite', ordered: false, errorsOnly: true, ops: [
+            { insert: 0, document: { _id: 1 } },
+            { insert: 0, document: { _id: 30 } }
+        ] }
+    ])
+    add('delete_many', [
+        { op: 'bulkWrite', ops: [{ delete: 0, filter: { grp: 'a' }, multi: true }] },
+        { op: 'find', filter: {}, sort: { _id: 1 } }
+    ])
+    add('bad_namespace_index', [{ op: 'bulkWrite', ops: [{ insert: 1, document: { _id: 5 } }] }])
+    add('empty_ops', [{ op: 'bulkWrite', ops: [] }])
+    add('not_admin', [{ op: 'bulkWrite', db: DB, ops: [{ insert: 0, document: { _id: 6 } }] }])
+    add('duplicate_after_failure_order', [
+        { op: 'bulkWrite', ordered: false, ops: [
+            { insert: 0, document: { _id: 2 } },
+            { insert: 0, document: { _id: 40 } },
+            { insert: 0, document: { _id: 2 } }
+        ] }
+    ])
+    return entries
+}
+
+const VALIDATOR_SCHEMA = {
+    $jsonSchema: {
+        bsonType: 'object',
+        required: ['name'],
+        properties: {
+            _id: { bsonType: 'int' },
+            name: { bsonType: 'string' },
+            age: { bsonType: 'int', minimum: 0, maximum: 120 },
+            tags: { bsonType: 'array', items: { bsonType: 'string' } }
+        },
+        additionalProperties: false
+    }
+}
+
+function buildValidators(seed) {
+    const entries = []
+    let n = 0
+    function add(suffix, setup, steps) {
+        const collection = `diff_valid_${n}`
+        entries.push({
+            id: `diff.validators.${suffix}`,
+            cluster: 'validators',
+            collection,
+            setup: setup.map((step) => ({ ...step, collection })),
+            steps: steps.map((step) => ({ ...step, collection }))
+        })
+        n += 1
+    }
+    add('create_then_valid_insert', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [
+        { op: 'insert', documents: [{ _id: 1, name: 'alpha', age: 30 }] },
+        { op: 'find', filter: {} }
+    ])
+    add('missing_required', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 2, other: 1 }] }])
+    add('wrong_type', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 3, name: 5 }] }])
+    add('below_minimum', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 4, name: 'beta', age: -1 }] }])
+    add('above_maximum', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 5, name: 'gamma', age: 200 }] }])
+    add('item_type', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 6, name: 'delta', tags: ['ok', 2] }] }])
+    add('additional_property', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'insert', documents: [{ _id: 7, name: 'epsilon', extra: 1 }] }])
+    add('additional_property_without_id_declared', [
+        { op: 'create', validator: { $jsonSchema: { bsonType: 'object', required: ['name'], properties: { name: { bsonType: 'string' } } } } }
+    ], [{ op: 'insert', documents: [{ _id: 8, name: 'zeta' }] }])
+    add('update_to_invalid', [
+        { op: 'create', validator: VALIDATOR_SCHEMA },
+        { op: 'insert', documents: [{ _id: 9, name: 'eta', age: 30 }] }
+    ], [{ op: 'update', updates: [{ q: { _id: 9 }, u: { $set: { age: 300 } } }] }])
+    add('create_duplicate', [
+        { op: 'create', validator: VALIDATOR_SCHEMA }
+    ], [{ op: 'create', validator: VALIDATOR_SCHEMA }])
+    add('warn_action_allows_write', [
+        { op: 'create', validator: VALIDATOR_SCHEMA, validationAction: 'warn' }
+    ], [
+        { op: 'insert', documents: [{ _id: 10, name: 5 }] },
+        { op: 'find', filter: {} }
+    ])
+    add('collmod_action_off_then_write', [
+        { op: 'create', validator: VALIDATOR_SCHEMA, validationAction: 'error' },
+        { op: 'collMod', validationAction: 'warn' }
+    ], [
+        { op: 'insert', documents: [{ _id: 11, name: 6 }] },
+        { op: 'collMod', validationLevel: 'off' },
+        { op: 'insert', documents: [{ _id: 12, name: 7 }] }
+    ])
+    add('moderate_skips_existing_invalid', [
+        { op: 'create', validator: VALIDATOR_SCHEMA, validationLevel: 'off' },
+        { op: 'insert', documents: [{ _id: 13, name: 'theta' }, { _id: 14, name: 5 }] },
+        { op: 'collMod', validationLevel: 'moderate' }
+    ], [
+        { op: 'update', updates: [{ q: { _id: 14 }, u: { $set: { name: 8 } } }] }
+    ])
+    add('moderate_blocks_valid_to_invalid', [
+        { op: 'create', validator: VALIDATOR_SCHEMA, validationLevel: 'off' },
+        { op: 'insert', documents: [{ _id: 15, name: 'iota' }] },
+        { op: 'collMod', validationLevel: 'moderate' }
+    ], [{ op: 'update', updates: [{ q: { _id: 15 }, u: { $set: { name: 9 } } }] }])
+    add('collmod_missing_namespace', [], [{ op: 'collMod', validationLevel: 'off' }])
+    add('collmod_validator_replaces', [
+        { op: 'create', validator: { $jsonSchema: { bsonType: 'object', required: ['name'], properties: { name: { bsonType: 'string' } } } } }
+    ], [
+        { op: 'collMod', validator: { $jsonSchema: { bsonType: 'object', required: ['code'], properties: { code: { bsonType: 'int' } } } } },
+        { op: 'insert', documents: [{ _id: 16, name: 'kappa' }] },
+        { op: 'insert', documents: [{ _id: 17, code: 7 }] }
+    ])
+    return entries
+}
+
+function buildListCollections(seed) {
+    const entries = []
+    let n = 0
+    function add(suffix, setup, steps) {
+        const collection = `diff_list_${n}`
+        entries.push({
+            id: `diff.listCollections.${suffix}`,
+            cluster: 'listCollections',
+            collection,
+            setup: setup.map((step) => ({ ...step, collection })),
+            steps: [{ collection, ...steps[0] }, ...steps.slice(1)]
+        })
+        n += 1
+    }
+    add('default_shape', [
+        { op: 'create' },
+        { op: 'insert', documents: [{ _id: 1 }, { _id: 2 }] }
+    ], [{ op: 'listCollections', filter: { name: `diff_list_${n}` } }])
+    add('name_only', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{ op: 'listCollections', nameOnly: true, filter: { name: `diff_list_${n}` } }])
+    add('authorized_true', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{ op: 'listCollections', nameOnly: true, authorizedCollections: true, filter: { name: `diff_list_${n}` } }])
+    add('filter_type_gt', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{
+        op: 'listCollections',
+        nameOnly: true,
+        // Bound the range to this exact name so other collections in the
+        // database cannot leak into the batch.
+        filter: {
+            type: 'collection',
+            $and: [{ name: { $gte: `diff_list_${n}` } }, { name: { $lt: `diff_list_${n}z` } }]
+        }
+    }])
+    add('filter_no_match', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{ op: 'listCollections', filter: { name: 'definitely-not-present' } }])
+    add('bad_name_only_type', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{ op: 'listCollections', nameOnly: 1 }])
+    add('bad_authorized_type', [
+        { op: 'insert', documents: [{ _id: 1 }] }
+    ], [{ op: 'listCollections', authorizedCollections: 'yes' }])
+    add('options_after_collmod', [
+        { op: 'create', validator: VALIDATOR_SCHEMA },
+        { op: 'collMod', validationLevel: 'moderate', validationAction: 'warn' }
+    ], [{ op: 'listCollections', filter: { name: `diff_list_${n}` } }])
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -774,7 +1133,12 @@ const CLUSTERS = [
     ['delete', buildDelete],
     ['insert', buildInsert],
     ['indexes', buildIndexes],
-    ['cursor', buildCursor]
+    ['cursor', buildCursor],
+    ['findAndModify', buildFindAndModify],
+    ['distinct', buildDistinct],
+    ['bulkWrite', buildBulkWrite],
+    ['validators', buildValidators],
+    ['listCollections', buildListCollections]
 ]
 
 function generate(seed) {
@@ -834,6 +1198,47 @@ function commandOf(step, replies) {
                 cursors: step.cursorsFrom.map((index) => resolveCursor(index)),
                 $db: DB
             }
+        case 'findAndModify': {
+            const command = { findAndModify: collection }
+            for (const key of ['query', 'sort', 'remove', 'update', 'new', 'fields', 'upsert']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'distinct': {
+            const command = { distinct: collection, key: step.key }
+            if (step.query !== undefined) command.query = step.query
+            return { ...command, $db: DB }
+        }
+        case 'bulkWrite': {
+            const command = { bulkWrite: 1, ops: step.ops, nsInfo: step.nsInfo }
+            if (step.ordered !== undefined) command.ordered = step.ordered
+            if (step.errorsOnly !== undefined) command.errorsOnly = step.errorsOnly
+            return { ...command, $db: step.db ?? 'admin' }
+        }
+        case 'create': {
+            const command = { create: collection }
+            for (const key of ['validator', 'validationLevel', 'validationAction']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'collMod': {
+            const command = { collMod: collection }
+            for (const key of ['validator', 'validationLevel', 'validationAction']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'listCollections': {
+            const command = { listCollections: 1 }
+            for (const key of ['filter', 'nameOnly', 'authorizedCollections']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'drop':
+            return { drop: collection, $db: DB }
         default:
             throw new Error(`unknown step op ${step.op}`)
     }
@@ -861,9 +1266,13 @@ function canonicalizeReply(reply, entry) {
 }
 
 async function runOnOracle(entry) {
-    for (const collection of new Set(entry.setup.map((step) => step.collection))) {
-        await oracleCommand({ delete: collection, deletes: [{ q: {}, limit: 0 }], $db: DB }).catch(() => {})
-        await oracleCommand({ dropIndexes: collection, index: '*', $db: DB }).catch(() => {})
+    // Drop every namespace the entry touches, so `create` entries start from a
+    // clean database and the entry can be replayed for the stability rerun.
+    const touched = new Set(entry.setup.map((step) => step.collection))
+    for (const step of entry.steps) if (step.collection) touched.add(step.collection)
+    for (const step of entry.setup) if (step.op === 'bulkWrite') for (const ns of step.nsInfo ?? []) touched.add(ns.ns.split('.')[1])
+    for (const collection of touched) {
+        await oracleCommand({ drop: collection, $db: DB }).catch(() => {})
     }
     for (const step of entry.setup) await oracleCommand(commandOf(step, []))
     const replies = []

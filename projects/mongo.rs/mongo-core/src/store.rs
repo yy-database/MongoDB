@@ -18,7 +18,7 @@
 //! through the explicit `repair_shard` entry point.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
 };
@@ -45,6 +45,18 @@ pub struct IndexSpec {
     pub key: BsonDocument,
     /// Whether the index rejects duplicate keys.
     pub unique: bool,
+}
+
+/// Collection-level options kept in the catalog. Only non-default values are
+/// stored, so collections without validators keep the original catalog shape.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CollectionOptions {
+    /// `$jsonSchema` (or other validator) exactly as it was sent.
+    pub validator: Option<serde_json::Value>,
+    /// `strict` (default), `moderate`, or `off`.
+    pub validation_level: Option<String>,
+    /// `error` (default) or `warn`.
+    pub validation_action: Option<String>,
 }
 
 /// Namespace label used to remember which Mongo namespaces exist.
@@ -93,6 +105,7 @@ struct CatalogState {
     shard_id: String,
     namespaces: BTreeSet<String>,
     indexes: Vec<IndexSpec>,
+    collections: BTreeMap<String, CollectionOptions>,
 }
 
 impl CatalogState {
@@ -114,6 +127,18 @@ impl CatalogState {
                     document.push(',');
                 }
                 document.push_str(&index.to_json());
+            }
+            document.push(']');
+        }
+        // The `collections` array is additive for the same reason: it only
+        // appears once a validator or a non-default validation level exists.
+        if !self.collections.is_empty() {
+            document.push_str(",\"collections\":[");
+            for (position, (namespace, options)) in self.collections.iter().enumerate() {
+                if position > 0 {
+                    document.push(',');
+                }
+                document.push_str(&collection_options_json(namespace, options));
             }
             document.push(']');
         }
@@ -167,6 +192,45 @@ fn parse_namespaces(document: &str) -> Result<BTreeSet<String>, StoreError> {
         namespaces.insert(label.to_string());
     }
     Ok(namespaces)
+}
+
+fn collection_options_json(namespace: &str, options: &CollectionOptions) -> String {
+    let field = |text: &str| serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
+    let mut text = format!("{{\"namespace\":{}", field(namespace));
+    if let Some(validator) = &options.validator {
+        text.push_str(&format!(",\"validator\":{}", serde_json::to_string(validator).unwrap_or_else(|_| "null".to_string())));
+    }
+    if let Some(level) = &options.validation_level {
+        text.push_str(&format!(",\"validationLevel\":{}", field(level)));
+    }
+    if let Some(action) = &options.validation_action {
+        text.push_str(&format!(",\"validationAction\":{}", field(action)));
+    }
+    text.push('}');
+    text
+}
+
+fn parse_collections(document: &str) -> Result<BTreeMap<String, CollectionOptions>, StoreError> {
+    let value: serde_json::Value = serde_json::from_str(document)
+        .map_err(|error| StoreError::Catalog(format!("catalog schema document is not JSON: {error}")))?;
+    let Some(entries) = value.get("collections") else { return Ok(BTreeMap::new()) };
+    let Some(entries) = entries.as_array() else {
+        return Err(StoreError::Catalog("catalog schema document has a non-array `collections` field".to_string()));
+    };
+    let mut collections = BTreeMap::new();
+    for entry in entries {
+        let namespace = entry
+            .get("namespace")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| StoreError::Catalog("catalog collection entry has no namespace".to_string()))?;
+        let options = CollectionOptions {
+            validator: entry.get("validator").cloned(),
+            validation_level: entry.get("validationLevel").and_then(serde_json::Value::as_str).map(str::to_string),
+            validation_action: entry.get("validationAction").and_then(serde_json::Value::as_str).map(str::to_string),
+        };
+        collections.insert(namespace.to_string(), options);
+    }
+    Ok(collections)
 }
 
 impl IndexSpec {
@@ -292,7 +356,11 @@ fn load_catalog(catalog_path: &Path) -> Result<CatalogState, StoreError> {
         Some(schema) => parse_indexes(&schema.document)?,
         None => Vec::new(),
     };
-    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id, namespaces, indexes })
+    let collections = match &schema {
+        Some(schema) => parse_collections(&schema.document)?,
+        None => BTreeMap::new(),
+    };
+    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id, namespaces, indexes, collections })
 }
 
 fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, StoreError> {
@@ -301,7 +369,13 @@ fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, St
         .and_then(|stem| stem.to_str())
         .filter(|stem| !stem.is_empty())
         .ok_or_else(|| StoreError::Catalog(format!("shard path `{}` has no file stem", requested.display())))?;
-    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id: stem.to_string(), namespaces: BTreeSet::new(), indexes: Vec::new() })
+    Ok(CatalogState {
+        path: catalog_path.to_path_buf(),
+        shard_id: stem.to_string(),
+        namespaces: BTreeSet::new(),
+        indexes: Vec::new(),
+        collections: BTreeMap::new(),
+    })
 }
 
 /// Document store backed by one `.yyds` catalog and one `.yykv` shard.
@@ -378,6 +452,39 @@ impl Store {
             return Ok(());
         }
         catalog.flush()
+    }
+
+    /// Reads the collection options, defaulting to no validator and `strict` /
+    /// `error` when the catalog has no entry.
+    pub fn collection_options(&self, namespace: &str) -> CollectionOptions {
+        self.catalog_lock().collections.get(namespace).cloned().unwrap_or_default()
+    }
+
+    /// Writes collection options and registers the namespace in one durable
+    /// catalog update. An all-default option set removes the entry again.
+    pub fn set_collection_options(&self, namespace: &str, options: CollectionOptions) -> Result<(), StoreError> {
+        let mut catalog = self.catalog_lock();
+        catalog.namespaces.insert(namespace.to_string());
+        if options == CollectionOptions::default() {
+            catalog.collections.remove(namespace);
+        }
+        else {
+            catalog.collections.insert(namespace.to_string(), options);
+        }
+        catalog.flush()
+    }
+
+    /// Creates a collection. Returns `false` when the namespace already exists.
+    pub fn create_collection(&self, namespace: &str, options: CollectionOptions) -> Result<bool, StoreError> {
+        let mut catalog = self.catalog_lock();
+        if !catalog.namespaces.insert(namespace.to_string()) {
+            return Ok(false);
+        }
+        if options != CollectionOptions::default() {
+            catalog.collections.insert(namespace.to_string(), options);
+        }
+        catalog.flush()?;
+        Ok(true)
     }
 
     /// Reads one document by its encoded `_id`.

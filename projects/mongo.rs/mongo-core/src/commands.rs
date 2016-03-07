@@ -10,11 +10,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use database_protocol_mongo::bson::{BsonDocument, BsonValue, encode_bson, integral_value, parse_bson, value_to_key};
+use database_protocol_mongo::bson::{
+    BinaryData, BsonDocument, BsonValue, encode_bson, integral_value, parse_bson, value_to_key,
+};
 
 use crate::{
     cursor::CursorStore,
-    store::{IndexSpec, Store},
+    json,
+    store::{CollectionOptions, IndexSpec, Store},
 };
 
 /// Filter operators this gateway implements. Anything outside this list is a
@@ -227,24 +230,6 @@ fn unknown_operator(
     )
 }
 
-/// `listCollections` accepts only an exact `name` match.
-fn validate_listing_filter(filter: &BsonDocument) -> Result<(), CommandError> {
-    for (field_index, (field, expected)) in filter.fields.iter().enumerate() {
-        if field != "name" {
-            return Err(CommandError::new(
-                59,
-                format!("unsupported listCollections filter field: {field} (fieldIndex: {field_index})"),
-            ));
-        }
-        if let BsonValue::Document(operators) = expected {
-            if let Some((operator, _)) = operators.fields.first() {
-                return Err(unknown_operator(operator, "listCollections", field, field_index, 0));
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Result document for a failed command: `{ ok: 0, errmsg, code, codeName, ... }`.
 ///
 /// `codeName` strings below were read from `mongod 8.0.9`, covering every code
@@ -272,8 +257,10 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         9 => "FailedToParse",
         14 => "TypeMismatch",
         16 => "InvalidLength",
+        13 => "Unauthorized",
         26 => "NamespaceNotFound",
         27 => "IndexNotFound",
+        48 => "NamespaceExists",
         43 => "CursorNotFound",
         67 => "CannotCreateIndex",
         72 => "InvalidOptions",
@@ -281,6 +268,9 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         85 => "IndexOptionsConflict",
         86 => "IndexKeySpecsConflict",
         11000 => "DuplicateKey",
+        112 => "WriteConflict",
+        121 => "DocumentValidationFailure",
+        225 => "TransactionTooOld",
         40414 => "IDLFailedToParse",
         40148 => "Location40148",
         40149 => "Location40149",
@@ -334,11 +324,23 @@ struct WriteError {
     message: String,
     key_pattern: Option<BsonDocument>,
     key_value: Option<BsonDocument>,
+    err_info: Option<BsonDocument>,
 }
 
 impl WriteError {
     fn plain(index: usize, code: i32, message: impl Into<String>) -> Self {
-        Self { index, code, message: message.into(), key_pattern: None, key_value: None }
+        Self { index, code, message: message.into(), key_pattern: None, key_value: None, err_info: None }
+    }
+
+    fn validation(index: usize, err_info: BsonDocument) -> Self {
+        Self {
+            index,
+            code: 121,
+            message: "Document failed validation".to_string(),
+            key_pattern: None,
+            key_value: None,
+            err_info: Some(err_info),
+        }
     }
 
     fn duplicate(index: usize, message: impl Into<String>, key_pattern: BsonDocument, key_value: BsonDocument) -> Self {
@@ -348,6 +350,7 @@ impl WriteError {
             message: message.into(),
             key_pattern: Some(key_pattern),
             key_value: Some(key_value),
+            err_info: None,
         }
     }
 }
@@ -394,6 +397,13 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         }
         if let Some(error) = parallel_array_error(&stored, &index_specs) {
             write_errors.push(WriteError::plain(index, error.code, error.message));
+            if ordered {
+                break;
+            }
+            continue;
+        }
+        if let Some(info) = insert_validation_failure(store, &namespace, &stored) {
+            write_errors.push(WriteError::validation(index, info));
             if ordered {
                 break;
             }
@@ -962,6 +972,12 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
             };
+            if let Some(info) = update_validation_failure(store, &namespace, &document, &updated) {
+                if !changes.is_empty() {
+                    store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                }
+                return Ok(write_reply(0, Some(0), &[WriteError::validation(index, info)]));
+            }
             if let Some(error) = parallel_array_error(&updated, &index_specs) {
                 // A parallel-array key cannot be indexed at all, so the real
                 // server reports a zeroed counter pair plus `writeErrors`.
@@ -1021,6 +1037,9 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             };
             if inserted.get("_id").is_none() {
                 inserted.fields.insert(0, ("_id".to_string(), BsonValue::ObjectId(generate_object_id())));
+            }
+            if let Some(info) = insert_validation_failure(store, &namespace, &inserted) {
+                return Ok(write_reply(0, Some(0), &[WriteError::validation(index, info)]));
             }
             let Some(identifier) = inserted.get("_id").cloned() else {
                 return Ok(write_reply(0, Some(0), &[]));
@@ -1149,6 +1168,9 @@ fn write_reply(count: i64, modified: Option<i64>, errors: &[WriteError]) -> Bson
                 }
                 if let Some(value) = &error.key_value {
                     entry.push("keyValue".to_string(), BsonValue::Document(value.clone()));
+                }
+                if let Some(info) = &error.err_info {
+                    entry.push("errInfo".to_string(), BsonValue::Document(info.clone()));
                 }
                 BsonValue::Document(entry)
             })
@@ -1339,6 +1361,46 @@ fn validate_negative_index(document: &BsonDocument, segments: &[&str]) -> Result
         }
     }
     Ok(())
+}
+
+/// Every value reachable by `segments`, traversing arrays field-wise so
+/// `a.b` over `[{b: 1}, {b: 2}]` yields both values.
+fn collect_values_at<'a>(document: &'a BsonDocument, segments: &[&str], out: &mut Vec<&'a BsonValue>) {
+    let Some((head, rest)) = segments.split_first()
+    else {
+        return;
+    };
+    if let Some(value) = document.get(head) {
+        collect_descend_values(value, rest, out);
+    }
+}
+
+fn collect_descend_values<'a>(value: &'a BsonValue, segments: &[&str], out: &mut Vec<&'a BsonValue>) {
+    let Some((head, rest)) = segments.split_first()
+    else {
+        out.push(value);
+        return;
+    };
+    match value {
+        BsonValue::Document(document) => {
+            if let Some(next) = document.get(head) {
+                collect_descend_values(next, rest, out);
+            }
+        }
+        BsonValue::Array(items) => {
+            if let Ok(index) = head.parse::<usize>() {
+                if let Some(next) = items.get(index) {
+                    collect_descend_values(next, rest, out);
+                }
+            }
+            else {
+                for item in items {
+                    collect_descend_values(item, segments, out);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 fn value_at<'a>(document: &'a BsonDocument, segments: &[&str]) -> Option<&'a BsonValue> {
@@ -1917,17 +1979,36 @@ pub fn kill_cursors(command: &BsonDocument, cursors: &mut CursorStore) -> Result
     Ok(response)
 }
 
-/// `listCollections`, backed by the namespaces actually present in storage.
+/// `listCollections` with `nameOnly`, `authorizedCollections`, and a general
+/// `filter` applied to the rendered collection descriptions.
 pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let database = command.database();
     let prefix = format!("{database}.");
-    let wanted = match command.get("filter") {
+    let name_only = match command.get("nameOnly") {
+        Some(BsonValue::Bool(flag)) => *flag,
+        Some(other) => {
+            return Err(CommandError::new(
+                14,
+                format!("BSON field 'listCollections.nameOnly' is the wrong type '{}', expected type 'bool'", bson_type_name(other)),
+            ));
+        }
+        None => false,
+    };
+    if let Some(other) = command.get("authorizedCollections") {
+        if !matches!(other, BsonValue::Bool(_)) {
+            return Err(CommandError::new(
+                14,
+                format!(
+                    "BSON field 'listCollections.authorizedCollections' is the wrong type '{}', expected type 'bool'",
+                    bson_type_name(other)
+                ),
+            ));
+        }
+    }
+    let filter = match command.get("filter") {
         Some(BsonValue::Document(filter)) => {
-            validate_listing_filter(filter)?;
-            match filter.get("name") {
-                Some(BsonValue::String(name)) => Some(name.clone()),
-                _ => None,
-            }
+            validate_filter(filter, "listCollections")?;
+            Some(filter)
         }
         _ => None,
     };
@@ -1938,19 +2019,847 @@ pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDoc
         else {
             continue;
         };
-        if let Some(wanted) = &wanted {
-            if collection != wanted {
-                continue;
-            }
-        }
         let mut entry = BsonDocument::new();
         entry.push("name".to_string(), BsonValue::String(collection.to_string()));
         entry.push("type".to_string(), BsonValue::String("collection".to_string()));
-        entry.push("options".to_string(), BsonValue::Document(BsonDocument::new()));
+        if name_only {
+            if let Some(filter) = filter {
+                if !document_matches(&entry, filter)? {
+                    continue;
+                }
+            }
+            entries.push(BsonValue::Document(entry));
+            continue;
+        }
+        let mut options = BsonDocument::new();
+        if let Some(validator) = collection_validator_value(store, &namespace) {
+            options.push("validator".to_string(), validator);
+        }
+        let stored = store.collection_options(&namespace);
+        if let Some(level) = &stored.validation_level {
+            options.push("validationLevel".to_string(), BsonValue::String(level.clone()));
+        }
+        if let Some(action) = &stored.validation_action {
+            options.push("validationAction".to_string(), BsonValue::String(action.clone()));
+        }
+        entry.push("options".to_string(), BsonValue::Document(options));
+        let mut info = BsonDocument::new();
+        info.push("readOnly".to_string(), BsonValue::Bool(false));
+        info.push("uuid".to_string(), collection_uuid(&namespace));
+        entry.push("info".to_string(), BsonValue::Document(info));
+        let mut id_index = BsonDocument::new();
+        id_index.push("v".to_string(), BsonValue::Int32(2));
+        let mut key = BsonDocument::new();
+        key.push("_id".to_string(), BsonValue::Int32(1));
+        id_index.push("key".to_string(), BsonValue::Document(key));
+        id_index.push("name".to_string(), BsonValue::String("_id_".to_string()));
+        entry.push("idIndex".to_string(), BsonValue::Document(id_index));
+        if let Some(filter) = filter {
+            if !document_matches(&entry, filter)? {
+                continue;
+            }
+        }
         entries.push(BsonValue::Document(entry));
     }
 
     Ok(cursor_reply(&format!("{database}.$cmd.listCollections"), "firstBatch", entries, 0))
+}
+
+/// A stable collection identifier derived from the namespace, so reopening a
+/// store keeps the `info.uuid` the catalog reported before.
+fn collection_uuid_bytes(namespace: &str) -> [u8; 16] {
+    let mut high: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut low: u64 = 0x9e37_79b9_7f4a_7c15;
+    for byte in namespace.bytes() {
+        high ^= u64::from(byte);
+        high = high.wrapping_mul(0x0000_0100_0000_01b3);
+        low ^= u64::from(byte).wrapping_add(0x9e37_79b9);
+        low = low.rotate_left(7).wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    let mut bytes = [0_u8; 16];
+    bytes[..8].copy_from_slice(&high.to_be_bytes());
+    bytes[8..].copy_from_slice(&low.to_be_bytes());
+    bytes
+}
+
+fn collection_uuid(namespace: &str) -> BsonValue {
+    BsonValue::Binary(BinaryData::new(4, collection_uuid_bytes(namespace).to_vec()))
+}
+
+/// UUID in the `8-4-4-4-12` textual form `mongod` uses inside error messages.
+fn collection_uuid_text(namespace: &str) -> String {
+    let bytes = collection_uuid_bytes(namespace);
+    format!(
+        "{}-{}-{}-{}-{}",
+        bytes[..4].iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+        bytes[4..6].iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+        bytes[6..8].iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+        bytes[8..10].iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+        bytes[10..].iter().map(|byte| format!("{byte:02x}")).collect::<String>()
+    )
+}
+
+/// `mongod 8.0.9` refuses a second `create` whose options differ from the
+/// stored ones and quotes the stored options in the message, uuid first.
+fn create_conflict_message(namespace: &str, options: &CollectionOptions) -> String {
+    let mut rendered = vec![format!("uuid: UUID(\"{}\")", collection_uuid_text(namespace))];
+    if let Some(validator) = &options.validator {
+        if let Ok(value) = json::from_json(validator) {
+            rendered.push(format!("validator: {}", render_shell_value(&value)));
+        }
+    }
+    if let Some(level) = &options.validation_level {
+        rendered.push(format!("validationLevel: \"{level}\""));
+    }
+    if let Some(action) = &options.validation_action {
+        rendered.push(format!("validationAction: \"{action}\""));
+    }
+    format!("namespace {namespace} already exists, but with different options: {{ {} }}", rendered.join(", "))
+}
+
+fn collection_validator_value(store: &Store, namespace: &str) -> Option<BsonValue> {
+    store.collection_options(namespace).validator.and_then(|validator| json::from_json(&validator).ok())
+}
+
+/// The validator schema, level, and action in force for a namespace. A missing
+/// `$jsonSchema` validator means no schema validation happens.
+fn collection_schema(store: &Store, namespace: &str) -> Option<(BsonDocument, String, String)> {
+    let options = store.collection_options(namespace);
+    let validator = options.validator.and_then(|value| json::from_json(&value).ok())?;
+    let BsonValue::Document(validator) = validator
+    else {
+        return None;
+    };
+    let schema = match validator.get("$jsonSchema") {
+        Some(BsonValue::Document(schema)) => schema.clone(),
+        _ => return None,
+    };
+    let level = options.validation_level.unwrap_or_else(|| "strict".to_string());
+    let action = options.validation_action.unwrap_or_else(|| "error".to_string());
+    Some((schema, level, action))
+}
+
+fn schema_rules(schema: &BsonDocument, document: &BsonDocument) -> Vec<BsonValue> {
+    let mut rules = Vec::new();
+    if let Some(BsonValue::String(expected)) = schema.get("bsonType") {
+        if expected != "object" {
+            let mut specified = BsonDocument::new();
+            specified.push("$jsonSchema".to_string(), BsonValue::Document(schema.clone()));
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("$jsonSchema".to_string()));
+            rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+            rule.push("reason".to_string(), BsonValue::String("expression did not evaluate to true".to_string()));
+            rules.push(BsonValue::Document(rule));
+            return rules;
+        }
+    }
+    if let Some(BsonValue::Bool(false)) = schema.get("additionalProperties") {
+        let properties = match schema.get("properties") {
+            Some(BsonValue::Document(properties)) => properties,
+            _ => &BsonDocument::new(),
+        };
+        let extra: Vec<String> =
+            document.fields.iter().filter(|(field, _)| properties.get(field).is_none()).map(|(field, _)| field.clone()).collect();
+        if !extra.is_empty() {
+            let mut specified = BsonDocument::new();
+            specified.push("additionalProperties".to_string(), BsonValue::Bool(false));
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("additionalProperties".to_string()));
+            rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+            rule.push(
+                "additionalProperties".to_string(),
+                BsonValue::Array(extra.into_iter().map(BsonValue::String).collect()),
+            );
+            rules.push(BsonValue::Document(rule));
+        }
+    }
+    if let Some(BsonValue::Array(required)) = schema.get("required") {
+        let missing: Vec<BsonValue> = required
+            .iter()
+            .filter_map(|requirement| match requirement {
+                BsonValue::String(field) if document.get(field).is_none() => Some(BsonValue::String(field.clone())),
+                _ => None,
+            })
+            .collect();
+        if !missing.is_empty() {
+            let mut specified = BsonDocument::new();
+            specified.push("required".to_string(), BsonValue::Array(required.clone()));
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("required".to_string()));
+            rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+            rule.push("missingProperties".to_string(), BsonValue::Array(missing));
+            rules.push(BsonValue::Document(rule));
+        }
+    }
+    if let Some(BsonValue::Document(properties)) = schema.get("properties") {
+        let mut unsatisfied = Vec::new();
+        for (field, property_schema) in &properties.fields {
+            let BsonValue::Document(property_schema) = property_schema else { continue };
+            let Some(value) = document.get(field) else { continue };
+            let details = schema_details(property_schema, value);
+            if details.is_empty() {
+                continue;
+            }
+            let mut entry = BsonDocument::new();
+            entry.push("propertyName".to_string(), BsonValue::String(field.clone()));
+            entry.push("details".to_string(), BsonValue::Array(details.into_iter().map(BsonValue::Document).collect()));
+            unsatisfied.push(BsonValue::Document(entry));
+        }
+        if !unsatisfied.is_empty() {
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("properties".to_string()));
+            rule.push("propertiesNotSatisfied".to_string(), BsonValue::Array(unsatisfied));
+            rules.push(BsonValue::Document(rule));
+        }
+    }
+    rules
+}
+
+fn schema_details(schema: &BsonDocument, value: &BsonValue) -> Vec<BsonDocument> {
+    let mut details = Vec::new();
+    if let Some(BsonValue::String(expected)) = schema.get("bsonType") {
+        let actual = bson_type_name(value);
+        if actual != expected {
+            let mut specified = BsonDocument::new();
+            specified.push("bsonType".to_string(), BsonValue::String(expected.clone()));
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("bsonType".to_string()));
+            rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+            rule.push("reason".to_string(), BsonValue::String("type did not match".to_string()));
+            rule.push("consideredValue".to_string(), value.clone());
+            rule.push("consideredType".to_string(), BsonValue::String(actual.to_string()));
+            details.push(rule);
+            return details;
+        }
+    }
+    if let Some(minimum) = schema.get("minimum") {
+        if let (Some(current), Some(limit)) = (number_of(value), number_of(minimum)) {
+            if current < limit {
+                let mut specified = BsonDocument::new();
+                specified.push("minimum".to_string(), minimum.clone());
+                let mut rule = BsonDocument::new();
+                rule.push("operatorName".to_string(), BsonValue::String("minimum".to_string()));
+                rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+                rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
+                rule.push("consideredValue".to_string(), value.clone());
+                details.push(rule);
+            }
+        }
+    }
+    if let Some(maximum) = schema.get("maximum") {
+        if let (Some(current), Some(limit)) = (number_of(value), number_of(maximum)) {
+            if current > limit {
+                let mut specified = BsonDocument::new();
+                specified.push("maximum".to_string(), maximum.clone());
+                let mut rule = BsonDocument::new();
+                rule.push("operatorName".to_string(), BsonValue::String("maximum".to_string()));
+                rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+                rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
+                rule.push("consideredValue".to_string(), value.clone());
+                details.push(rule);
+            }
+        }
+    }
+    if let (Some(BsonValue::Document(items)), BsonValue::Array(values)) = (schema.get("items"), value) {
+        for (index, item) in values.iter().enumerate() {
+            let item_details = schema_details(items, item);
+            if item_details.is_empty() {
+                continue;
+            }
+            let mut rule = BsonDocument::new();
+            rule.push("operatorName".to_string(), BsonValue::String("items".to_string()));
+            rule.push(
+                "reason".to_string(),
+                BsonValue::String("At least one item did not match the sub-schema".to_string()),
+            );
+            rule.push("itemIndex".to_string(), BsonValue::Int32(index as i32));
+            rule.push("details".to_string(), BsonValue::Array(item_details.into_iter().map(BsonValue::Document).collect()));
+            details.push(rule);
+        }
+    }
+    details
+}
+
+fn validation_err_info(document: &BsonDocument, rules: Vec<BsonValue>) -> BsonDocument {
+    let mut details = BsonDocument::new();
+    details.push("operatorName".to_string(), BsonValue::String("$jsonSchema".to_string()));
+    details.push("schemaRulesNotSatisfied".to_string(), BsonValue::Array(rules));
+    let mut info = BsonDocument::new();
+    info.push("failingDocumentId".to_string(), document.get("_id").cloned().unwrap_or(BsonValue::Null));
+    info.push("details".to_string(), BsonValue::Document(details));
+    info
+}
+
+/// Insert-path validation: `off` and `warn` never fail a write.
+fn insert_validation_failure(store: &Store, namespace: &str, document: &BsonDocument) -> Option<BsonDocument> {
+    let (schema, level, action) = collection_schema(store, namespace)?;
+    if level == "off" || action == "warn" {
+        return None;
+    }
+    let rules = schema_rules(&schema, document);
+    if rules.is_empty() {
+        return None;
+    }
+    Some(validation_err_info(document, rules))
+}
+
+/// Update-path validation: `moderate` skips documents that were already
+/// invalid before the update, matching the server.
+fn update_validation_failure(
+    store: &Store,
+    namespace: &str,
+    original: &BsonDocument,
+    updated: &BsonDocument,
+) -> Option<BsonDocument> {
+    let (schema, level, action) = collection_schema(store, namespace)?;
+    if level == "off" || action == "warn" {
+        return None;
+    }
+    if level == "moderate" {
+        let before = schema_rules(&schema, original);
+        if !before.is_empty() {
+            return None;
+        }
+    }
+    let rules = schema_rules(&schema, updated);
+    if rules.is_empty() {
+        return None;
+    }
+    Some(validation_err_info(updated, rules))
+}
+
+fn validation_options(command: &BsonDocument) -> Result<CollectionOptions, CommandError> {
+    let mut options = CollectionOptions::default();
+    if let Some(validator) = command.get("validator") {
+        let BsonValue::Document(validator) = validator
+        else {
+            return Err(CommandError::new(2, "The 'validator' field must be an object".to_string()));
+        };
+        options.validator = Some(json::to_json(&BsonValue::Document(validator.clone())));
+    }
+    if let Some(level) = command.get("validationLevel") {
+        let BsonValue::String(level) = level
+        else {
+            return Err(CommandError::new(2, "The 'validationLevel' field must be a string".to_string()));
+        };
+        if !matches!(level.as_str(), "off" | "strict" | "moderate") {
+            return Err(CommandError::new(2, format!("Enumeration value '{level}' for field 'validationLevel' is not a valid value")));
+        }
+        options.validation_level = Some(level.clone());
+    }
+    if let Some(action) = command.get("validationAction") {
+        let BsonValue::String(action) = action
+        else {
+            return Err(CommandError::new(2, "The 'validationAction' field must be a string".to_string()));
+        };
+        if !matches!(action.as_str(), "error" | "warn") {
+            return Err(CommandError::new(2, format!("Enumeration value '{action}' for field 'validationAction' is not a valid value")));
+        }
+        options.validation_action = Some(action.clone());
+    }
+    Ok(options)
+}
+
+/// `create` with an optional validator, validation level, and action.
+pub fn create(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let Some(collection) = command.get("create").and_then(|value| match value {
+        BsonValue::String(name) => Some(name.clone()),
+        _ => None,
+    })
+    else {
+        return Err(CommandError::new(73, "create command missing collection name"));
+    };
+    let namespace = format!("{}.{collection}", command.database());
+    let options = validation_options(command)?;
+    // `mongod 8.0.9` treats `create` as idempotent when the stored options
+    // match, and refuses only when they differ.
+    if store.namespace_exists(&namespace) {
+        let existing = store.collection_options(&namespace);
+        if existing != options {
+            return Err(CommandError::new(48, create_conflict_message(&namespace, &existing)));
+        }
+        let mut response = BsonDocument::new();
+        response.push("ok".to_string(), BsonValue::Double(1.0));
+        return Ok(response);
+    }
+    store
+        .create_collection(&namespace, options)
+        .map_err(|error| CommandError::new(2, format!("create failed: {error}")))?;
+    let mut response = BsonDocument::new();
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
+}
+
+/// `collMod` updating validator, validation level, and validation action in
+/// place.
+pub fn coll_mod(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let Some(collection) = command.get("collMod").and_then(|value| match value {
+        BsonValue::String(name) => Some(name.clone()),
+        _ => None,
+    })
+    else {
+        return Err(CommandError::new(73, "collMod command missing collection name"));
+    };
+    let namespace = format!("{}.{collection}", command.database());
+    if !store.namespace_exists(&namespace) {
+        return Err(CommandError::new(26, "ns does not exist".to_string()));
+    }
+    let mut options = store.collection_options(&namespace);
+    let changes = validation_options(command)?;
+    if changes.validator.is_some() {
+        options.validator = changes.validator;
+    }
+    if changes.validation_level.is_some() {
+        options.validation_level = changes.validation_level;
+    }
+    if changes.validation_action.is_some() {
+        options.validation_action = changes.validation_action;
+    }
+    store
+        .set_collection_options(&namespace, options)
+        .map_err(|error| CommandError::new(2, format!("collMod failed: {error}")))?;
+    let mut response = BsonDocument::new();
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
+}
+
+fn command_bool(command: &BsonDocument, field: &str, default: bool) -> bool {
+    match command.get(field) {
+        Some(BsonValue::Bool(flag)) => *flag,
+        _ => default,
+    }
+}
+
+fn find_projection(documents: Vec<BsonDocument>, fields: Option<&BsonValue>) -> Result<Vec<BsonDocument>, CommandError> {
+    match fields {
+        Some(BsonValue::Document(specification)) => project_stage(&documents, specification),
+        _ => Ok(documents),
+    }
+}
+
+/// `findAndModify`: `remove`, `new`, `upsert`, `fields`, and `sort`.
+pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let namespace = namespace_from_command(command, "findAndModify")
+        .ok_or_else(|| CommandError::new(73, "findAndModify command missing collection name"))?;
+    let empty = BsonDocument::new();
+    let filter = match command.get("query") {
+        Some(BsonValue::Document(filter)) => filter,
+        _ => &empty,
+    };
+    validate_filter(filter, "findAndModify")?;
+    let remove = command_bool(command, "remove", false);
+    let return_new = command_bool(command, "new", false);
+    let upsert = command_bool(command, "upsert", false);
+    let update = match command.get("update") {
+        Some(BsonValue::Document(update)) => Some(update),
+        _ => None,
+    };
+    if remove && update.is_some() {
+        return Err(CommandError::new(
+            9,
+            "Cannot specify both an update and remove=true".to_string(),
+        ));
+    }
+    if !remove && update.is_none() {
+        return Err(CommandError::new(
+            9,
+            "Either an update or remove=true must be specified".to_string(),
+        ));
+    }
+    if remove && return_new {
+        return Err(CommandError::new(
+            9,
+            "Cannot specify both new=true and remove=true; 'remove' always returns the deleted document".to_string(),
+        ));
+    }
+
+    let sort = parse_sort(command.get("sort"));
+    let mut documents = collect_matching(store, &namespace, filter)?;
+    sort_documents(&mut documents, &sort);
+    let matched = documents.first().cloned();
+
+    if remove {
+        let mut last_error = BsonDocument::new();
+        if let Some(document) = &matched {
+            last_error.push("n".to_string(), BsonValue::Int32(1));
+            if let Some(identifier) = document.get("_id") {
+                store.delete(&namespace, &[value_to_key(identifier)]).map_err(|error| CommandError::new(2, error.to_string()))?;
+            }
+            let value = find_projection(vec![document.clone()], command.get("fields"))?;
+            return Ok(find_and_modify_reply(last_error, value.into_iter().next()));
+        }
+        last_error.push("n".to_string(), BsonValue::Int32(0));
+        return Ok(find_and_modify_reply(last_error, None));
+    }
+
+    let update_document = update.expect("update checked above");
+    let operator_update = update_document.fields.iter().any(|(field, _)| field.starts_with('$'));
+    let index_specs = store.index_specs(&namespace);
+    if let Some(document) = &matched {
+        let identifier_value = document.get("_id").cloned();
+        let identifier = identifier_value.as_ref().map(describe_id).unwrap_or_else(|| "<missing>".to_string());
+        let updated = if operator_update {
+            apply_update(document, update_document, &identifier, filter)?
+        }
+        else {
+            build_replacement(update_document, identifier_value.as_ref())?
+        };
+        if let Some(info) = update_validation_failure(store, &namespace, document, &updated) {
+            return Ok(find_and_modify_validation_failure(info));
+        }
+        if let Some(error) = parallel_array_error(&updated, &index_specs) {
+            return Err(CommandError::new(error.code, error.message));
+        }
+        let key = value_to_key(identifier_value.as_ref().unwrap_or(&BsonValue::Null));
+        store
+            .replace(&namespace, &[(key, encode_bson(&updated))])
+            .map_err(|error| CommandError::new(2, error.to_string()))?;
+        let mut last_error = BsonDocument::new();
+        last_error.push("n".to_string(), BsonValue::Int32(1));
+        last_error.push("updatedExisting".to_string(), BsonValue::Bool(true));
+        let selected = if return_new { updated } else { document.clone() };
+        let value = find_projection(vec![selected], command.get("fields"))?;
+        return Ok(find_and_modify_reply(last_error, value.into_iter().next()));
+    }
+
+    if upsert {
+        let mut inserted = if operator_update {
+            let base = upsert_base(filter);
+            let identifier = base.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
+            apply_update(&base, update_document, &identifier, filter)?
+        }
+        else {
+            let query_identifier = match filter.get("_id") {
+                Some(BsonValue::Document(operators)) if has_operator(operators) => None,
+                Some(value) => Some(value.clone()),
+                None => None,
+            };
+            build_replacement(update_document, query_identifier.as_ref())?
+        };
+        if inserted.get("_id").is_none() {
+            inserted.fields.insert(0, ("_id".to_string(), BsonValue::ObjectId(generate_object_id())));
+        }
+        if let Some(info) = insert_validation_failure(store, &namespace, &inserted) {
+            return Ok(find_and_modify_validation_failure(info));
+        }
+        let identifier = inserted.get("_id").cloned().unwrap_or(BsonValue::Null);
+        let candidates = vec![(0_usize, inserted.clone(), identifier.clone())];
+        let mut write_errors = Vec::new();
+        commit_insert(store, &namespace, &candidates, &Vec::new(), true, &mut write_errors)?;
+        if let Some(error) = write_errors.first() {
+            return Err(CommandError::new(error.code, error.message.clone()));
+        }
+        let mut last_error = BsonDocument::new();
+        last_error.push("n".to_string(), BsonValue::Int32(1));
+        last_error.push("updatedExisting".to_string(), BsonValue::Bool(false));
+        last_error.push("upserted".to_string(), identifier);
+        let selected = if return_new { Some(inserted) } else { None };
+        let value = match selected {
+            Some(document) => find_projection(vec![document], command.get("fields"))?.into_iter().next(),
+            None => None,
+        };
+        return Ok(find_and_modify_reply(last_error, value));
+    }
+
+    let mut last_error = BsonDocument::new();
+    last_error.push("n".to_string(), BsonValue::Int32(0));
+    last_error.push("updatedExisting".to_string(), BsonValue::Bool(false));
+    Ok(find_and_modify_reply(last_error, None))
+}
+
+fn find_and_modify_reply(last_error: BsonDocument, value: Option<BsonDocument>) -> BsonDocument {
+    let mut response = BsonDocument::new();
+    response.push("lastErrorObject".to_string(), BsonValue::Document(last_error));
+    response.push("value".to_string(), value.map(BsonValue::Document).unwrap_or(BsonValue::Null));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response
+}
+
+fn find_and_modify_validation_failure(info: BsonDocument) -> BsonDocument {
+    let mut last_error = BsonDocument::new();
+    last_error.push("n".to_string(), BsonValue::Int32(0));
+    last_error.push("updatedExisting".to_string(), BsonValue::Bool(false));
+    let mut response = BsonDocument::new();
+    response.push("lastErrorObject".to_string(), BsonValue::Document(last_error));
+    response.push("value".to_string(), BsonValue::Null);
+    response.push("code".to_string(), BsonValue::Int32(121));
+    response.push("errmsg".to_string(), BsonValue::String("Document failed validation".to_string()));
+    response.push("errInfo".to_string(), BsonValue::Document(info));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response
+}
+
+/// `distinct`: nested paths, one-level array flattening, query filtering, and
+/// first-occurrence ordering.
+pub fn distinct(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let namespace = namespace_from_command(command, "distinct")
+        .ok_or_else(|| CommandError::new(73, "distinct command missing collection name"))?;
+    let Some(key) = command.get("key") else {
+        return Err(CommandError::new(40414, "BSON field 'distinct.key' is missing but a required field"));
+    };
+    let BsonValue::String(key) = key
+    else {
+        return Err(CommandError::new(
+            14,
+            format!("BSON field 'distinctCommandRequest.key' is the wrong type '{}', expected type 'string'", bson_type_name(key)),
+        ));
+    };
+    let empty = BsonDocument::new();
+    let filter = match command.get("query") {
+        Some(BsonValue::Document(filter)) => filter,
+        _ => &empty,
+    };
+    validate_filter(filter, "distinct")?;
+
+    let segments: Vec<&str> = key.split('.').collect();
+    let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
+    let mut values = Vec::new();
+    for (_key, payload) in store.scan(&namespace) {
+        let Ok(document) = parse_bson(&payload)
+        else {
+            continue;
+        };
+        if !document_matches(&document, filter)? {
+            continue;
+        }
+        let mut matched = Vec::new();
+        collect_values_at(&document, &segments, &mut matched);
+        for value in matched {
+            collect_distinct(value, &mut seen, &mut values);
+        }
+    }
+    // `mongod` collects distinct values in a sorted BSON set, so the reply is
+    // ordered by canonical type and value instead of by scan order.
+    values.sort_by(compare_values);
+    let mut response = BsonDocument::new();
+    response.push("values".to_string(), BsonValue::Array(values));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
+}
+
+fn collect_distinct(value: &BsonValue, seen: &mut BTreeSet<Vec<u8>>, values: &mut Vec<BsonValue>) {
+    match value {
+        BsonValue::Array(items) => {
+            for item in items {
+                if seen.insert(value_to_key(item)) {
+                    values.push(item.clone());
+                }
+            }
+        }
+        other => {
+            if seen.insert(value_to_key(other)) {
+                values.push(other.clone());
+            }
+        }
+    }
+}
+
+/// `bulkWrite` over `admin`, with ordered / unordered execution and the
+/// aggregate counters the server reports alongside per-operation results.
+pub fn bulk_write(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    if command.database() != "admin" {
+        return Err(CommandError::new(13, "bulkWrite may only be run against the admin database.".to_string()));
+    }
+    let Some(BsonValue::Array(operations)) = command.get("ops") else {
+        return Err(CommandError::new(40414, "BSON field 'bulkWrite.ops' is missing but a required field"));
+    };
+    if operations.is_empty() || operations.len() > 100_000 {
+        return Err(CommandError::new(
+            16,
+            format!("Write batch sizes must be between 1 and 100000. Got {} operations.", operations.len()),
+        ));
+    }
+    let Some(BsonValue::Array(namespaces)) = command.get("nsInfo") else {
+        return Err(CommandError::new(40414, "BSON field 'bulkWrite.nsInfo' is missing but a required field"));
+    };
+    let names: Vec<String> = namespaces
+        .iter()
+        .map(|entry| match entry {
+            BsonValue::Document(entry) => match entry.get("ns") {
+                Some(BsonValue::String(name)) => Ok(name.clone()),
+                _ => Err(CommandError::new(2, "nsInfo entries require a string 'ns' field".to_string())),
+            },
+            _ => Err(CommandError::new(2, "nsInfo entries must be documents".to_string())),
+        })
+        .collect::<Result<_, _>>()?;
+    let ordered = command_bool(command, "ordered", true);
+    let errors_only = command_bool(command, "errorsOnly", false);
+
+    let mut results = Vec::new();
+    let mut n_errors = 0_i64;
+    let mut n_inserted = 0_i64;
+    let mut n_matched = 0_i64;
+    let mut n_modified = 0_i64;
+    let mut n_upserted = 0_i64;
+    let mut n_deleted = 0_i64;
+
+    for (index, operation) in operations.iter().enumerate() {
+        let BsonValue::Document(operation) = operation
+        else {
+            return Err(CommandError::new(2, "BulkWrite ops entry must be a document".to_string()));
+        };
+        let kind = ["insert", "update", "delete"]
+            .into_iter()
+            .find(|field| operation.get(field).is_some())
+            .ok_or_else(|| CommandError::new(2, "BulkWrite ops entry must be an insert, update, or delete".to_string()))?;
+        let Some(BsonValue::Int32(namespace_index)) = operation.get(kind) else {
+            return Err(CommandError::new(
+                2,
+                format!(
+                    "BulkWrite ops entry {} has an invalid nsInfo index.",
+                    render_shell_value(&BsonValue::Document(operation.clone()))
+                ),
+            ));
+        };
+        let namespace_index = usize::try_from(*namespace_index).ok();
+        let Some(namespace_index) = namespace_index.filter(|index| *index < names.len()) else {
+            return Err(CommandError::new(
+                2,
+                format!(
+                    "BulkWrite ops entry {} has an invalid nsInfo index.",
+                    render_shell_value(&BsonValue::Document(operation.clone()))
+                ),
+            ));
+        };
+        let namespace = &names[namespace_index];
+        let (database, collection) = namespace
+            .split_once('.')
+            .ok_or_else(|| CommandError::new(2, format!("nsInfo namespace '{namespace}' is not fully qualified")))?;
+
+        let reply = match kind {
+            "insert" => {
+                let Some(document) = operation.get("document") else {
+                    return Err(CommandError::new(2, "BulkWrite insert entry requires a 'document' field".to_string()));
+                };
+                let mut request = BsonDocument::new();
+                request.push("insert".to_string(), BsonValue::String(collection.to_string()));
+                request.push("documents".to_string(), BsonValue::Array(vec![document.clone()]));
+                request.push("$db".to_string(), BsonValue::String(database.to_string()));
+                insert(&request, store)?
+            }
+            "update" => {
+                let Some(filter) = operation.get("filter") else {
+                    return Err(CommandError::new(2, "BulkWrite update entry requires a 'filter' field".to_string()));
+                };
+                let Some(update_mods) = operation.get("updateMods") else {
+                    return Err(CommandError::new(2, "BulkWrite update entry requires an 'updateMods' field".to_string()));
+                };
+                let mut specification = BsonDocument::new();
+                specification.push("q".to_string(), filter.clone());
+                specification.push("u".to_string(), update_mods.clone());
+                if let Some(value) = operation.get("multi") {
+                    specification.push("multi".to_string(), value.clone());
+                }
+                if let Some(value) = operation.get("upsert") {
+                    specification.push("upsert".to_string(), value.clone());
+                }
+                let mut request = BsonDocument::new();
+                request.push("update".to_string(), BsonValue::String(collection.to_string()));
+                request.push("updates".to_string(), BsonValue::Array(vec![BsonValue::Document(specification)]));
+                request.push("$db".to_string(), BsonValue::String(database.to_string()));
+                update(&request, store)?
+            }
+            _ => {
+                let Some(filter) = operation.get("filter") else {
+                    return Err(CommandError::new(2, "BulkWrite delete entry requires a 'filter' field".to_string()));
+                };
+                let limit = if command_bool(operation, "multi", false) { 0 } else { 1 };
+                let mut specification = BsonDocument::new();
+                specification.push("q".to_string(), filter.clone());
+                specification.push("limit".to_string(), BsonValue::Int32(limit));
+                let mut request = BsonDocument::new();
+                request.push("delete".to_string(), BsonValue::String(collection.to_string()));
+                request.push("deletes".to_string(), BsonValue::Array(vec![BsonValue::Document(specification)]));
+                request.push("$db".to_string(), BsonValue::String(database.to_string()));
+                delete(&request, store)?
+            }
+        };
+
+        let write_errors = match reply.get("writeErrors") {
+            Some(BsonValue::Array(errors)) => errors,
+            _ => &Vec::new(),
+        };
+        let failed = !write_errors.is_empty();
+        let mut result = BsonDocument::new();
+        result.push("ok".to_string(), BsonValue::Double(if failed { 0.0 } else { 1.0 }));
+        result.push("idx".to_string(), BsonValue::Int32(index as i32));
+        if let Some(first) = write_errors.first() {
+            let BsonValue::Document(first) = first else {
+                return Err(CommandError::new(2, "writeErrors entries must be documents".to_string()));
+            };
+            for (field, value) in &first.fields {
+                if field == "index" {
+                    continue;
+                }
+                result.push(field.clone(), value.clone());
+            }
+            result.push("n".to_string(), BsonValue::Int32(0));
+            n_errors += 1;
+        }
+        else {
+            let n = reply_count(&reply, "n");
+            match kind {
+                "insert" => {
+                    n_inserted += n;
+                    result.push("n".to_string(), count_value(n));
+                }
+                "update" => {
+                    if let Some(upserted) = reply.get("upserted") {
+                        n_upserted += 1;
+                        result.push("n".to_string(), count_value(n));
+                        let modified = reply_count(&reply, "nModified");
+                        n_modified += modified;
+                        result.push("nModified".to_string(), count_value(modified));
+                        let upserted = match upserted {
+                            BsonValue::Array(items) => items.first().and_then(|item| match item {
+                                BsonValue::Document(entry) => entry.get("_id").cloned(),
+                                _ => None,
+                            }),
+                            other => Some(other.clone()),
+                        };
+                        if let Some(identifier) = upserted {
+                            let mut entry = BsonDocument::new();
+                            entry.push("_id".to_string(), identifier);
+                            result.push("upserted".to_string(), BsonValue::Document(entry));
+                        }
+                    }
+                    else {
+                        n_matched += n;
+                        let modified = reply_count(&reply, "nModified");
+                        n_modified += modified;
+                        result.push("n".to_string(), count_value(n));
+                        result.push("nModified".to_string(), count_value(modified));
+                    }
+                }
+                _ => {
+                    n_deleted += n;
+                    result.push("n".to_string(), count_value(n));
+                }
+            }
+        }
+
+        if !errors_only || failed {
+            results.push(BsonValue::Document(result));
+        }
+        if failed && ordered {
+            break;
+        }
+    }
+
+    let mut cursor = BsonDocument::new();
+    cursor.push("id".to_string(), BsonValue::Int64(0));
+    cursor.push("firstBatch".to_string(), BsonValue::Array(results));
+    cursor.push("ns".to_string(), BsonValue::String("admin.$cmd.bulkWrite".to_string()));
+    let mut response = BsonDocument::new();
+    response.push("cursor".to_string(), BsonValue::Document(cursor));
+    response.push("nErrors".to_string(), count_value(n_errors));
+    response.push("nInserted".to_string(), count_value(n_inserted));
+    response.push("nMatched".to_string(), count_value(n_matched));
+    response.push("nModified".to_string(), count_value(n_modified));
+    response.push("nUpserted".to_string(), count_value(n_upserted));
+    response.push("nDeleted".to_string(), count_value(n_deleted));
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
 }
 
 /// `listDatabases`, derived from the stored namespaces.
@@ -3139,6 +4048,15 @@ fn rule_is_exclusion(value: &BsonValue) -> bool {
 
 fn count_value(count: i64) -> BsonValue {
     i32::try_from(count).map(BsonValue::Int32).unwrap_or(BsonValue::Int64(count))
+}
+
+fn reply_count(reply: &BsonDocument, field: &str) -> i64 {
+    match reply.get(field) {
+        Some(BsonValue::Int32(value)) => i64::from(*value),
+        Some(BsonValue::Int64(value)) => *value,
+        Some(BsonValue::Double(value)) => *value as i64,
+        _ => 0,
+    }
 }
 
 fn parse_sort(sort: Option<&BsonValue>) -> Vec<(String, i32)> {

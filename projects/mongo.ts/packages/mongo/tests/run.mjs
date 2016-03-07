@@ -197,9 +197,48 @@ function runCase(testCase) {
                 const command = { killCursors: step.collection, cursors: step.ids }
                 return JSON.parse(binding.killCursors(cursorTable(), commandText(testCase, step, command)))
             }
+            case 'findAndModify': {
+                const command = { findAndModify: step.collection }
+                for (const key of ['query', 'sort', 'remove', 'update', 'new', 'fields', 'upsert']) {
+                    if (step[key] !== undefined) command[key] = step[key]
+                }
+                return JSON.parse(binding.findAndModify(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'distinct': {
+                const command = { distinct: step.collection, key: step.key }
+                if (step.query !== undefined) command.query = step.query
+                return JSON.parse(binding.distinct(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'bulkWrite': {
+                const command = { bulkWrite: 1, ops: step.ops }
+                if (step.nsInfo !== undefined) command.nsInfo = step.nsInfo
+                if (step.ordered !== undefined) command.ordered = step.ordered
+                if (step.errorsOnly !== undefined) command.errorsOnly = step.errorsOnly
+                // `bulkWrite` is only accepted against `admin`; the namespaces
+                // it writes are taken from `nsInfo`.
+                return JSON.parse(
+                    binding.bulkWrite(storeOf(step.store), commandText(testCase, { ...step, db: step.db ?? 'admin' }, command))
+                )
+            }
+            case 'create': {
+                const command = { create: step.collection }
+                for (const key of ['validator', 'validationLevel', 'validationAction']) {
+                    if (step[key] !== undefined) command[key] = step[key]
+                }
+                return JSON.parse(binding.create(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'collMod': {
+                const command = { collMod: step.collection }
+                for (const key of ['validator', 'validationLevel', 'validationAction']) {
+                    if (step[key] !== undefined) command[key] = step[key]
+                }
+                return JSON.parse(binding.collMod(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'listCollections': {
                 const command = { listCollections: 1 }
-                if (step.filter !== undefined) command.filter = step.filter
+                for (const key of ['filter', 'nameOnly', 'authorizedCollections']) {
+                    if (step[key] !== undefined) command[key] = step[key]
+                }
                 return JSON.parse(binding.listCollections(storeOf(step.store), commandText(testCase, step, command)))
             }
             case 'createIndexes': {

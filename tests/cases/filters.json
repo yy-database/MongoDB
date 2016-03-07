@@ -189,21 +189,33 @@
             ]
         },
         {
-            "id": "filter.reject.listing_field",
-            "surface": "error",
-            "program": [{ "op": "open", "store": "s" }, { "op": "listCollections", "filter": { "type": "collection" }, "as": "r" }],
+            "id": "filter.listing.type_filter",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "create", "collection": "items" },
+                { "op": "listCollections", "filter": { "type": "collection" }, "as": "r" }
+            ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "unsupported listCollections filter field: type (fieldIndex: 0)" }
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/name", "equals": "items" },
+                { "at": "/r/cursor/firstBatch/0/type", "equals": "collection" },
+                { "at": "/r/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         },
         {
-            "id": "filter.reject.listing_operator",
-            "surface": "error",
-            "program": [{ "op": "open", "store": "s" }, { "op": "listCollections", "filter": { "name": { "$regex": "^a" } }, "as": "r" }],
+            "id": "filter.listing.regex_filter",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "create", "collection": "items" },
+                { "op": "create", "collection": "other" },
+                { "op": "listCollections", "filter": { "name": { "$regex": "^oth" } }, "as": "r" }
+            ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "2" } },
-                { "at": "/r/errmsg", "equals": "unknown operator: $regex (operation: listCollections, field: \"name\", fieldIndex: 0, operatorIndex: 0)" }
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/name", "equals": "other" },
+                { "at": "/r/ok", "equals": { "$numberDouble": "1.0" } }
             ]
         }
     ]

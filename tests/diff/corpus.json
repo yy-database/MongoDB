@@ -1,7 +1,7 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 130,
+  "count": 198,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
@@ -10,9 +10,14 @@
     "delete": 8,
     "insert": 10,
     "indexes": 12,
-    "cursor": 8
+    "cursor": 8,
+    "findAndModify": 18,
+    "distinct": 11,
+    "bulkWrite": 15,
+    "validators": 16,
+    "listCollections": 8
   },
-  "digest": "678d48e2c67e10a40d0b426858fe980a7f9df4f0e5d804a89df95e32d3b67f3a",
+  "digest": "09be908c7805e3f35840fcddb3f9043746e678b1dbe486085f4083051cea3e78",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -12586,6 +12591,3935 @@
         }
       ],
       "seed": 20308620
+    },
+    {
+      "id": "diff.findAndModify.update_old",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_0",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 11
+            }
+          },
+          "collection": "diff_famod_0"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.update_new",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_1",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_1",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 11
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_1"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.update_inc",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_2",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_2",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 2
+          },
+          "update": {
+            "$inc": {
+              "score": 5
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_2"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.fields_include",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_3",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_3",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 3
+          },
+          "update": {
+            "$set": {
+              "score": 31
+            }
+          },
+          "fields": {
+            "name": 1,
+            "score": 1
+          },
+          "new": true,
+          "collection": "diff_famod_3"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.fields_exclude",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_4",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_4",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 4
+          },
+          "update": {
+            "$set": {
+              "score": 41
+            }
+          },
+          "fields": {
+            "grp": 0
+          },
+          "new": true,
+          "collection": "diff_famod_4"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.sort_desc",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_5",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_5",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "grp": "a"
+          },
+          "sort": {
+            "score": -1
+          },
+          "update": {
+            "$set": {
+              "picked": true
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_5"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.sort_asc_fields",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_6",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_6",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "grp": "b"
+          },
+          "sort": {
+            "score": 1
+          },
+          "update": {
+            "$set": {
+              "picked": true
+            }
+          },
+          "fields": {
+            "score": 1
+          },
+          "collection": "diff_famod_6"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.no_match",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_7",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_7",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "update": {
+            "$set": {
+              "name": "nobody"
+            }
+          },
+          "collection": "diff_famod_7"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.upsert_new",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_8",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_8",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "update": {
+            "$set": {
+              "score": 7
+            }
+          },
+          "upsert": true,
+          "new": true,
+          "collection": "diff_famod_8"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 99
+          },
+          "collection": "diff_famod_8"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.upsert_old_null",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_9",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_9",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 98
+          },
+          "update": {
+            "$set": {
+              "score": 8
+            }
+          },
+          "upsert": true,
+          "collection": "diff_famod_9"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.upsert_equality_fields",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_10",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_10",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "name": "zeta"
+          },
+          "update": {
+            "$set": {
+              "score": 9
+            }
+          },
+          "upsert": true,
+          "new": true,
+          "collection": "diff_famod_10"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.upsert_replacement",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_11",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_11",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 97
+          },
+          "update": {
+            "score": 5,
+            "grp": "z"
+          },
+          "upsert": true,
+          "new": true,
+          "collection": "diff_famod_11"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.remove_old",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_12",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_12",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 3
+          },
+          "remove": true,
+          "collection": "diff_famod_12"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 3
+          },
+          "collection": "diff_famod_12"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.remove_no_match",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_13",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_13",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "remove": true,
+          "collection": "diff_famod_13"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.remove_fields",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_14",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_14",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 4
+          },
+          "remove": true,
+          "fields": {
+            "grp": 1
+          },
+          "collection": "diff_famod_14"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.error_update_and_remove",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_15",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_15",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 1
+            }
+          },
+          "remove": true,
+          "collection": "diff_famod_15"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.error_remove_new",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_16",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_16",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "remove": true,
+          "new": true,
+          "collection": "diff_famod_16"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.findAndModify.error_missing_update",
+      "cluster": "findAndModify",
+      "collection": "diff_famod_17",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_famod_17",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "collection": "diff_famod_17"
+        }
+      ],
+      "seed": 20316539
+    },
+    {
+      "id": "diff.distinct.array_flatten",
+      "cluster": "distinct",
+      "collection": "diff_distinct_0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_0",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "tags",
+          "collection": "diff_distinct_0"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.array_reversed",
+      "cluster": "distinct",
+      "collection": "diff_distinct_1",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_1",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "tags",
+          "collection": "diff_distinct_1"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 2
+          },
+          "projection": {
+            "tags": 1
+          },
+          "collection": "diff_distinct_1"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.nested_path",
+      "cluster": "distinct",
+      "collection": "diff_distinct_2",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_2",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "a.b",
+          "collection": "diff_distinct_2"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.missing_key",
+      "cluster": "distinct",
+      "collection": "diff_distinct_3",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_3",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "ghost",
+          "collection": "diff_distinct_3"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.query_filter",
+      "cluster": "distinct",
+      "collection": "diff_distinct_4",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_4",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "tags",
+          "query": {
+            "grp": "a"
+          },
+          "collection": "diff_distinct_4"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.query_no_match",
+      "cluster": "distinct",
+      "collection": "diff_distinct_5",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_5",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "tags",
+          "query": {
+            "grp": "z"
+          },
+          "collection": "diff_distinct_5"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.dotted_into_array",
+      "cluster": "distinct",
+      "collection": "diff_distinct_6",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_6",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "items.qty",
+          "collection": "diff_distinct_6"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.empty_and_scalar",
+      "cluster": "distinct",
+      "collection": "diff_distinct_7",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_7",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "items",
+          "collection": "diff_distinct_7"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.numeric_equivalence",
+      "cluster": "distinct",
+      "collection": "diff_distinct_8",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_8",
+          "documents": [
+            {
+              "_id": 1,
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "v": {
+                "$numberDouble": "1.0"
+              }
+            },
+            {
+              "_id": 3,
+              "v": {
+                "$numberLong": "1"
+              }
+            },
+            {
+              "_id": 4,
+              "v": {
+                "$numberDouble": "2.5"
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "v",
+          "collection": "diff_distinct_8"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.nested_arrays",
+      "cluster": "distinct",
+      "collection": "diff_distinct_9",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_9",
+          "documents": [
+            {
+              "_id": 1,
+              "n": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            },
+            {
+              "_id": 2,
+              "n": [
+                [
+                  2
+                ],
+                4
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": "n",
+          "collection": "diff_distinct_9"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.distinct.bad_key_type",
+      "cluster": "distinct",
+      "collection": "diff_distinct_10",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_distinct_10",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "distinct",
+          "key": 5,
+          "collection": "diff_distinct_10"
+        }
+      ],
+      "seed": 20324458
+    },
+    {
+      "id": "diff.bulkWrite.insert_single",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_0",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_0",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_0"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 10,
+                "score": 100
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.insert_batch",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_1",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_1",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_1",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_1"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 11,
+                "score": 110
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 12,
+                "score": 120
+              }
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_1",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_1"
+            }
+          ],
+          "op": "find",
+          "filter": {
+            "_id": {
+              "$gte": 11
+            }
+          },
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.mixed_ops",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_2",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_2",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_2",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_2"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 4,
+                "score": 40
+              }
+            },
+            {
+              "update": 0,
+              "filter": {
+                "_id": 1
+              },
+              "updateMods": {
+                "$inc": {
+                  "score": 1
+                }
+              }
+            },
+            {
+              "delete": 0,
+              "filter": {
+                "_id": 3
+              }
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_2",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_2"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.update_multi",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_3",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_3",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_3",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_3"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "grp": "a"
+              },
+              "updateMods": {
+                "$set": {
+                  "flag": true
+                }
+              },
+              "multi": true
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_3",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_3"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.update_no_match",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_4",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_4",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_4",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_4"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 99
+              },
+              "updateMods": {
+                "$set": {
+                  "flag": true
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.upsert_missing",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_5",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_5",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_5",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_5"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 7
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 70
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.upsert_match_existing",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_6",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_6",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_6",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_6"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 2
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 21
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.ordered_duplicate_stops",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_7",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_7",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_7",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_7"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": true,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 20
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 21
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.unordered_continues",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_8",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_8",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_8",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_8"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 20
+              }
+            },
+            {
+              "update": 0,
+              "filter": {
+                "_id": 2
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 21
+                }
+              }
+            },
+            {
+              "delete": 0,
+              "filter": {
+                "_id": 3
+              }
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_8",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_8"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.errors_only",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_9",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_9",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_9",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_9"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "errorsOnly": true,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 30
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.delete_many",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_10",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_10",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_10",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_10"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "delete": 0,
+              "filter": {
+                "grp": "a"
+              },
+              "multi": true
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_10",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_10"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.bad_namespace_index",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_11",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_11",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_11",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_11"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 1,
+              "document": {
+                "_id": 5
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.empty_ops",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_12",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_12",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_12",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_12"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": []
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.not_admin",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_13",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_13",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_13",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_13"
+            }
+          ],
+          "op": "bulkWrite",
+          "db": "diff",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 6
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.bulkWrite.duplicate_after_failure_order",
+      "cluster": "bulkWrite",
+      "collection": "diff_bulk_14",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_bulk_14",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_bulk_14",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_14"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 2
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 40
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 2
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20332377
+    },
+    {
+      "id": "diff.validators.create_then_valid_insert",
+      "cluster": "validators",
+      "collection": "diff_valid_0",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_0"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "age": 30
+            }
+          ],
+          "collection": "diff_valid_0"
+        },
+        {
+          "op": "find",
+          "filter": {},
+          "collection": "diff_valid_0"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.missing_required",
+      "cluster": "validators",
+      "collection": "diff_valid_1",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_1"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 2,
+              "other": 1
+            }
+          ],
+          "collection": "diff_valid_1"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.wrong_type",
+      "cluster": "validators",
+      "collection": "diff_valid_2",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_2"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 3,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_2"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.below_minimum",
+      "cluster": "validators",
+      "collection": "diff_valid_3",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_3"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 4,
+              "name": "beta",
+              "age": -1
+            }
+          ],
+          "collection": "diff_valid_3"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.above_maximum",
+      "cluster": "validators",
+      "collection": "diff_valid_4",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_4"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 5,
+              "name": "gamma",
+              "age": 200
+            }
+          ],
+          "collection": "diff_valid_4"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.item_type",
+      "cluster": "validators",
+      "collection": "diff_valid_5",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_5"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 6,
+              "name": "delta",
+              "tags": [
+                "ok",
+                2
+              ]
+            }
+          ],
+          "collection": "diff_valid_5"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.additional_property",
+      "cluster": "validators",
+      "collection": "diff_valid_6",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_6"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 7,
+              "name": "epsilon",
+              "extra": 1
+            }
+          ],
+          "collection": "diff_valid_6"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.additional_property_without_id_declared",
+      "cluster": "validators",
+      "collection": "diff_valid_7",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "bsonType": "string"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_7"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 8,
+              "name": "zeta"
+            }
+          ],
+          "collection": "diff_valid_7"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.update_to_invalid",
+      "cluster": "validators",
+      "collection": "diff_valid_8",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_8"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 9,
+              "name": "eta",
+              "age": 30
+            }
+          ],
+          "collection": "diff_valid_8"
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 9
+              },
+              "u": {
+                "$set": {
+                  "age": 300
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_8"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.create_duplicate",
+      "cluster": "validators",
+      "collection": "diff_valid_9",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_9"
+        }
+      ],
+      "steps": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_9"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.warn_action_allows_write",
+      "cluster": "validators",
+      "collection": "diff_valid_10",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationAction": "warn",
+          "collection": "diff_valid_10"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 10,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_10"
+        },
+        {
+          "op": "find",
+          "filter": {},
+          "collection": "diff_valid_10"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.collmod_action_off_then_write",
+      "cluster": "validators",
+      "collection": "diff_valid_11",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationAction": "error",
+          "collection": "diff_valid_11"
+        },
+        {
+          "op": "collMod",
+          "validationAction": "warn",
+          "collection": "diff_valid_11"
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 11,
+              "name": 6
+            }
+          ],
+          "collection": "diff_valid_11"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "off",
+          "collection": "diff_valid_11"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 12,
+              "name": 7
+            }
+          ],
+          "collection": "diff_valid_11"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.moderate_skips_existing_invalid",
+      "cluster": "validators",
+      "collection": "diff_valid_12",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationLevel": "off",
+          "collection": "diff_valid_12"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 13,
+              "name": "theta"
+            },
+            {
+              "_id": 14,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_12"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "moderate",
+          "collection": "diff_valid_12"
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 14
+              },
+              "u": {
+                "$set": {
+                  "name": 8
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_12"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.moderate_blocks_valid_to_invalid",
+      "cluster": "validators",
+      "collection": "diff_valid_13",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationLevel": "off",
+          "collection": "diff_valid_13"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 15,
+              "name": "iota"
+            }
+          ],
+          "collection": "diff_valid_13"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "moderate",
+          "collection": "diff_valid_13"
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 15
+              },
+              "u": {
+                "$set": {
+                  "name": 9
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_13"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.collmod_missing_namespace",
+      "cluster": "validators",
+      "collection": "diff_valid_14",
+      "setup": [],
+      "steps": [
+        {
+          "op": "collMod",
+          "validationLevel": "off",
+          "collection": "diff_valid_14"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.validators.collmod_validator_replaces",
+      "cluster": "validators",
+      "collection": "diff_valid_15",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "bsonType": "string"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_15"
+        }
+      ],
+      "steps": [
+        {
+          "op": "collMod",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "code"
+              ],
+              "properties": {
+                "code": {
+                  "bsonType": "int"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_15"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 16,
+              "name": "kappa"
+            }
+          ],
+          "collection": "diff_valid_15"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 17,
+              "code": 7
+            }
+          ],
+          "collection": "diff_valid_15"
+        }
+      ],
+      "seed": 20340296
+    },
+    {
+      "id": "diff.listCollections.default_shape",
+      "cluster": "listCollections",
+      "collection": "diff_list_0",
+      "setup": [
+        {
+          "op": "create",
+          "collection": "diff_list_0"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            },
+            {
+              "_id": 2
+            }
+          ],
+          "collection": "diff_list_0"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_0",
+          "op": "listCollections",
+          "filter": {
+            "name": "diff_list_0"
+          }
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.name_only",
+      "cluster": "listCollections",
+      "collection": "diff_list_1",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_1"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_1",
+          "op": "listCollections",
+          "nameOnly": true,
+          "filter": {
+            "name": "diff_list_1"
+          }
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.authorized_true",
+      "cluster": "listCollections",
+      "collection": "diff_list_2",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_2"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_2",
+          "op": "listCollections",
+          "nameOnly": true,
+          "authorizedCollections": true,
+          "filter": {
+            "name": "diff_list_2"
+          }
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.filter_type_gt",
+      "cluster": "listCollections",
+      "collection": "diff_list_3",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_3"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_3",
+          "op": "listCollections",
+          "nameOnly": true,
+          "filter": {
+            "type": "collection",
+            "$and": [
+              {
+                "name": {
+                  "$gte": "diff_list_3"
+                }
+              },
+              {
+                "name": {
+                  "$lt": "diff_list_3z"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.filter_no_match",
+      "cluster": "listCollections",
+      "collection": "diff_list_4",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_4"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_4",
+          "op": "listCollections",
+          "filter": {
+            "name": "definitely-not-present"
+          }
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.bad_name_only_type",
+      "cluster": "listCollections",
+      "collection": "diff_list_5",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_5"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_5",
+          "op": "listCollections",
+          "nameOnly": 1
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.bad_authorized_type",
+      "cluster": "listCollections",
+      "collection": "diff_list_6",
+      "setup": [
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_6"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_6",
+          "op": "listCollections",
+          "authorizedCollections": "yes"
+        }
+      ],
+      "seed": 20348215
+    },
+    {
+      "id": "diff.listCollections.options_after_collmod",
+      "cluster": "listCollections",
+      "collection": "diff_list_7",
+      "setup": [
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_list_7"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "moderate",
+          "validationAction": "warn",
+          "collection": "diff_list_7"
+        }
+      ],
+      "steps": [
+        {
+          "collection": "diff_list_7",
+          "op": "listCollections",
+          "filter": {
+            "name": "diff_list_7"
+          }
+        }
+      ],
+      "seed": 20348215
     }
   ]
 }

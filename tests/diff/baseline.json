@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 130,
+  "count": 198,
   "mongod": "8.0.9",
-  "corpusDigest": "678d48e2c67e10a40d0b426858fe980a7f9df4f0e5d804a89df95e32d3b67f3a",
-  "replyDigest": "dbb71ec9fda59a57ab0cc6e47081c3e21ff1d07be9d8fe9263eacb73fcb217aa",
+  "corpusDigest": "09be908c7805e3f35840fcddb3f9043746e678b1dbe486085f4083051cea3e78",
+  "replyDigest": "1b556a3b427487db9390eae3d21750c32e0d60faf2b36a8652f1197b09d83dc7",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -5513,6 +5513,2290 @@
             "$numberLong": "0"
           },
           "ns": "diff.diff_cursor_7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.update_old": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "1"
+          },
+          "name": "alpha",
+          "score": {
+            "$numberInt": "10"
+          },
+          "grp": "a"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.update_new": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "1"
+          },
+          "name": "alpha",
+          "score": {
+            "$numberInt": "11"
+          },
+          "grp": "a"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.update_inc": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "2"
+          },
+          "name": "beta",
+          "score": {
+            "$numberInt": "25"
+          },
+          "grp": "a"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.fields_include": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "3"
+          },
+          "name": "gamma",
+          "score": {
+            "$numberInt": "31"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.fields_exclude": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "4"
+          },
+          "name": "delta",
+          "score": {
+            "$numberInt": "41"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.sort_desc": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "2"
+          },
+          "name": "beta",
+          "score": {
+            "$numberInt": "20"
+          },
+          "grp": "a",
+          "picked": true
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.sort_asc_fields": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": true
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "3"
+          },
+          "score": {
+            "$numberInt": "30"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.no_match": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "0"
+          },
+          "updatedExisting": false
+        },
+        "value": null,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.upsert_new": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": false,
+          "upserted": {
+            "$numberInt": "99"
+          }
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "99"
+          },
+          "score": {
+            "$numberInt": "7"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "99"
+              },
+              "score": {
+                "$numberInt": "7"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_famod_8"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.upsert_old_null": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": false,
+          "upserted": {
+            "$numberInt": "98"
+          }
+        },
+        "value": null,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.upsert_equality_fields": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": false,
+          "upserted": {
+            "$oid": "<oid>"
+          }
+        },
+        "value": {
+          "_id": {
+            "$oid": "<oid>"
+          },
+          "name": "zeta",
+          "score": {
+            "$numberInt": "9"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.upsert_replacement": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          },
+          "updatedExisting": false,
+          "upserted": {
+            "$numberInt": "97"
+          }
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "97"
+          },
+          "score": {
+            "$numberInt": "5"
+          },
+          "grp": "z"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.remove_old": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          }
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "3"
+          },
+          "name": "gamma",
+          "score": {
+            "$numberInt": "30"
+          },
+          "grp": "b"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_famod_12"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.remove_no_match": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "0"
+          }
+        },
+        "value": null,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.remove_fields": [
+      {
+        "lastErrorObject": {
+          "n": {
+            "$numberInt": "1"
+          }
+        },
+        "value": {
+          "_id": {
+            "$numberInt": "4"
+          },
+          "grp": "b"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.findAndModify.error_update_and_remove": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Cannot specify both an update and remove=true",
+        "code": {
+          "$numberInt": "9"
+        },
+        "codeName": "FailedToParse"
+      }
+    ],
+    "diff.findAndModify.error_remove_new": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Cannot specify both new=true and remove=true; 'remove' always returns the deleted document",
+        "code": {
+          "$numberInt": "9"
+        },
+        "codeName": "FailedToParse"
+      }
+    ],
+    "diff.findAndModify.error_missing_update": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Either an update or remove=true must be specified",
+        "code": {
+          "$numberInt": "9"
+        },
+        "codeName": "FailedToParse"
+      }
+    ],
+    "diff.distinct.array_flatten": [
+      {
+        "values": [
+          "blue",
+          "green",
+          "red"
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.array_reversed": [
+      {
+        "values": [
+          "blue",
+          "green",
+          "red"
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "tags": [
+                "blue",
+                "red"
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_distinct_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.nested_path": [
+      {
+        "values": [
+          {
+            "$numberInt": "1"
+          },
+          {
+            "$numberInt": "2"
+          },
+          {
+            "$numberInt": "3"
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.missing_key": [
+      {
+        "values": [],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.query_filter": [
+      {
+        "values": [
+          "blue",
+          "red"
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.query_no_match": [
+      {
+        "values": [],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.dotted_into_array": [
+      {
+        "values": [
+          {
+            "$numberInt": "2"
+          },
+          {
+            "$numberInt": "5"
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.empty_and_scalar": [
+      {
+        "values": [
+          {
+            "qty": {
+              "$numberInt": "2"
+            }
+          },
+          {
+            "qty": {
+              "$numberInt": "5"
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.numeric_equivalence": [
+      {
+        "values": [
+          {
+            "$numberInt": "1"
+          },
+          {
+            "$numberDouble": "2.5"
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.nested_arrays": [
+      {
+        "values": [
+          {
+            "$numberInt": "4"
+          },
+          [
+            {
+              "$numberInt": "1"
+            },
+            {
+              "$numberInt": "2"
+            }
+          ],
+          [
+            {
+              "$numberInt": "2"
+            }
+          ],
+          [
+            {
+              "$numberInt": "3"
+            }
+          ]
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.distinct.bad_key_type": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field 'distinctCommandRequest.key' is the wrong type 'int', expected type 'string'",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      }
+    ],
+    "diff.bulkWrite.insert_single": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "1"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.insert_batch": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "2"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "11"
+              },
+              "score": {
+                "$numberInt": "110"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "12"
+              },
+              "score": {
+                "$numberInt": "120"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bulk_1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.mixed_ops": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "1"
+              },
+              "nModified": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "2"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "1"
+        },
+        "nMatched": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "11"
+              },
+              "grp": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "score": {
+                "$numberInt": "40"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bulk_2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.update_multi": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "2"
+              },
+              "nModified": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "2"
+        },
+        "nModified": {
+          "$numberInt": "2"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "flag": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "flag": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bulk_3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.update_no_match": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "0"
+              },
+              "nModified": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.upsert_missing": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "1"
+              },
+              "nModified": {
+                "$numberInt": "0"
+              },
+              "upserted": {
+                "_id": {
+                  "$numberInt": "7"
+                }
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "1"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.upsert_match_existing": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "1"
+              },
+              "nModified": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.ordered_duplicate_stops": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "0.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_7 index: _id_ dup key: { _id: 1 }",
+              "keyPattern": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "1"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.unordered_continues": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "0.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_8 index: _id_ dup key: { _id: 1 }",
+              "keyPattern": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "2"
+              },
+              "n": {
+                "$numberInt": "1"
+              },
+              "nModified": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "3"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "1"
+        },
+        "nInserted": {
+          "$numberInt": "1"
+        },
+        "nMatched": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "21"
+              },
+              "grp": "a"
+            },
+            {
+              "_id": {
+                "$numberInt": "20"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bulk_8"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.errors_only": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "0.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_9 index: _id_ dup key: { _id: 1 }",
+              "keyPattern": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "1"
+        },
+        "nInserted": {
+          "$numberInt": "1"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.delete_many": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "n": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "0"
+        },
+        "nInserted": {
+          "$numberInt": "0"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bulk_10"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bulkWrite.bad_namespace_index": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BulkWrite ops entry { insert: 1, document: { _id: 5 } } has an invalid nsInfo index.",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      }
+    ],
+    "diff.bulkWrite.empty_ops": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Write batch sizes must be between 1 and 100000. Got 0 operations.",
+        "code": {
+          "$numberInt": "16"
+        },
+        "codeName": "InvalidLength"
+      }
+    ],
+    "diff.bulkWrite.not_admin": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "bulkWrite may only be run against the admin database.",
+        "code": {
+          "$numberInt": "13"
+        },
+        "codeName": "Unauthorized"
+      }
+    ],
+    "diff.bulkWrite.duplicate_after_failure_order": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "firstBatch": [
+            {
+              "ok": {
+                "$numberDouble": "0.0"
+              },
+              "idx": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_14 index: _id_ dup key: { _id: 2 }",
+              "keyPattern": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "_id": {
+                  "$numberInt": "2"
+                }
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "1.0"
+              },
+              "idx": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "ok": {
+                "$numberDouble": "0.0"
+              },
+              "idx": {
+                "$numberInt": "2"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_14 index: _id_ dup key: { _id: 2 }",
+              "keyPattern": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "_id": {
+                  "$numberInt": "2"
+                }
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "ns": "admin.$cmd.bulkWrite"
+        },
+        "nErrors": {
+          "$numberInt": "2"
+        },
+        "nInserted": {
+          "$numberInt": "1"
+        },
+        "nMatched": {
+          "$numberInt": "0"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "nUpserted": {
+          "$numberInt": "0"
+        },
+        "nDeleted": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.create_then_valid_insert": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "alpha",
+              "age": {
+                "$numberInt": "30"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_valid_0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.missing_required": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "2"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "additionalProperties",
+                    "specifiedAs": {
+                      "additionalProperties": false
+                    },
+                    "additionalProperties": [
+                      "other"
+                    ]
+                  },
+                  {
+                    "operatorName": "required",
+                    "specifiedAs": {
+                      "required": [
+                        "name"
+                      ]
+                    },
+                    "missingProperties": [
+                      "name"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.wrong_type": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "3"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "name",
+                        "details": [
+                          {
+                            "operatorName": "bsonType",
+                            "specifiedAs": {
+                              "bsonType": "string"
+                            },
+                            "reason": "type did not match",
+                            "consideredValue": {
+                              "$numberInt": "5"
+                            },
+                            "consideredType": "int"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.below_minimum": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "4"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "age",
+                        "details": [
+                          {
+                            "operatorName": "minimum",
+                            "specifiedAs": {
+                              "minimum": {
+                                "$numberInt": "0"
+                              }
+                            },
+                            "reason": "comparison failed",
+                            "consideredValue": {
+                              "$numberInt": "-1"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.above_maximum": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "5"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "age",
+                        "details": [
+                          {
+                            "operatorName": "maximum",
+                            "specifiedAs": {
+                              "maximum": {
+                                "$numberInt": "120"
+                              }
+                            },
+                            "reason": "comparison failed",
+                            "consideredValue": {
+                              "$numberInt": "200"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.item_type": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "6"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "tags",
+                        "details": [
+                          {
+                            "operatorName": "items",
+                            "reason": "At least one item did not match the sub-schema",
+                            "itemIndex": {
+                              "$numberInt": "1"
+                            },
+                            "details": [
+                              {
+                                "operatorName": "bsonType",
+                                "specifiedAs": {
+                                  "bsonType": "string"
+                                },
+                                "reason": "type did not match",
+                                "consideredValue": {
+                                  "$numberInt": "2"
+                                },
+                                "consideredType": "int"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.additional_property": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "7"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "additionalProperties",
+                    "specifiedAs": {
+                      "additionalProperties": false
+                    },
+                    "additionalProperties": [
+                      "extra"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.additional_property_without_id_declared": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.update_to_invalid": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "9"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "age",
+                        "details": [
+                          {
+                            "operatorName": "maximum",
+                            "specifiedAs": {
+                              "maximum": {
+                                "$numberInt": "120"
+                              }
+                            },
+                            "reason": "comparison failed",
+                            "consideredValue": {
+                              "$numberInt": "300"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.create_duplicate": [
+      {
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.warn_action_allows_write": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "10"
+              },
+              "name": {
+                "$numberInt": "5"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_valid_10"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.collmod_action_off_then_write": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.moderate_skips_existing_invalid": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.moderate_blocks_valid_to_invalid": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "15"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "properties",
+                    "propertiesNotSatisfied": [
+                      {
+                        "propertyName": "name",
+                        "details": [
+                          {
+                            "operatorName": "bsonType",
+                            "specifiedAs": {
+                              "bsonType": "string"
+                            },
+                            "reason": "type did not match",
+                            "consideredValue": {
+                              "$numberInt": "9"
+                            },
+                            "consideredType": "int"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.validators.collmod_missing_namespace": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "ns does not exist",
+        "code": {
+          "$numberInt": "26"
+        },
+        "codeName": "NamespaceNotFound"
+      }
+    ],
+    "diff.validators.collmod_validator_replaces": [
+      {
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "121"
+            },
+            "errmsg": "Document failed validation",
+            "errInfo": {
+              "failingDocumentId": {
+                "$numberInt": "16"
+              },
+              "details": {
+                "operatorName": "$jsonSchema",
+                "schemaRulesNotSatisfied": [
+                  {
+                    "operatorName": "required",
+                    "specifiedAs": {
+                      "required": [
+                        "code"
+                      ]
+                    },
+                    "missingProperties": [
+                      "code"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.default_shape": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": [
+            {
+              "name": "diff_list_0",
+              "type": "collection",
+              "options": {},
+              "info": {
+                "readOnly": false,
+                "uuid": "<uuid>"
+              },
+              "idIndex": {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              }
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.name_only": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": [
+            {
+              "name": "diff_list_1",
+              "type": "collection"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.authorized_true": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": [
+            {
+              "name": "diff_list_2",
+              "type": "collection"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.filter_type_gt": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": [
+            {
+              "name": "diff_list_3",
+              "type": "collection"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.filter_no_match": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": []
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.listCollections.bad_name_only_type": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field 'listCollections.nameOnly' is the wrong type 'int', expected type 'bool'",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      }
+    ],
+    "diff.listCollections.bad_authorized_type": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field 'listCollections.authorizedCollections' is the wrong type 'string', expected type 'bool'",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      }
+    ],
+    "diff.listCollections.options_after_collmod": [
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.$cmd.listCollections",
+          "firstBatch": [
+            {
+              "name": "diff_list_7",
+              "type": "collection",
+              "options": {
+                "validator": {
+                  "$jsonSchema": {
+                    "bsonType": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "_id": {
+                        "bsonType": "int"
+                      },
+                      "name": {
+                        "bsonType": "string"
+                      },
+                      "age": {
+                        "bsonType": "int",
+                        "minimum": {
+                          "$numberInt": "0"
+                        },
+                        "maximum": {
+                          "$numberInt": "120"
+                        }
+                      },
+                      "tags": {
+                        "bsonType": "array",
+                        "items": {
+                          "bsonType": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "validationLevel": "moderate",
+                "validationAction": "warn"
+              },
+              "info": {
+                "readOnly": false,
+                "uuid": "<uuid>"
+              },
+              "idIndex": {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              }
+            }
+          ]
         },
         "ok": {
           "$numberDouble": "1.0"

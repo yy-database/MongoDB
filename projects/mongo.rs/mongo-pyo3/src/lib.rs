@@ -175,6 +175,36 @@ fn kill_cursors(cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<
     Ok(command_reply(commands::kill_cursors(&decode_command(command)?, &mut cursors.inner)))
 }
 
+/// `findAndModify` reply.
+#[pyfunction]
+fn find_and_modify(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::find_and_modify(&decode_command(command)?, &store.inner)))
+}
+
+/// `distinct` reply.
+#[pyfunction]
+fn distinct(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::distinct(&decode_command(command)?, &store.inner)))
+}
+
+/// `bulkWrite` reply.
+#[pyfunction]
+fn bulk_write(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::bulk_write(&decode_command(command)?, &store.inner)))
+}
+
+/// `create` reply.
+#[pyfunction]
+fn create(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::create(&decode_command(command)?, &store.inner)))
+}
+
+/// `collMod` reply.
+#[pyfunction]
+fn coll_mod(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::coll_mod(&decode_command(command)?, &store.inner)))
+}
+
 /// `listCollections` reply.
 #[pyfunction]
 fn list_collections(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
@@ -244,6 +274,11 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(update, module)?)?;
     module.add_function(wrap_pyfunction!(get_more, module)?)?;
     module.add_function(wrap_pyfunction!(kill_cursors, module)?)?;
+    module.add_function(wrap_pyfunction!(find_and_modify, module)?)?;
+    module.add_function(wrap_pyfunction!(distinct, module)?)?;
+    module.add_function(wrap_pyfunction!(bulk_write, module)?)?;
+    module.add_function(wrap_pyfunction!(create, module)?)?;
+    module.add_function(wrap_pyfunction!(coll_mod, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
     module.add_function(wrap_pyfunction!(create_indexes, module)?)?;

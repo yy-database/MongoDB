@@ -18387,6 +18387,6812 @@
           }
         }
       ]
+    },
+    {
+      "id": "diff.findAndModify.update_old",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.update_old",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_0",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 11
+            }
+          },
+          "collection": "diff_famod_0",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "1"
+            },
+            "name": "alpha",
+            "score": {
+              "$numberInt": "10"
+            },
+            "grp": "a"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.update_new",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.update_new",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_1",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 11
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_1",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "1"
+            },
+            "name": "alpha",
+            "score": {
+              "$numberInt": "11"
+            },
+            "grp": "a"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.update_inc",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.update_inc",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_2",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 2
+          },
+          "update": {
+            "$inc": {
+              "score": 5
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_2",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "2"
+            },
+            "name": "beta",
+            "score": {
+              "$numberInt": "25"
+            },
+            "grp": "a"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.fields_include",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.fields_include",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_3",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 3
+          },
+          "update": {
+            "$set": {
+              "score": 31
+            }
+          },
+          "fields": {
+            "name": 1,
+            "score": 1
+          },
+          "new": true,
+          "collection": "diff_famod_3",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "3"
+            },
+            "name": "gamma",
+            "score": {
+              "$numberInt": "31"
+            }
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.fields_exclude",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.fields_exclude",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_4",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 4
+          },
+          "update": {
+            "$set": {
+              "score": 41
+            }
+          },
+          "fields": {
+            "grp": 0
+          },
+          "new": true,
+          "collection": "diff_famod_4",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "4"
+            },
+            "name": "delta",
+            "score": {
+              "$numberInt": "41"
+            }
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.sort_desc",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.sort_desc",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_5",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "grp": "a"
+          },
+          "sort": {
+            "score": -1
+          },
+          "update": {
+            "$set": {
+              "picked": true
+            }
+          },
+          "new": true,
+          "collection": "diff_famod_5",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "2"
+            },
+            "name": "beta",
+            "score": {
+              "$numberInt": "20"
+            },
+            "grp": "a",
+            "picked": true
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.sort_asc_fields",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.sort_asc_fields",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_6",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "grp": "b"
+          },
+          "sort": {
+            "score": 1
+          },
+          "update": {
+            "$set": {
+              "picked": true
+            }
+          },
+          "fields": {
+            "score": 1
+          },
+          "collection": "diff_famod_6",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": true
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "3"
+            },
+            "score": {
+              "$numberInt": "30"
+            }
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.no_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.no_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_7",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "update": {
+            "$set": {
+              "name": "nobody"
+            }
+          },
+          "collection": "diff_famod_7",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "0"
+            },
+            "updatedExisting": false
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": null
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.upsert_new",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.upsert_new",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_8",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "update": {
+            "$set": {
+              "score": 7
+            }
+          },
+          "upsert": true,
+          "new": true,
+          "collection": "diff_famod_8",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 99
+          },
+          "collection": "diff_famod_8",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": false,
+            "upserted": {
+              "$numberInt": "99"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "99"
+            },
+            "score": {
+              "$numberInt": "7"
+            }
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "99"
+                },
+                "score": {
+                  "$numberInt": "7"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_famod_8"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.upsert_old_null",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.upsert_old_null",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_9",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 98
+          },
+          "update": {
+            "$set": {
+              "score": 8
+            }
+          },
+          "upsert": true,
+          "collection": "diff_famod_9",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": false,
+            "upserted": {
+              "$numberInt": "98"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": null
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.upsert_replacement",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.upsert_replacement",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_11",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 97
+          },
+          "update": {
+            "score": 5,
+            "grp": "z"
+          },
+          "upsert": true,
+          "new": true,
+          "collection": "diff_famod_11",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            },
+            "updatedExisting": false,
+            "upserted": {
+              "$numberInt": "97"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "97"
+            },
+            "score": {
+              "$numberInt": "5"
+            },
+            "grp": "z"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.remove_old",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.remove_old",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_12",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 3
+          },
+          "remove": true,
+          "collection": "diff_famod_12",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 3
+          },
+          "collection": "diff_famod_12",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "3"
+            },
+            "name": "gamma",
+            "score": {
+              "$numberInt": "30"
+            },
+            "grp": "b"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_famod_12"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.remove_no_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.remove_no_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_13",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 99
+          },
+          "remove": true,
+          "collection": "diff_famod_13",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "0"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": null
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.remove_fields",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.remove_fields",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_14",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 4
+          },
+          "remove": true,
+          "fields": {
+            "grp": 1
+          },
+          "collection": "diff_famod_14",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/lastErrorObject",
+          "equals": {
+            "n": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r0/value",
+          "equals": {
+            "_id": {
+              "$numberInt": "4"
+            },
+            "grp": "b"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.error_update_and_remove",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.error_update_and_remove",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_15",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "update": {
+            "$set": {
+              "score": 1
+            }
+          },
+          "remove": true,
+          "collection": "diff_famod_15",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Cannot specify both an update and remove=true"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "9"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "FailedToParse"
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.error_remove_new",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.error_remove_new",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_16",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "remove": true,
+          "new": true,
+          "collection": "diff_famod_16",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Cannot specify both new=true and remove=true; 'remove' always returns the deleted document"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "9"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "FailedToParse"
+        }
+      ]
+    },
+    {
+      "id": "diff.findAndModify.error_missing_update",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.findAndModify.error_missing_update",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_famod_17",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b"
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "c"
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "query": {
+            "_id": 1
+          },
+          "collection": "diff_famod_17",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Either an update or remove=true must be specified"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "9"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "FailedToParse"
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.array_flatten",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.array_flatten",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_0",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "tags",
+          "collection": "diff_distinct_0",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            "blue",
+            "green",
+            "red"
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.array_reversed",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.array_reversed",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_1",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "tags",
+          "collection": "diff_distinct_1",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "_id": 2
+          },
+          "projection": {
+            "tags": 1
+          },
+          "collection": "diff_distinct_1",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            "blue",
+            "green",
+            "red"
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "tags": [
+                  "blue",
+                  "red"
+                ]
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_distinct_1"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.nested_path",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.nested_path",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_2",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "a.b",
+          "collection": "diff_distinct_2",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            {
+              "$numberInt": "1"
+            },
+            {
+              "$numberInt": "2"
+            },
+            {
+              "$numberInt": "3"
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.missing_key",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.missing_key",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_3",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "ghost",
+          "collection": "diff_distinct_3",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": []
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.query_filter",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.query_filter",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_4",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "tags",
+          "query": {
+            "grp": "a"
+          },
+          "collection": "diff_distinct_4",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            "blue",
+            "red"
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.query_no_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.query_no_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_5",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "tags",
+          "query": {
+            "grp": "z"
+          },
+          "collection": "diff_distinct_5",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": []
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.dotted_into_array",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.dotted_into_array",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_6",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "items.qty",
+          "collection": "diff_distinct_6",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            {
+              "$numberInt": "2"
+            },
+            {
+              "$numberInt": "5"
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.empty_and_scalar",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.empty_and_scalar",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_7",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "items",
+          "collection": "diff_distinct_7",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            {
+              "qty": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "qty": {
+                "$numberInt": "5"
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.numeric_equivalence",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.numeric_equivalence",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_8",
+          "documents": [
+            {
+              "_id": 1,
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "v": {
+                "$numberDouble": "1.0"
+              }
+            },
+            {
+              "_id": 3,
+              "v": {
+                "$numberLong": "1"
+              }
+            },
+            {
+              "_id": 4,
+              "v": {
+                "$numberDouble": "2.5"
+              }
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "v",
+          "collection": "diff_distinct_8",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            {
+              "$numberInt": "1"
+            },
+            {
+              "$numberDouble": "2.5"
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.nested_arrays",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.nested_arrays",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_9",
+          "documents": [
+            {
+              "_id": 1,
+              "n": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            },
+            {
+              "_id": 2,
+              "n": [
+                [
+                  2
+                ],
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": "n",
+          "collection": "diff_distinct_9",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/values",
+          "equals": [
+            {
+              "$numberInt": "4"
+            },
+            [
+              {
+                "$numberInt": "1"
+              },
+              {
+                "$numberInt": "2"
+              }
+            ],
+            [
+              {
+                "$numberInt": "2"
+              }
+            ],
+            [
+              {
+                "$numberInt": "3"
+              }
+            ]
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.distinct.bad_key_type",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.distinct.bad_key_type",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_distinct_10",
+          "documents": [
+            {
+              "_id": 1,
+              "tags": [
+                "red",
+                "blue"
+              ],
+              "a": {
+                "b": 1
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "tags": [
+                "blue",
+                "red"
+              ],
+              "a": {
+                "b": 2
+              },
+              "items": [
+                {
+                  "qty": 2
+                }
+              ],
+              "grp": "b"
+            },
+            {
+              "_id": 3,
+              "tags": [],
+              "a": {
+                "b": 3
+              },
+              "items": [],
+              "grp": "a"
+            },
+            {
+              "_id": 4,
+              "tags": "green",
+              "grp": "b"
+            },
+            {
+              "_id": 5,
+              "a": {
+                "b": 1
+              },
+              "grp": "a"
+            }
+          ]
+        },
+        {
+          "op": "distinct",
+          "key": 5,
+          "collection": "diff_distinct_10",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "BSON field 'distinctCommandRequest.key' is the wrong type 'int', expected type 'string'"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "14"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "TypeMismatch"
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.insert_single",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.insert_single",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_0",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_0",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_0"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 10,
+                "score": 100
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.insert_batch",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.insert_batch",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_1",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_1",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_1"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 11,
+                "score": 110
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 12,
+                "score": 120
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "collection": "diff_bulk_1",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_1"
+            }
+          ],
+          "op": "find",
+          "filter": {
+            "_id": {
+              "$gte": 11
+            }
+          },
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "11"
+                },
+                "score": {
+                  "$numberInt": "110"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "12"
+                },
+                "score": {
+                  "$numberInt": "120"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bulk_1"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.mixed_ops",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.mixed_ops",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_2",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_2",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_2"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 4,
+                "score": 40
+              }
+            },
+            {
+              "update": 0,
+              "filter": {
+                "_id": 1
+              },
+              "updateMods": {
+                "$inc": {
+                  "score": 1
+                }
+              }
+            },
+            {
+              "delete": 0,
+              "filter": {
+                "_id": 3
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "collection": "diff_bulk_2",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_2"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "1"
+                },
+                "nModified": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "2"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "11"
+                },
+                "grp": "a"
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a"
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "score": {
+                  "$numberInt": "40"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bulk_2"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.update_multi",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.update_multi",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_3",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_3",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_3"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "grp": "a"
+              },
+              "updateMods": {
+                "$set": {
+                  "flag": true
+                }
+              },
+              "multi": true
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "collection": "diff_bulk_3",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_3"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "2"
+                },
+                "nModified": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "flag": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "flag": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bulk_3"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.update_no_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.update_no_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_4",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_4",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_4"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 99
+              },
+              "updateMods": {
+                "$set": {
+                  "flag": true
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "0"
+                },
+                "nModified": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.upsert_missing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.upsert_missing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_5",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_5",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_5"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 7
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 70
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "1"
+                },
+                "nModified": {
+                  "$numberInt": "0"
+                },
+                "upserted": {
+                  "_id": {
+                    "$numberInt": "7"
+                  }
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.upsert_match_existing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.upsert_match_existing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_6",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_6",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_6"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "update": 0,
+              "filter": {
+                "_id": 2
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 21
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "1"
+                },
+                "nModified": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.ordered_duplicate_stops",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.ordered_duplicate_stops",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_7",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_7",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_7"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": true,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 20
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 21
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "0.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "code": {
+                  "$numberInt": "11000"
+                },
+                "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_7 index: _id_ dup key: { _id: 1 }",
+                "keyPattern": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "keyValue": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.unordered_continues",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.unordered_continues",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_8",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_8",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_8"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 20
+              }
+            },
+            {
+              "update": 0,
+              "filter": {
+                "_id": 2
+              },
+              "updateMods": {
+                "$set": {
+                  "score": 21
+                }
+              }
+            },
+            {
+              "delete": 0,
+              "filter": {
+                "_id": 3
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "collection": "diff_bulk_8",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_8"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "0.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "code": {
+                  "$numberInt": "11000"
+                },
+                "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_8 index: _id_ dup key: { _id: 1 }",
+                "keyPattern": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "keyValue": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "2"
+                },
+                "n": {
+                  "$numberInt": "1"
+                },
+                "nModified": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "3"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a"
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "21"
+                },
+                "grp": "a"
+              },
+              {
+                "_id": {
+                  "$numberInt": "20"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bulk_8"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.errors_only",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.errors_only",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_9",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_9",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_9"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "errorsOnly": true,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 1
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 30
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "0.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "code": {
+                  "$numberInt": "11000"
+                },
+                "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_9 index: _id_ dup key: { _id: 1 }",
+                "keyPattern": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "keyValue": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.delete_many",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.delete_many",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_10",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_10",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_10"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "delete": 0,
+              "filter": {
+                "grp": "a"
+              },
+              "multi": true
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "collection": "diff_bulk_10",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_10"
+            }
+          ],
+          "op": "find",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "n": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bulk_10"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.bad_namespace_index",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.bad_namespace_index",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_11",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_11",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_11"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [
+            {
+              "insert": 1,
+              "document": {
+                "_id": 5
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "BulkWrite ops entry { insert: 1, document: { _id: 5 } } has an invalid nsInfo index."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "BadValue"
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.empty_ops",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.empty_ops",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_12",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_12",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_12"
+            }
+          ],
+          "op": "bulkWrite",
+          "ops": [],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Write batch sizes must be between 1 and 100000. Got 0 operations."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "16"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "InvalidLength"
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.not_admin",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.not_admin",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_13",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_13",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_13"
+            }
+          ],
+          "op": "bulkWrite",
+          "db": "diff",
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 6
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "bulkWrite may only be run against the admin database."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "13"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Unauthorized"
+        }
+      ]
+    },
+    {
+      "id": "diff.bulkWrite.duplicate_after_failure_order",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bulkWrite.duplicate_after_failure_order",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bulk_14",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10,
+              "grp": "a"
+            },
+            {
+              "_id": 2,
+              "score": 20,
+              "grp": "a"
+            },
+            {
+              "_id": 3,
+              "score": 30,
+              "grp": "b"
+            }
+          ]
+        },
+        {
+          "collection": "diff_bulk_14",
+          "nsInfo": [
+            {
+              "ns": "diff.diff_bulk_14"
+            }
+          ],
+          "op": "bulkWrite",
+          "ordered": false,
+          "ops": [
+            {
+              "insert": 0,
+              "document": {
+                "_id": 2
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 40
+              }
+            },
+            {
+              "insert": 0,
+              "document": {
+                "_id": 2
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "firstBatch": [
+              {
+                "ok": {
+                  "$numberDouble": "0.0"
+                },
+                "idx": {
+                  "$numberInt": "0"
+                },
+                "code": {
+                  "$numberInt": "11000"
+                },
+                "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_14 index: _id_ dup key: { _id: 2 }",
+                "keyPattern": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "keyValue": {
+                  "_id": {
+                    "$numberInt": "2"
+                  }
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "1.0"
+                },
+                "idx": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "ok": {
+                  "$numberDouble": "0.0"
+                },
+                "idx": {
+                  "$numberInt": "2"
+                },
+                "code": {
+                  "$numberInt": "11000"
+                },
+                "errmsg": "E11000 duplicate key error collection: diff.diff_bulk_14 index: _id_ dup key: { _id: 2 }",
+                "keyPattern": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "keyValue": {
+                  "_id": {
+                    "$numberInt": "2"
+                  }
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "ns": "admin.$cmd.bulkWrite"
+          }
+        },
+        {
+          "at": "/r0/nErrors",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/nInserted",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nMatched",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nUpserted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/nDeleted",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.create_then_valid_insert",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.create_then_valid_insert",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_0"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "age": 30
+            }
+          ],
+          "collection": "diff_valid_0",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {},
+          "collection": "diff_valid_0",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "name": "alpha",
+                "age": {
+                  "$numberInt": "30"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_valid_0"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.missing_required",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.missing_required",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_1"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 2,
+              "other": 1
+            }
+          ],
+          "collection": "diff_valid_1",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "2"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "additionalProperties",
+                      "specifiedAs": {
+                        "additionalProperties": false
+                      },
+                      "additionalProperties": [
+                        "other"
+                      ]
+                    },
+                    {
+                      "operatorName": "required",
+                      "specifiedAs": {
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      "missingProperties": [
+                        "name"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.wrong_type",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.wrong_type",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_2"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 3,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_2",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "3"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "name",
+                          "details": [
+                            {
+                              "operatorName": "bsonType",
+                              "specifiedAs": {
+                                "bsonType": "string"
+                              },
+                              "reason": "type did not match",
+                              "consideredValue": {
+                                "$numberInt": "5"
+                              },
+                              "consideredType": "int"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.below_minimum",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.below_minimum",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_3"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 4,
+              "name": "beta",
+              "age": -1
+            }
+          ],
+          "collection": "diff_valid_3",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "4"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "age",
+                          "details": [
+                            {
+                              "operatorName": "minimum",
+                              "specifiedAs": {
+                                "minimum": {
+                                  "$numberInt": "0"
+                                }
+                              },
+                              "reason": "comparison failed",
+                              "consideredValue": {
+                                "$numberInt": "-1"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.above_maximum",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.above_maximum",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_4"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 5,
+              "name": "gamma",
+              "age": 200
+            }
+          ],
+          "collection": "diff_valid_4",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "5"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "age",
+                          "details": [
+                            {
+                              "operatorName": "maximum",
+                              "specifiedAs": {
+                                "maximum": {
+                                  "$numberInt": "120"
+                                }
+                              },
+                              "reason": "comparison failed",
+                              "consideredValue": {
+                                "$numberInt": "200"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.item_type",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.item_type",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_5"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 6,
+              "name": "delta",
+              "tags": [
+                "ok",
+                2
+              ]
+            }
+          ],
+          "collection": "diff_valid_5",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "6"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "tags",
+                          "details": [
+                            {
+                              "operatorName": "items",
+                              "reason": "At least one item did not match the sub-schema",
+                              "itemIndex": {
+                                "$numberInt": "1"
+                              },
+                              "details": [
+                                {
+                                  "operatorName": "bsonType",
+                                  "specifiedAs": {
+                                    "bsonType": "string"
+                                  },
+                                  "reason": "type did not match",
+                                  "consideredValue": {
+                                    "$numberInt": "2"
+                                  },
+                                  "consideredType": "int"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.additional_property",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.additional_property",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_6"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 7,
+              "name": "epsilon",
+              "extra": 1
+            }
+          ],
+          "collection": "diff_valid_6",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "7"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "additionalProperties",
+                      "specifiedAs": {
+                        "additionalProperties": false
+                      },
+                      "additionalProperties": [
+                        "extra"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.additional_property_without_id_declared",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.additional_property_without_id_declared",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "bsonType": "string"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_7"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 8,
+              "name": "zeta"
+            }
+          ],
+          "collection": "diff_valid_7",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.update_to_invalid",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.update_to_invalid",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_8"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 9,
+              "name": "eta",
+              "age": 30
+            }
+          ],
+          "collection": "diff_valid_8"
+        },
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 9
+              },
+              "u": {
+                "$set": {
+                  "age": 300
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_8",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "9"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "age",
+                          "details": [
+                            {
+                              "operatorName": "maximum",
+                              "specifiedAs": {
+                                "maximum": {
+                                  "$numberInt": "120"
+                                }
+                              },
+                              "reason": "comparison failed",
+                              "consideredValue": {
+                                "$numberInt": "300"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.create_duplicate",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.create_duplicate",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_9"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "collection": "diff_valid_9",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.warn_action_allows_write",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.warn_action_allows_write",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationAction": "warn",
+          "collection": "diff_valid_10"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 10,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_10",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {},
+          "collection": "diff_valid_10",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "10"
+                },
+                "name": {
+                  "$numberInt": "5"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_valid_10"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.collmod_action_off_then_write",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.collmod_action_off_then_write",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationAction": "error",
+          "collection": "diff_valid_11"
+        },
+        {
+          "op": "collMod",
+          "validationAction": "warn",
+          "collection": "diff_valid_11"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 11,
+              "name": 6
+            }
+          ],
+          "collection": "diff_valid_11",
+          "as": "r0"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "off",
+          "collection": "diff_valid_11",
+          "as": "r1"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 12,
+              "name": 7
+            }
+          ],
+          "collection": "diff_valid_11",
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.moderate_skips_existing_invalid",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.moderate_skips_existing_invalid",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationLevel": "off",
+          "collection": "diff_valid_12"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 13,
+              "name": "theta"
+            },
+            {
+              "_id": 14,
+              "name": 5
+            }
+          ],
+          "collection": "diff_valid_12"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "moderate",
+          "collection": "diff_valid_12"
+        },
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 14
+              },
+              "u": {
+                "$set": {
+                  "name": 8
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_12",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.moderate_blocks_valid_to_invalid",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.moderate_blocks_valid_to_invalid",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "_id": {
+                  "bsonType": "int"
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "age": {
+                  "bsonType": "int",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "tags": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "validationLevel": "off",
+          "collection": "diff_valid_13"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 15,
+              "name": "iota"
+            }
+          ],
+          "collection": "diff_valid_13"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "moderate",
+          "collection": "diff_valid_13"
+        },
+        {
+          "op": "update",
+          "updates": [
+            {
+              "q": {
+                "_id": 15
+              },
+              "u": {
+                "$set": {
+                  "name": 9
+                }
+              }
+            }
+          ],
+          "collection": "diff_valid_13",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "15"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "properties",
+                      "propertiesNotSatisfied": [
+                        {
+                          "propertyName": "name",
+                          "details": [
+                            {
+                              "operatorName": "bsonType",
+                              "specifiedAs": {
+                                "bsonType": "string"
+                              },
+                              "reason": "type did not match",
+                              "consideredValue": {
+                                "$numberInt": "9"
+                              },
+                              "consideredType": "int"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.collmod_missing_namespace",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.collmod_missing_namespace",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "collMod",
+          "validationLevel": "off",
+          "collection": "diff_valid_14",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "ns does not exist"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "26"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "NamespaceNotFound"
+        }
+      ]
+    },
+    {
+      "id": "diff.validators.collmod_validator_replaces",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.validators.collmod_validator_replaces",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "create",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "bsonType": "string"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_15"
+        },
+        {
+          "op": "collMod",
+          "validator": {
+            "$jsonSchema": {
+              "bsonType": "object",
+              "required": [
+                "code"
+              ],
+              "properties": {
+                "code": {
+                  "bsonType": "int"
+                }
+              }
+            }
+          },
+          "collection": "diff_valid_15",
+          "as": "r0"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 16,
+              "name": "kappa"
+            }
+          ],
+          "collection": "diff_valid_15",
+          "as": "r1"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 17,
+              "code": 7
+            }
+          ],
+          "collection": "diff_valid_15",
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r1/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "121"
+              },
+              "errmsg": "Document failed validation",
+              "errInfo": {
+                "failingDocumentId": {
+                  "$numberInt": "16"
+                },
+                "details": {
+                  "operatorName": "$jsonSchema",
+                  "schemaRulesNotSatisfied": [
+                    {
+                      "operatorName": "required",
+                      "specifiedAs": {
+                        "required": [
+                          "code"
+                        ]
+                      },
+                      "missingProperties": [
+                        "code"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.name_only",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.name_only",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_1"
+        },
+        {
+          "collection": "diff_list_1",
+          "op": "listCollections",
+          "nameOnly": true,
+          "filter": {
+            "name": "diff_list_1"
+          },
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.$cmd.listCollections",
+            "firstBatch": [
+              {
+                "name": "diff_list_1",
+                "type": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.authorized_true",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.authorized_true",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_2"
+        },
+        {
+          "collection": "diff_list_2",
+          "op": "listCollections",
+          "nameOnly": true,
+          "authorizedCollections": true,
+          "filter": {
+            "name": "diff_list_2"
+          },
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.$cmd.listCollections",
+            "firstBatch": [
+              {
+                "name": "diff_list_2",
+                "type": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.filter_type_gt",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.filter_type_gt",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_3"
+        },
+        {
+          "collection": "diff_list_3",
+          "op": "listCollections",
+          "nameOnly": true,
+          "filter": {
+            "type": "collection",
+            "$and": [
+              {
+                "name": {
+                  "$gte": "diff_list_3"
+                }
+              },
+              {
+                "name": {
+                  "$lt": "diff_list_3z"
+                }
+              }
+            ]
+          },
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.$cmd.listCollections",
+            "firstBatch": [
+              {
+                "name": "diff_list_3",
+                "type": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.filter_no_match",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.filter_no_match",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_4"
+        },
+        {
+          "collection": "diff_list_4",
+          "op": "listCollections",
+          "filter": {
+            "name": "definitely-not-present"
+          },
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.$cmd.listCollections",
+            "firstBatch": []
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.bad_name_only_type",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.bad_name_only_type",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_5"
+        },
+        {
+          "collection": "diff_list_5",
+          "op": "listCollections",
+          "nameOnly": 1,
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "BSON field 'listCollections.nameOnly' is the wrong type 'int', expected type 'bool'"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "14"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "TypeMismatch"
+        }
+      ]
+    },
+    {
+      "id": "diff.listCollections.bad_authorized_type",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.listCollections.bad_authorized_type",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ],
+          "collection": "diff_list_6"
+        },
+        {
+          "collection": "diff_list_6",
+          "op": "listCollections",
+          "authorizedCollections": "yes",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "BSON field 'listCollections.authorizedCollections' is the wrong type 'string', expected type 'bool'"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "14"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "TypeMismatch"
+        }
+      ]
     }
   ]
 }
