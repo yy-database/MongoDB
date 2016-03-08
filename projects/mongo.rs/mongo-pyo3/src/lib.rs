@@ -211,6 +211,18 @@ fn list_collections(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<Str
     Ok(command_reply(commands::list_collections(&decode_command(command)?, &store.inner)))
 }
 
+/// `commitTransaction` reply.
+#[pyfunction]
+fn commit_transaction(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::commit_transaction(&decode_command(command)?, &store.inner)))
+}
+
+/// `abortTransaction` reply.
+#[pyfunction]
+fn abort_transaction(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::abort_transaction(&decode_command(command)?, &store.inner)))
+}
+
 /// `listDatabases` reply.
 #[pyfunction]
 fn list_databases(store: PyRef<'_, MongoStore>) -> String {
@@ -280,6 +292,8 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(create, module)?)?;
     module.add_function(wrap_pyfunction!(coll_mod, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
+    module.add_function(wrap_pyfunction!(commit_transaction, module)?)?;
+    module.add_function(wrap_pyfunction!(abort_transaction, module)?)?;
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
     module.add_function(wrap_pyfunction!(create_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(list_indexes, module)?)?;

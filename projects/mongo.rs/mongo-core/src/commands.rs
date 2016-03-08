@@ -17,7 +17,7 @@ use database_protocol_mongo::bson::{
 use crate::{
     cursor::CursorStore,
     json,
-    store::{CollectionOptions, IndexSpec, Store},
+    store::{CollectionOptions, IndexSpec, Store, TransactionCommit, TransactionWrite},
 };
 
 /// Filter operators this gateway implements. Anything outside this list is a
@@ -270,6 +270,7 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         11000 => "DuplicateKey",
         112 => "WriteConflict",
         121 => "DocumentValidationFailure",
+        251 => "NoSuchTransaction",
         225 => "TransactionTooOld",
         40414 => "IDLFailedToParse",
         40148 => "Location40148",
@@ -360,6 +361,7 @@ impl WriteError {
 pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "insert")
         .ok_or_else(|| CommandError::new(73, "insert command missing collection name"))?;
+    let session = SessionContext::new(command, store);
 
     let Some(BsonValue::Array(documents)) = command.get("documents")
     else {
@@ -416,7 +418,7 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         candidates.push((index, stored, identifier));
     }
 
-    let inserted = if unique_indexes.is_empty() {
+    let inserted = if unique_indexes.is_empty() && session.key().is_none() {
         let entries: Vec<(Vec<u8>, Vec<u8>)> =
             candidates.iter().map(|(_, stored, identifier)| (value_to_key(identifier), encode_bson(stored))).collect();
         let positions: Vec<usize> = candidates.iter().map(|(index, _, _)| *index).collect();
@@ -429,7 +431,7 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         }
         report.inserted as usize
     } else {
-        commit_insert(store, &namespace, &candidates, &unique_indexes, ordered, &mut write_errors)?
+        commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, ordered, &mut write_errors)?
     };
     write_errors.sort_by_key(|error| error.index);
 
@@ -443,6 +445,7 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 /// that reuses a rejected one's key, exactly like `mongod`.
 fn commit_insert(
     store: &Store,
+    session: Option<&str>,
     namespace: &str,
     candidates: &[(usize, BsonDocument, BsonValue)],
     unique_indexes: &[IndexSpec],
@@ -451,7 +454,7 @@ fn commit_insert(
 ) -> Result<usize, CommandError> {
     let mut indexed: Vec<BTreeSet<Vec<u8>>> = vec![BTreeSet::new(); unique_indexes.len()];
     let mut existing: BTreeSet<Vec<u8>> = BTreeSet::new();
-    for (key, payload) in store.scan(namespace) {
+    for (key, payload) in namespace_documents(store, namespace, session) {
         existing.insert(key);
         let Ok(document) = parse_bson(&payload) else { continue };
         for (position, specification) in unique_indexes.iter().enumerate() {
@@ -498,7 +501,7 @@ fn commit_insert(
     }
 
     if !accepted.is_empty() {
-        store.import(namespace, &accepted).map_err(|error| CommandError::new(2, format!("insert failed: {error}")))?;
+        stage_insert(store, session, namespace, &accepted)?;
     }
     Ok(accepted.len())
 }
@@ -670,6 +673,7 @@ fn duplicate_index_error(index: usize, namespace: &str, specification: &IndexSpe
 pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) -> Result<BsonDocument, CommandError> {
     let namespace =
         namespace_from_command(command, "find").ok_or_else(|| CommandError::new(73, "find command missing collection name"))?;
+    let session = SessionContext::new(command, store);
 
     let filter = match command.get("filter") {
         Some(BsonValue::Document(filter)) => filter.clone(),
@@ -685,7 +689,7 @@ pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) ->
         _ => None,
     };
 
-    let mut documents = collect_matching(store, &namespace, &filter)?;
+    let mut documents = collect_matching(store, &namespace, &filter, session.key())?;
     sort_documents(&mut documents, &sort);
 
     let start = skip.min(documents.len());
@@ -710,6 +714,7 @@ pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) ->
 pub fn count(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "count")
         .ok_or_else(|| CommandError::new(73, "count command missing collection name"))?;
+    let session = SessionContext::new(command, store);
 
     let filter = match command.get("query") {
         Some(BsonValue::Document(filter)) => filter.clone(),
@@ -719,7 +724,7 @@ pub fn count(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Comm
     let skip = parse_count(command.get("skip"));
     let limit = parse_count(command.get("limit"));
 
-    let matched = collect_matching(store, &namespace, &filter)?.len();
+    let matched = collect_matching(store, &namespace, &filter, session.key())?.len();
     let start = skip.min(matched);
     let end = if limit > 0 { (start + limit).min(matched) } else { matched };
 
@@ -733,13 +738,14 @@ pub fn count(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Comm
 pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "aggregate")
         .ok_or_else(|| CommandError::new(73, "aggregate command missing collection name"))?;
+    let session = SessionContext::new(command, store);
 
     let stages = match command.get("pipeline") {
         Some(BsonValue::Array(stages)) => stages,
         _ => return Err(CommandError::new(2, "aggregate requires a pipeline array")),
     };
 
-    let mut documents = collect_matching(store, &namespace, &BsonDocument::new())?;
+    let mut documents = collect_matching(store, &namespace, &BsonDocument::new(), session.key())?;
     for stage in stages {
         let BsonValue::Document(stage_document) = stage
         else {
@@ -835,6 +841,7 @@ pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, 
 pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "delete")
         .ok_or_else(|| CommandError::new(73, "delete command missing collection name"))?;
+    let session = SessionContext::new(command, store);
 
     let specifications = match command.get("deletes") {
         Some(BsonValue::Array(deletes)) => deletes.clone(),
@@ -865,11 +872,11 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
         if let Some(identifier) = single_id_lookup(filter) {
             let key = value_to_key(identifier);
-            deleted += store.delete(&namespace, std::slice::from_ref(&key)).unwrap_or(0) as i64;
+            deleted += stage_delete(store, session.key(), &namespace, std::slice::from_ref(&key))? as i64;
         }
         else {
             let mut keys = Vec::new();
-            for (key, value) in store.scan(&namespace) {
+            for (key, value) in namespace_documents(store, &namespace, session.key()) {
                 if limit > 0 && keys.len() >= limit {
                     break;
                 }
@@ -882,7 +889,7 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                 }
             }
             if !keys.is_empty() {
-                deleted += store.delete(&namespace, &keys).unwrap_or(0) as i64;
+                deleted += stage_delete(store, session.key(), &namespace, &keys)? as i64;
             }
         }
     }
@@ -895,6 +902,7 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "update")
         .ok_or_else(|| CommandError::new(73, "update command missing collection name"))?;
+    let session = SessionContext::new(command, store);
     let Some(BsonValue::Array(specifications)) = command.get("updates")
     else {
         return Err(CommandError::new(2, "update requires an 'updates' array"));
@@ -906,7 +914,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     let unique_indexes: Vec<IndexSpec> = index_specs.iter().filter(|index| index.unique).cloned().collect();
     let mut indexed: BTreeMap<Vec<u8>, Vec<BTreeSet<Vec<u8>>>> = BTreeMap::new();
     if !unique_indexes.is_empty() {
-        for (key, value) in store.scan(&namespace) {
+        for (key, value) in namespace_documents(store, &namespace, session.key()) {
             if let Ok(document) = parse_bson(&value) {
                 indexed.insert(key, unique_indexes.iter().map(|spec| tuples_of(&document, spec)).collect());
             }
@@ -943,7 +951,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         let multi = matches!(specification.get("multi"), Some(BsonValue::Bool(true)));
 
         let mut changes = Vec::new();
-        for (key, value) in store.scan(&namespace) {
+        for (key, value) in namespace_documents(store, &namespace, session.key()) {
             let Ok(document) = parse_bson(&value)
             else {
                 continue;
@@ -967,7 +975,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     // zeroed counter pair plus `writeErrors`, and aborts the rest
                     // of the command.
                     if !changes.is_empty() {
-                        store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                        stage_replace(store, session.key(), &namespace, &changes)?;
                     }
                     return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
@@ -991,7 +999,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     // Same shape as a failing multi-update: already applied writes
                     // stay, counters report zero, and the command stops here.
                     if !changes.is_empty() {
-                        store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
+                        stage_replace(store, session.key(), &namespace, &changes)?;
                     }
                     return Ok(write_reply(
                         0,
@@ -1013,7 +1021,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             }
         }
         if !changes.is_empty() {
-            store.replace(&namespace, &changes).map_err(|error| CommandError::new(2, error.to_string()))?;
+            stage_replace(store, session.key(), &namespace, &changes)?;
         }
         if matched == 0 && upsert {
             let applied = if replacement {
@@ -1049,7 +1057,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             }
             let candidates = vec![(index, inserted, identifier.clone())];
             let mut write_errors = Vec::new();
-            let inserted_count = commit_insert(store, &namespace, &candidates, &unique_indexes, true, &mut write_errors)?;
+            let inserted_count = commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, true, &mut write_errors)?;
             if inserted_count == 1 {
                 return Ok(upsert_reply(index, &identifier));
             }
@@ -2423,6 +2431,150 @@ pub fn coll_mod(command: &BsonDocument, store: &Store) -> Result<BsonDocument, C
     Ok(response)
 }
 
+/// Logical session carried by `lsid`. `key` stays `None` while the session has
+/// no open transaction, so the command reads and writes committed data.
+struct SessionContext {
+    key: Option<String>,
+}
+
+impl SessionContext {
+    fn new(command: &BsonDocument, store: &Store) -> Self {
+        let key = transaction_key(command);
+        if let Some(session) = &key {
+            if command_bool(command, "startTransaction", false) {
+                store.begin_transaction(session);
+            }
+        }
+        let key = key.filter(|session| store.transaction_active(session));
+        Self { key }
+    }
+
+    fn key(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+}
+
+/// Stable textual form of the `lsid` document, used as the session key.
+fn transaction_key(command: &BsonDocument) -> Option<String> {
+    match command.get("lsid") {
+        Some(BsonValue::Document(document)) => Some(json::document_to_json(document)),
+        _ => None,
+    }
+}
+
+fn integral_field(document: &BsonDocument, field: &str) -> Option<i64> {
+    match document.get(field) {
+        Some(BsonValue::Int32(value)) => Some(i64::from(*value)),
+        Some(BsonValue::Int64(value)) => Some(*value),
+        Some(BsonValue::Double(value)) => integral_value(*value),
+        _ => None,
+    }
+}
+
+fn ok_reply() -> BsonDocument {
+    let mut response = BsonDocument::new();
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    response
+}
+
+/// `mongod 8.0.9` reports a write conflict during plan execution with the
+/// `TransientTransactionError` label and aborts the transaction.
+fn write_conflict_error() -> CommandError {
+    CommandError::new(
+        112,
+        "Caused by :: Write conflict during plan execution and yielding is disabled. :: Please retry your operation or multi-document transaction.",
+    )
+    .with_detail("errorLabels", BsonValue::Array(vec![BsonValue::String("TransientTransactionError".to_string())]))
+}
+
+fn no_such_transaction_error(txn_number: i64) -> CommandError {
+    CommandError::new(251, format!("Transaction with {{ txnNumber: {txn_number} }} has been aborted."))
+        .with_detail("errorLabels", BsonValue::Array(vec![BsonValue::String("TransientTransactionError".to_string())]))
+}
+
+/// Stages a batch of new documents in the session's transaction, or writes it
+/// straight to the shard outside one.
+fn stage_insert(
+    store: &Store,
+    session: Option<&str>,
+    namespace: &str,
+    documents: &[(Vec<u8>, Vec<u8>)],
+) -> Result<(), CommandError> {
+    match session {
+        Some(key) => {
+            for (document_key, payload) in documents {
+                if store.transaction_write(key, namespace, document_key, Some(payload.clone())) == TransactionWrite::Conflict {
+                    return Err(write_conflict_error());
+                }
+            }
+            Ok(())
+        }
+        None => store.import(namespace, documents).map(|_| ()).map_err(|error| CommandError::new(2, format!("insert failed: {error}"))),
+    }
+}
+
+/// Stages replacements in the session's transaction, or writes them straight
+/// to the shard outside one.
+fn stage_replace(
+    store: &Store,
+    session: Option<&str>,
+    namespace: &str,
+    documents: &[(Vec<u8>, Vec<u8>)],
+) -> Result<usize, CommandError> {
+    match session {
+        Some(key) => {
+            for (document_key, payload) in documents {
+                if store.transaction_write(key, namespace, document_key, Some(payload.clone())) == TransactionWrite::Conflict {
+                    return Err(write_conflict_error());
+                }
+            }
+            Ok(documents.len())
+        }
+        None => store.replace(namespace, documents).map_err(|error| CommandError::new(2, error.to_string())),
+    }
+}
+
+/// Stages deletions in the session's transaction, or writes them straight to
+/// the shard outside one.
+fn stage_delete(
+    store: &Store,
+    session: Option<&str>,
+    namespace: &str,
+    keys: &[Vec<u8>],
+) -> Result<usize, CommandError> {
+    match session {
+        Some(key) => {
+            for document_key in keys {
+                if store.transaction_write(key, namespace, document_key, None) == TransactionWrite::Conflict {
+                    return Err(write_conflict_error());
+                }
+            }
+            Ok(keys.len())
+        }
+        None => store.delete(namespace, keys).map_err(|error| CommandError::new(2, error.to_string())),
+    }
+}
+
+/// The namespace as seen by the session: staged writes layered over committed
+/// data when a transaction is open, committed data otherwise.
+fn namespace_documents(store: &Store, namespace: &str, session: Option<&str>) -> Vec<(Vec<u8>, Vec<u8>)> {
+    match session.and_then(|key| store.transaction_scan(key, namespace)) {
+        Some(documents) => documents,
+        None => store.scan(namespace),
+    }
+}
+
+/// One document as seen by the session, including staged inserts, updates, and
+/// deletes.
+fn namespace_document(store: &Store, namespace: &str, key: &[u8], session: Option<&str>) -> Option<Vec<u8>> {
+    if let Some(session) = session {
+        if let Some(staged) = store.transaction_get(session, namespace, key) {
+            return staged;
+        }
+    }
+    store.get(namespace, key)
+}
+
 fn command_bool(command: &BsonDocument, field: &str, default: bool) -> bool {
     match command.get(field) {
         Some(BsonValue::Bool(flag)) => *flag,
@@ -2441,6 +2593,7 @@ fn find_projection(documents: Vec<BsonDocument>, fields: Option<&BsonValue>) -> 
 pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "findAndModify")
         .ok_or_else(|| CommandError::new(73, "findAndModify command missing collection name"))?;
+    let session = SessionContext::new(command, store);
     let empty = BsonDocument::new();
     let filter = match command.get("query") {
         Some(BsonValue::Document(filter)) => filter,
@@ -2474,7 +2627,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
     }
 
     let sort = parse_sort(command.get("sort"));
-    let mut documents = collect_matching(store, &namespace, filter)?;
+    let mut documents = collect_matching(store, &namespace, filter, session.key())?;
     sort_documents(&mut documents, &sort);
     let matched = documents.first().cloned();
 
@@ -2483,7 +2636,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         if let Some(document) = &matched {
             last_error.push("n".to_string(), BsonValue::Int32(1));
             if let Some(identifier) = document.get("_id") {
-                store.delete(&namespace, &[value_to_key(identifier)]).map_err(|error| CommandError::new(2, error.to_string()))?;
+                stage_delete(store, session.key(), &namespace, &[value_to_key(identifier)])?;
             }
             let value = find_projection(vec![document.clone()], command.get("fields"))?;
             return Ok(find_and_modify_reply(last_error, value.into_iter().next()));
@@ -2511,9 +2664,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
             return Err(CommandError::new(error.code, error.message));
         }
         let key = value_to_key(identifier_value.as_ref().unwrap_or(&BsonValue::Null));
-        store
-            .replace(&namespace, &[(key, encode_bson(&updated))])
-            .map_err(|error| CommandError::new(2, error.to_string()))?;
+        stage_replace(store, session.key(), &namespace, &[(key, encode_bson(&updated))])?;
         let mut last_error = BsonDocument::new();
         last_error.push("n".to_string(), BsonValue::Int32(1));
         last_error.push("updatedExisting".to_string(), BsonValue::Bool(true));
@@ -2545,7 +2696,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         let identifier = inserted.get("_id").cloned().unwrap_or(BsonValue::Null);
         let candidates = vec![(0_usize, inserted.clone(), identifier.clone())];
         let mut write_errors = Vec::new();
-        commit_insert(store, &namespace, &candidates, &Vec::new(), true, &mut write_errors)?;
+        commit_insert(store, session.key(), &namespace, &candidates, &Vec::new(), true, &mut write_errors)?;
         if let Some(error) = write_errors.first() {
             return Err(CommandError::new(error.code, error.message.clone()));
         }
@@ -2589,11 +2740,39 @@ fn find_and_modify_validation_failure(info: BsonDocument) -> BsonDocument {
     response
 }
 
+/// `commitTransaction`: applies the session's staged writes, reporting a write
+/// conflict when another transaction changed one of those documents first.
+pub fn commit_transaction(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let Some(session) = transaction_key(command) else {
+        return Err(CommandError::new(40414, "commitTransaction must be run within a session"));
+    };
+    match store.transaction_commit(&session) {
+        TransactionCommit::Committed => Ok(ok_reply()),
+        TransactionCommit::Conflict => Err(write_conflict_error()),
+        TransactionCommit::Aborted | TransactionCommit::NoTransaction => {
+            Err(no_such_transaction_error(integral_field(command, "txnNumber").unwrap_or(0)))
+        }
+    }
+}
+
+/// `abortTransaction`: discards the session's staged writes.
+pub fn abort_transaction(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let Some(session) = transaction_key(command) else {
+        return Err(CommandError::new(40414, "abortTransaction must be run within a session"));
+    };
+    if store.transaction_abort(&session) {
+        Ok(ok_reply())
+    } else {
+        Err(no_such_transaction_error(integral_field(command, "txnNumber").unwrap_or(0)))
+    }
+}
+
 /// `distinct`: nested paths, one-level array flattening, query filtering, and
 /// first-occurrence ordering.
 pub fn distinct(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "distinct")
         .ok_or_else(|| CommandError::new(73, "distinct command missing collection name"))?;
+    let session = SessionContext::new(command, store);
     let Some(key) = command.get("key") else {
         return Err(CommandError::new(40414, "BSON field 'distinct.key' is missing but a required field"));
     };
@@ -2614,7 +2793,7 @@ pub fn distinct(command: &BsonDocument, store: &Store) -> Result<BsonDocument, C
     let segments: Vec<&str> = key.split('.').collect();
     let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
     let mut values = Vec::new();
-    for (_key, payload) in store.scan(&namespace) {
+    for (_key, payload) in namespace_documents(store, &namespace, session.key()) {
         let Ok(document) = parse_bson(&payload)
         else {
             continue;
@@ -3253,10 +3432,11 @@ fn collect_matching(
     store: &Store,
     namespace: &str,
     filter: &BsonDocument,
+    session: Option<&str>,
 ) -> Result<Vec<BsonDocument>, CommandError> {
     if let Some(identifier) = single_id_lookup(filter) {
         let key = value_to_key(identifier);
-        return match store.get(namespace, &key) {
+        return match namespace_document(store, namespace, &key, session) {
             Some(bytes) => match parse_bson(&bytes) {
                 Ok(document) if document_matches(&document, filter)? => Ok(vec![document]),
                 _ => Ok(Vec::new()),
@@ -3266,7 +3446,7 @@ fn collect_matching(
     }
 
     let mut documents = Vec::new();
-    for (_key, value) in store.scan(namespace) {
+    for (_key, value) in namespace_documents(store, namespace, session) {
         if let Ok(candidate) = parse_bson(&value) {
             if document_matches(&candidate, filter)? {
                 documents.push(candidate);
@@ -3538,7 +3718,7 @@ fn lookup_stage(
 
     let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
     let foreign_namespace = format!("{database}.{from}");
-    let foreign_documents = collect_matching(store, &foreign_namespace, &BsonDocument::new())?;
+    let foreign_documents = collect_matching(store, &foreign_namespace, &BsonDocument::new(), None)?;
 
     let mut output = Vec::with_capacity(documents.len());
     for document in documents {

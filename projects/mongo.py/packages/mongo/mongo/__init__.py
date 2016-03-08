@@ -7,9 +7,11 @@ everything public re-exports the `mongo-pyo3` functions unchanged.
 from .mongo_pyo3 import (  # noqa: F401
     MongoCursors,
     MongoStore,
+    abort_transaction,
     aggregate,
     bulk_write,
     coll_mod,
+    commit_transaction,
     command_name,
     count,
     create,
@@ -42,9 +44,11 @@ from .mongo_pyo3 import (  # noqa: F401
 __all__ = [
     "MongoCursors",
     "MongoStore",
+    "abort_transaction",
     "aggregate",
     "bulk_write",
     "coll_mod",
+    "commit_transaction",
     "command_name",
     "count",
     "create",

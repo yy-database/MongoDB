@@ -94,6 +94,9 @@ def command_of(case, step, command):
     if case.get("noDb"):
         return command
     enriched = dict(command)
+    for key in ("lsid", "txnNumber", "startTransaction", "autocommit"):
+        if key in step:
+            enriched[key] = step[key]
     enriched["$db"] = step.get("db", case.get("db", "app"))
     return enriched
 
@@ -550,6 +553,14 @@ def run_case(case):
                 if key in step:
                     command[key] = step[key]
             reply = mongo.list_collections(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "commitTransaction":
+            command = {"commitTransaction": 1}
+            reply = mongo.commit_transaction(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "abortTransaction":
+            command = {"abortTransaction": 1}
+            reply = mongo.abort_transaction(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
         if op == "createIndexes":
             command = {"createIndexes": step["collection"]}

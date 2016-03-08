@@ -100,8 +100,12 @@ function buildSynthetic(spec) {
 }
 
 function commandText(testCase, step, command) {
-    if (testCase.noDb) return JSON.stringify(command)
-    return JSON.stringify({ ...command, $db: step.db ?? testCase.db ?? 'app' })
+    const merged = { ...command }
+    for (const key of ['lsid', 'txnNumber', 'startTransaction', 'autocommit']) {
+        if (step[key] !== undefined) merged[key] = step[key]
+    }
+    if (testCase.noDb) return JSON.stringify(merged)
+    return JSON.stringify({ ...merged, $db: step.db ?? testCase.db ?? 'app' })
 }
 
 function runCase(testCase) {
@@ -240,6 +244,14 @@ function runCase(testCase) {
                     if (step[key] !== undefined) command[key] = step[key]
                 }
                 return JSON.parse(binding.listCollections(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'commitTransaction': {
+                const command = { commitTransaction: 1 }
+                return JSON.parse(binding.commitTransaction(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'abortTransaction': {
+                const command = { abortTransaction: 1 }
+                return JSON.parse(binding.abortTransaction(storeOf(step.store), commandText(testCase, step, command)))
             }
             case 'createIndexes': {
                 const command = { createIndexes: step.collection }

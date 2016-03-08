@@ -1,0 +1,196 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "sessions.commit_visibility",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "old" }] },
+                {
+                    "op": "update",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "v": "new" } } }],
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "filter": { "_id": 1 },
+                    "as": "r2"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r3" },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r4"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r5" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": "new" },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "old" },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/cursor/firstBatch/0/v", "equals": "new" }
+            ]
+        },
+        {
+            "id": "sessions.abort_discards",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "old" }] },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 5, "v": "pending" }],
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "autocommit": false,
+                    "filter": { "_id": 5 },
+                    "as": "r2"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 5 }, "as": "r3" },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "as": "r4"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 5 }, "as": "r5" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": "pending" },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "sessions.write_conflict",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2, "v": 20 }] },
+                {
+                    "op": "update",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "updates": [{ "q": { "_id": 2 }, "u": { "$set": { "v": 21 } } }],
+                    "as": "r1"
+                },
+                {
+                    "op": "update",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uBA==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "updates": [{ "q": { "_id": 2 }, "u": { "$set": { "v": 22 } } }],
+                    "as": "r2"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r3"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uBA==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r4"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 2 }, "as": "r5" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r2/code", "equals": { "$numberInt": "112" } },
+                { "at": "/r2/codeName", "equals": "WriteConflict" },
+                {
+                    "at": "/r2/errmsg",
+                    "equals": "Caused by :: Write conflict during plan execution and yielding is disabled. :: Please retry your operation or multi-document transaction."
+                },
+                { "at": "/r2/errorLabels/0", "equals": "TransientTransactionError" },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r4/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r4/codeName", "equals": "NoSuchTransaction" },
+                { "at": "/r4/errmsg", "equals": "Transaction with { txnNumber: 5 } has been aborted." },
+                { "at": "/r4/errorLabels/0", "equals": "TransientTransactionError" },
+                { "at": "/r5/cursor/firstBatch/0/v", "equals": { "$numberInt": "21" } }
+            ]
+        },
+        {
+            "id": "sessions.uncommitted_invisible",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "old" }] },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAw==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 9, "v": "staged" }],
+                    "as": "r1"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 9 }, "as": "r2" },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAw==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "autocommit": false,
+                    "filter": { "_id": 9 },
+                    "as": "r3"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAw==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "as": "r4"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 9 }, "as": "r5" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "staged" },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r5/cursor/firstBatch/0/v", "equals": "staged" }
+            ]
+        }
+    ]
+}

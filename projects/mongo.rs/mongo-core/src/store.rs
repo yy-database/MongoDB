@@ -378,11 +378,55 @@ fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, St
     })
 }
 
+/// One in-flight transaction: staged writes plus the store version it started
+/// from. `writes` is `None` for a staged delete.
+#[derive(Debug, Clone)]
+pub struct TransactionState {
+    /// Store version observed when the transaction started.
+    pub start_version: u64,
+    /// Staged `(namespace, encoded _id) -> document bytes`.
+    pub writes: BTreeMap<(String, Vec<u8>), Option<Vec<u8>>>,
+    /// Set when a write conflict or `abortTransaction` ended the transaction.
+    pub aborted: bool,
+}
+
+/// Result of staging one write inside a transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionWrite {
+    /// The write was recorded in the transaction overlay.
+    Staged,
+    /// Another active transaction already staged the same document.
+    Conflict,
+}
+
+/// Result of committing a transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionCommit {
+    /// The staged writes were applied.
+    Committed,
+    /// A document was modified after the transaction started.
+    Conflict,
+    /// The transaction had already been aborted by a conflict.
+    Aborted,
+    /// The session has no transaction to commit.
+    NoTransaction,
+}
+
+/// Sessions, their staged writes, and the per-document write versions used for
+/// conflict detection. Kept in memory: it describes in-flight work, not data.
+#[derive(Debug, Default)]
+struct SessionRegistry {
+    transactions: BTreeMap<String, TransactionState>,
+    versions: BTreeMap<(String, Vec<u8>), u64>,
+    version: u64,
+}
+
 /// Document store backed by one `.yyds` catalog and one `.yykv` shard.
 #[derive(Debug)]
 pub struct Store {
     shard: Mutex<FileShard>,
     catalog: Mutex<CatalogState>,
+    sessions: Mutex<SessionRegistry>,
 }
 
 impl Store {
@@ -429,7 +473,7 @@ impl Store {
             catalog.flush()?;
         }
 
-        Ok(Self { shard: Mutex::new(shard), catalog: Mutex::new(catalog) })
+        Ok(Self { shard: Mutex::new(shard), catalog: Mutex::new(catalog), sessions: Mutex::new(SessionRegistry::default()) })
     }
 
     fn lock(&self) -> MutexGuard<'_, FileShard> {
@@ -444,6 +488,155 @@ impl Store {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
+    }
+
+    fn sessions_lock(&self) -> MutexGuard<'_, SessionRegistry> {
+        match self.sessions.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    /// Notes one committed batch in the per-document version map. Active
+    /// transactions use these versions to detect a write conflict at commit.
+    fn note_writes(&self, namespace: &str, keys: &[Vec<u8>]) {
+        let mut registry = self.sessions_lock();
+        registry.version += 1;
+        let version = registry.version;
+        for key in keys {
+            registry.versions.insert((namespace.to_string(), key.clone()), version);
+        }
+    }
+
+    /// Starts (or restarts) a transaction for one logical session.
+    pub fn begin_transaction(&self, session: &str) {
+        let mut registry = self.sessions_lock();
+        let start_version = registry.version;
+        registry.transactions.insert(
+            session.to_string(),
+            TransactionState { start_version, writes: BTreeMap::new(), aborted: false },
+        );
+    }
+
+    /// Whether the session currently has a usable transaction.
+    pub fn transaction_active(&self, session: &str) -> bool {
+        self.sessions_lock().transactions.get(session).map(|state| !state.aborted).unwrap_or(false)
+    }
+
+    /// Stages one write in a transaction, rejecting a document another active
+    /// transaction already holds.
+    pub fn transaction_write(&self, session: &str, namespace: &str, key: &[u8], value: Option<Vec<u8>>) -> TransactionWrite {
+        let mut registry = self.sessions_lock();
+        let target = (namespace.to_string(), key.to_vec());
+        let mut conflict = false;
+        for (other, state) in &registry.transactions {
+            if other == session || state.aborted {
+                continue;
+            }
+            if state.writes.contains_key(&target) {
+                conflict = true;
+                break;
+            }
+        }
+        if conflict {
+            if let Some(state) = registry.transactions.get_mut(session) {
+                state.aborted = true;
+            }
+            return TransactionWrite::Conflict;
+        }
+        if let Some(state) = registry.transactions.get_mut(session) {
+            state.writes.insert(target, value);
+        }
+        TransactionWrite::Staged
+    }
+
+    /// The namespace as the transaction sees it, `None` when the session has no
+    /// active transaction and the caller should read the committed data.
+    pub fn transaction_scan(&self, session: &str, namespace: &str) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+        let staged: Vec<(Vec<u8>, Option<Vec<u8>>)> = {
+            let registry = self.sessions_lock();
+            let state = registry.transactions.get(session)?;
+            if state.aborted {
+                return None;
+            }
+            state
+                .writes
+                .iter()
+                .filter(|((owner, _), _)| owner == namespace)
+                .map(|((_, key), value)| (key.clone(), value.clone()))
+                .collect()
+        };
+        let mut documents = self.scan(namespace);
+        for (key, value) in staged {
+            match value {
+                Some(payload) => match documents.iter_mut().find(|(candidate, _)| candidate == &key) {
+                    Some(existing) => existing.1 = payload,
+                    None => documents.push((key, payload)),
+                },
+                None => documents.retain(|(candidate, _)| candidate != &key),
+            }
+        }
+        Some(documents)
+    }
+
+    /// One document as the transaction sees it. The outer `Option` is `None`
+    /// when the key is not staged, so the caller reads the committed value.
+    pub fn transaction_get(&self, session: &str, namespace: &str, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        let registry = self.sessions_lock();
+        let state = registry.transactions.get(session)?;
+        if state.aborted {
+            return None;
+        }
+        state.writes.get(&(namespace.to_string(), key.to_vec())).cloned().map(Some).unwrap_or(None)
+    }
+
+    /// Applies every staged write, or reports the conflict that prevents it.
+    pub fn transaction_commit(&self, session: &str) -> TransactionCommit {
+        let (start_version, aborted, writes) = {
+            let registry = self.sessions_lock();
+            let Some(state) = registry.transactions.get(session) else {
+                return TransactionCommit::NoTransaction;
+            };
+            (state.start_version, state.aborted, state.writes.clone())
+        };
+        if aborted {
+            let mut registry = self.sessions_lock();
+            registry.transactions.remove(session);
+            return TransactionCommit::Aborted;
+        }
+        let conflict = {
+            let registry = self.sessions_lock();
+            writes.keys().any(|key| registry.versions.get(key).map(|version| *version > start_version).unwrap_or(false))
+        };
+        if conflict {
+            let mut registry = self.sessions_lock();
+            if let Some(state) = registry.transactions.get_mut(session) {
+                state.aborted = true;
+            }
+            return TransactionCommit::Conflict;
+        }
+        let mut by_namespace: BTreeMap<String, Vec<(Vec<u8>, Option<Vec<u8>>)>> = BTreeMap::new();
+        for ((namespace, key), value) in writes {
+            by_namespace.entry(namespace).or_default().push((key, value));
+        }
+        for (namespace, entries) in by_namespace {
+            let replaced: Vec<(Vec<u8>, Vec<u8>)> =
+                entries.iter().filter_map(|(key, value)| value.clone().map(|payload| (key.clone(), payload))).collect();
+            if !replaced.is_empty() {
+                let _ = self.replace(&namespace, &replaced);
+            }
+            let deleted: Vec<Vec<u8>> = entries.iter().filter(|(_, value)| value.is_none()).map(|(key, _)| key.clone()).collect();
+            if !deleted.is_empty() {
+                let _ = self.delete(&namespace, &deleted);
+            }
+        }
+        self.sessions_lock().transactions.remove(session);
+        TransactionCommit::Committed
+    }
+
+    /// Drops the transaction overlay. Returns `false` when there was nothing to abort.
+    pub fn transaction_abort(&self, session: &str) -> bool {
+        self.sessions_lock().transactions.remove(session).is_some()
     }
 
     fn register_namespace(&self, namespace: &str) -> Result<(), StoreError> {
@@ -503,6 +696,7 @@ impl Store {
     /// at the first duplicate, `ordered: false` keeps the remaining valid documents.
     pub fn insert(&self, namespace: &str, documents: &[(Vec<u8>, Vec<u8>)], ordered: bool) -> Result<InsertReport, StoreError> {
         let mut report = InsertReport::default();
+        let mut written: Vec<Vec<u8>> = Vec::new();
         {
             let mut shard = self.lock();
             let mut changes = Vec::with_capacity(documents.len());
@@ -523,6 +717,7 @@ impl Store {
                     continue;
                 }
                 changes.push(ShardChange::Put { key, value: StoredValue::Inline(InlineValue(payload.clone())), expires_at: None });
+                written.push(key_bytes.clone());
                 report.inserted += 1;
             }
 
@@ -541,6 +736,7 @@ impl Store {
 
             shard.commit_changes(changes).map_err(|error| StoreError::Shard(error.to_string()))?;
         }
+        self.note_writes(namespace, &written);
         self.register_namespace(namespace)?;
         Ok(report)
     }
@@ -575,7 +771,10 @@ impl Store {
             return Ok(0);
         }
         let removed = changes.len();
+        let deleted: Vec<Vec<u8>> = keys.to_vec();
         shard.commit_changes(changes).map_err(|error| StoreError::Shard(error.to_string()))?;
+        drop(shard);
+        self.note_writes(namespace, &deleted);
         Ok(removed)
     }
 
@@ -607,6 +806,8 @@ impl Store {
             });
             shard.commit_changes(changes).map_err(|error| StoreError::Shard(error.to_string()))?;
         }
+        let keys: Vec<Vec<u8>> = documents.iter().map(|(key, _)| key.clone()).collect();
+        self.note_writes(namespace, &keys);
         self.register_namespace(namespace)?;
         Ok(documents.len())
     }

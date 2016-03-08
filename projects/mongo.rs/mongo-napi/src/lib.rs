@@ -212,6 +212,18 @@ pub fn list_collections(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::list_collections(&decode_command(&command)?, store_of(store))))
 }
 
+/// `commitTransaction` reply.
+#[napi]
+pub fn commit_transaction(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::commit_transaction(&decode_command(&command)?, store_of(store))))
+}
+
+/// `abortTransaction` reply.
+#[napi]
+pub fn abort_transaction(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::abort_transaction(&decode_command(&command)?, store_of(store))))
+}
+
 /// `listDatabases` reply.
 #[napi]
 pub fn list_databases(store: &MongoStore) -> String {
