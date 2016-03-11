@@ -399,6 +399,52 @@ pub enum TransactionWrite {
     Conflict,
 }
 
+/// Lifecycle of the newest transaction number a session used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    /// The transaction is open and accepts reads and writes.
+    Active,
+    /// The newest transaction number was committed.
+    Committed,
+    /// The newest transaction number was aborted, by the client or a conflict.
+    Aborted,
+}
+
+/// Result of starting a transaction for one session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionBegin {
+    /// A transaction was opened at the requested number.
+    Started,
+    /// The same number is already active, committed, or aborted.
+    AlreadyStarted,
+    /// The requested number is older than the session's newest number.
+    TooOld {
+        /// Newest number recorded for the session.
+        newer: i64,
+    },
+}
+
+/// What the session state allows for a write outside `startTransaction`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionWriteState {
+    /// The write belongs to the open transaction.
+    Active,
+    /// The number is older than the session's newest number.
+    TooOld {
+        /// Newest number recorded for the session.
+        newer: i64,
+    },
+    /// The number was already committed and cannot be reused.
+    AlreadyCommitted,
+    /// The number was already aborted and cannot be reused.
+    AlreadyAborted,
+    /// The number does not match any in-progress transaction.
+    NoTransaction {
+        /// Newest number recorded for the session.
+        active: i64,
+    },
+}
+
 /// Result of committing a transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransactionCommit {
@@ -406,10 +452,41 @@ pub enum TransactionCommit {
     Committed,
     /// A document was modified after the transaction started.
     Conflict,
-    /// The transaction had already been aborted by a conflict.
+    /// The number was already committed, so the commit is a no-op success.
+    AlreadyCommitted,
+    /// The number was aborted earlier, by the client or a conflict.
+    AlreadyAborted,
+    /// The number is older than the session's newest number.
+    TooOld {
+        /// Newest number recorded for the session.
+        newer: i64,
+    },
+    /// The number does not match the newest transaction of the session.
+    NoTransaction {
+        /// Newest number recorded for the session.
+        active: i64,
+    },
+}
+
+/// Result of aborting a transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionAbort {
+    /// The open transaction was dropped.
     Aborted,
-    /// The session has no transaction to commit.
-    NoTransaction,
+    /// The number belongs to a committed transaction.
+    AlreadyCommitted,
+    /// The number was already aborted.
+    AlreadyAborted,
+    /// The number is older than the session's newest number.
+    TooOld {
+        /// Newest number recorded for the session.
+        newer: i64,
+    },
+    /// The number does not match the newest transaction of the session.
+    NoTransaction {
+        /// Newest number recorded for the session.
+        active: i64,
+    },
 }
 
 /// Sessions, their staged writes, and the per-document write versions used for
@@ -417,6 +494,8 @@ pub enum TransactionCommit {
 #[derive(Debug, Default)]
 struct SessionRegistry {
     transactions: BTreeMap<String, TransactionState>,
+    last_numbers: BTreeMap<String, i64>,
+    last_states: BTreeMap<String, SessionState>,
     versions: BTreeMap<(String, Vec<u8>), u64>,
     version: u64,
 }
@@ -508,14 +587,47 @@ impl Store {
         }
     }
 
-    /// Starts (or restarts) a transaction for one logical session.
-    pub fn begin_transaction(&self, session: &str) {
+    /// Starts a transaction for one logical session. A number older than the
+    /// session's newest number is rejected, and the newest number can never be
+    /// started twice.
+    pub fn begin_transaction(&self, session: &str, txn_number: i64) -> TransactionBegin {
         let mut registry = self.sessions_lock();
+        if let Some(&last) = registry.last_numbers.get(session) {
+            if txn_number < last {
+                return TransactionBegin::TooOld { newer: last };
+            }
+            if txn_number == last {
+                return TransactionBegin::AlreadyStarted;
+            }
+        }
         let start_version = registry.version;
         registry.transactions.insert(
             session.to_string(),
             TransactionState { start_version, writes: BTreeMap::new(), aborted: false },
         );
+        registry.last_numbers.insert(session.to_string(), txn_number);
+        registry.last_states.insert(session.to_string(), SessionState::Active);
+        TransactionBegin::Started
+    }
+
+    /// What the session state allows for a command carrying `txn_number`
+    /// without `startTransaction`.
+    pub fn session_write_state(&self, session: &str, txn_number: i64) -> SessionWriteState {
+        let registry = self.sessions_lock();
+        let Some(&last) = registry.last_numbers.get(session) else {
+            return SessionWriteState::NoTransaction { active: -1 };
+        };
+        if txn_number < last {
+            return SessionWriteState::TooOld { newer: last };
+        }
+        if txn_number > last {
+            return SessionWriteState::NoTransaction { active: last };
+        }
+        match registry.last_states.get(session).copied().unwrap_or(SessionState::Active) {
+            SessionState::Active => SessionWriteState::Active,
+            SessionState::Committed => SessionWriteState::AlreadyCommitted,
+            SessionState::Aborted => SessionWriteState::AlreadyAborted,
+        }
     }
 
     /// Whether the session currently has a usable transaction.
@@ -542,6 +654,7 @@ impl Store {
             if let Some(state) = registry.transactions.get_mut(session) {
                 state.aborted = true;
             }
+            registry.last_states.insert(session.to_string(), SessionState::Aborted);
             return TransactionWrite::Conflict;
         }
         if let Some(state) = registry.transactions.get_mut(session) {
@@ -591,34 +704,50 @@ impl Store {
     }
 
     /// Applies every staged write, or reports the conflict that prevents it.
-    pub fn transaction_commit(&self, session: &str) -> TransactionCommit {
+    pub fn transaction_commit(&self, session: &str, txn_number: i64) -> TransactionCommit {
+        let mut registry = self.sessions_lock();
+        let Some(&last) = registry.last_numbers.get(session) else {
+            return TransactionCommit::NoTransaction { active: -1 };
+        };
+        if txn_number < last {
+            return TransactionCommit::TooOld { newer: last };
+        }
+        if txn_number > last {
+            return TransactionCommit::NoTransaction { active: last };
+        }
+        match registry.last_states.get(session).copied() {
+            Some(SessionState::Committed) => return TransactionCommit::AlreadyCommitted,
+            Some(SessionState::Aborted) => {
+                registry.transactions.remove(session);
+                return TransactionCommit::AlreadyAborted;
+            }
+            _ => {}
+        }
         let (start_version, aborted, writes) = {
-            let registry = self.sessions_lock();
             let Some(state) = registry.transactions.get(session) else {
-                return TransactionCommit::NoTransaction;
+                return TransactionCommit::NoTransaction { active: last };
             };
             (state.start_version, state.aborted, state.writes.clone())
         };
         if aborted {
-            let mut registry = self.sessions_lock();
             registry.transactions.remove(session);
-            return TransactionCommit::Aborted;
+            registry.last_states.insert(session.to_string(), SessionState::Aborted);
+            return TransactionCommit::AlreadyAborted;
         }
-        let conflict = {
-            let registry = self.sessions_lock();
-            writes.keys().any(|key| registry.versions.get(key).map(|version| *version > start_version).unwrap_or(false))
-        };
+        let conflict =
+            writes.keys().any(|key| registry.versions.get(key).map(|version| *version > start_version).unwrap_or(false));
         if conflict {
-            let mut registry = self.sessions_lock();
             if let Some(state) = registry.transactions.get_mut(session) {
                 state.aborted = true;
             }
+            registry.last_states.insert(session.to_string(), SessionState::Aborted);
             return TransactionCommit::Conflict;
         }
         let mut by_namespace: BTreeMap<String, Vec<(Vec<u8>, Option<Vec<u8>>)>> = BTreeMap::new();
         for ((namespace, key), value) in writes {
             by_namespace.entry(namespace).or_default().push((key, value));
         }
+        drop(registry);
         for (namespace, entries) in by_namespace {
             let replaced: Vec<(Vec<u8>, Vec<u8>)> =
                 entries.iter().filter_map(|(key, value)| value.clone().map(|payload| (key.clone(), payload))).collect();
@@ -630,13 +759,38 @@ impl Store {
                 let _ = self.delete(&namespace, &deleted);
             }
         }
-        self.sessions_lock().transactions.remove(session);
+        let mut registry = self.sessions_lock();
+        registry.transactions.remove(session);
+        registry.last_states.insert(session.to_string(), SessionState::Committed);
         TransactionCommit::Committed
     }
 
-    /// Drops the transaction overlay. Returns `false` when there was nothing to abort.
-    pub fn transaction_abort(&self, session: &str) -> bool {
-        self.sessions_lock().transactions.remove(session).is_some()
+    /// Drops the open transaction, or reports that the number was already
+    /// committed or aborted.
+    pub fn transaction_abort(&self, session: &str, txn_number: i64) -> TransactionAbort {
+        let mut registry = self.sessions_lock();
+        let Some(&last) = registry.last_numbers.get(session) else {
+            return TransactionAbort::NoTransaction { active: -1 };
+        };
+        if txn_number < last {
+            return TransactionAbort::TooOld { newer: last };
+        }
+        if txn_number > last {
+            return TransactionAbort::NoTransaction { active: last };
+        }
+        match registry.last_states.get(session).copied() {
+            Some(SessionState::Committed) => return TransactionAbort::AlreadyCommitted,
+            Some(SessionState::Aborted) => {
+                registry.transactions.remove(session);
+                return TransactionAbort::AlreadyAborted;
+            }
+            _ => {}
+        }
+        if registry.transactions.remove(session).is_none() {
+            return TransactionAbort::NoTransaction { active: last };
+        }
+        registry.last_states.insert(session.to_string(), SessionState::Aborted);
+        TransactionAbort::Aborted
     }
 
     fn register_namespace(&self, namespace: &str) -> Result<(), StoreError> {

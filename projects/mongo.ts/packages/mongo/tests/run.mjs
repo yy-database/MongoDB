@@ -180,6 +180,11 @@ function runCase(testCase) {
                 }
                 return JSON.parse(binding.count(storeOf(step.store), commandText(testCase, step, command)))
             }
+            case 'explain': {
+                const command = { explain: step.explain }
+                if (step.verbosity !== undefined) command.verbosity = step.verbosity
+                return JSON.parse(binding.explain(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'aggregate': {
                 const command = { aggregate: step.collection, pipeline: step.pipeline, cursor: {} }
                 return JSON.parse(binding.aggregate(storeOf(step.store), commandText(testCase, step, command)))

@@ -221,17 +221,17 @@
             "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
         },
         {
-            "id": "err.cmd.unknown_stage_bucket",
+            "id": "err.cmd.unknown_stage_graph_lookup",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $bucket is a documented stage this gateway does not implement",
+            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $graphLookup is a documented stage this gateway does not implement",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$bucket": { "groupBy": "$a", "boundaries": [0, 10] } }], "as": "r2" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$graphLookup": { "from": "items", "startWith": "$_id", "connectFromField": "to", "connectToField": "_id", "as": "graph" } }], "as": "r2" }
             ],
             "checks": [
                 { "at": "/r2/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $bucket (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $sortByCount, $group, $project)" }
+                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $graphLookup (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $project)" }
             ]
         },
         {

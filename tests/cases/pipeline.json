@@ -563,15 +563,15 @@
         {
             "id": "pipe.project.unknown_expression",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Operators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/); $literal is documented but not implemented here",
+            "source": "MongoDB manual, Aggregation Pipeline Operators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/); $toUpper is documented but not implemented here",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "x": { "$literal": 1 } } }], "as": "r" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "x": { "$toUpper": "$v" } } }], "as": "r" }
             ],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "unknown $project expression: $literal (supported: $add, $concat, $ifNull)" }
+                { "at": "/r/errmsg", "equals": "unknown $project expression: $toUpper (supported: $add, $concat, $ifNull, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)" }
             ]
         },
         {
@@ -677,16 +677,16 @@
             ]
         },
         {
-            "id": "pipe.lookup.pipeline_outside_gateway",
+            "id": "pipe.lookup.empty_from",
             "surface": "error",
-            "source": "coordinate: the $lookup sub-pipeline form is not implemented in this gateway, so it is reported instead of executed",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28018), 2026-11-06, `$lookup` without `from` and without `pipeline` reports code 9",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "foreign_docs", "pipeline": [{ "$match": { "b": 2 } }], "as": "join" } }], "as": "r" }
+                { "op": "aggregate", "collection": "local_docs", "pipeline": [{ "$lookup": { "from": "", "as": "join" } }], "as": "r" }
             ],
             "checks": [
-                { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "$lookup sub-pipelines are outside this gateway (coordinate: only `from` + `localField` + `foreignField` + `as` is supported)" }
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "must specify 'pipeline' when 'from' is empty" }
             ]
         },
         {

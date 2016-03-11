@@ -143,6 +143,12 @@ fn count(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
     Ok(command_reply(commands::count(&decode_command(command)?, &store.inner)))
 }
 
+/// `explain` reply.
+#[pyfunction]
+fn explain(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::explain(&decode_command(command)?, &store.inner)))
+}
+
 /// `aggregate` reply.
 #[pyfunction]
 fn aggregate(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
@@ -281,6 +287,7 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(insert, module)?)?;
     module.add_function(wrap_pyfunction!(find, module)?)?;
     module.add_function(wrap_pyfunction!(count, module)?)?;
+    module.add_function(wrap_pyfunction!(explain, module)?)?;
     module.add_function(wrap_pyfunction!(aggregate, module)?)?;
     module.add_function(wrap_pyfunction!(delete, module)?)?;
     module.add_function(wrap_pyfunction!(update, module)?)?;

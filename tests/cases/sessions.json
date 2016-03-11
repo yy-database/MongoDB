@@ -191,6 +191,346 @@
                 { "at": "/r5/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r5/cursor/firstBatch/0/v", "equals": "staged" }
             ]
+        },
+        {
+            "id": "sessions.txn_number_too_old",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "seed" }] },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 2, "v": "five" }],
+                    "as": "r1"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r2"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "4" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 3, "v": "four" }],
+                    "as": "r3"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "4" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 3, "v": "four" }],
+                    "as": "r4"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 4, "v": "six" }],
+                    "as": "r5"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "as": "r6"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 4 }, "as": "r7" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r3/code", "equals": { "$numberInt": "225" } },
+                { "at": "/r3/codeName", "equals": "TransactionTooOld" },
+                {
+                    "at": "/r3/errmsg",
+                    "equals": "Cannot start transaction with { txnNumber: 4 } on session 00112233-4455-6677-8899-aabbccddee01 - 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU= -  -  because a newer transaction with txnNumberAndRetryCounter { txnNumber: 5, txnRetryCounter: 0 } has already started on this session."
+                },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r4/code", "equals": { "$numberInt": "225" } },
+                { "at": "/r4/codeName", "equals": "TransactionTooOld" },
+                { "at": "/r5/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r6/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r7/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "sessions.session_state_writes",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 4, "v": "committed" }],
+                    "as": "r1"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "as": "r2"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 5, "v": "late" }],
+                    "as": "r3"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "as": "r4"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "6" },
+                    "as": "r5"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 8, "v": "aborted" }],
+                    "as": "r6"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "as": "r7"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 9, "v": "late" }],
+                    "as": "r8"
+                },
+                {
+                    "op": "commitTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "as": "r9"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "as": "r10"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "7" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 10, "v": "retry" }],
+                    "as": "r11"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "8" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 11, "v": "future" }],
+                    "as": "r12"
+                },
+                { "op": "find", "collection": "items", "filter": { "_id": 4 }, "as": "r13" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r3/code", "equals": { "$numberInt": "256" } },
+                { "at": "/r3/codeName", "equals": "TransactionCommitted" },
+                { "at": "/r3/errmsg", "equals": "Transaction with { txnNumber: 6 } has been committed." },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r5/code", "equals": { "$numberInt": "256" } },
+                { "at": "/r6/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r7/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r8/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r8/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r8/codeName", "equals": "NoSuchTransaction" },
+                { "at": "/r8/errmsg", "equals": "Transaction with { txnNumber: 7 } has been aborted." },
+                { "at": "/r8/errorLabels/0", "equals": "TransientTransactionError" },
+                { "at": "/r9/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r9/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r10/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r10/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r11/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r11/code", "equals": { "$numberInt": "117" } },
+                { "at": "/r11/codeName", "equals": "ConflictingOperationInProgress" },
+                { "at": "/r12/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r12/code", "equals": { "$numberInt": "251" } },
+                {
+                    "at": "/r12/errmsg",
+                    "equals": "Given transaction number 8 does not match any in-progress transactions. The active transaction number is 7"
+                },
+                { "at": "/r12/errorLabels/0", "equals": "TransientTransactionError" },
+                { "at": "/r13/cursor/firstBatch/0/v", "equals": "committed" }
+            ]
+        },
+        {
+            "id": "sessions.session_counter_independent",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 1, "v": "a" }],
+                    "as": "r1"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r2"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 2, "v": "b" }],
+                    "as": "r3"
+                },
+                {
+                    "op": "abortTransaction",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAg==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "as": "r4"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 3, "v": "a" }],
+                    "as": "r5"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "5" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 4, "v": "a" }],
+                    "as": "r6"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "4" },
+                    "autocommit": false,
+                    "startTransaction": true,
+                    "documents": [{ "_id": 5, "v": "a" }],
+                    "as": "r7"
+                }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "1" } },
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r5/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r6/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r6/code", "equals": { "$numberInt": "117" } },
+                { "at": "/r7/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r7/code", "equals": { "$numberInt": "225" } }
+            ]
+        },
+        {
+            "id": "sessions.unknown_lsid_write",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAw==", "subType": "04" } } },
+                    "txnNumber": { "$numberLong": "9" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 1, "v": "unknown" }],
+                    "as": "r1"
+                }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "251" } },
+                { "at": "/r1/codeName", "equals": "NoSuchTransaction" },
+                {
+                    "at": "/r1/errmsg",
+                    "equals": "Given transaction number 9 does not match any in-progress transactions. The active transaction number is -1"
+                },
+                { "at": "/r1/errorLabels/0", "equals": "TransientTransactionError" }
+            ]
+        },
+        {
+            "id": "sessions.txn_number_type",
+            "surface": "transaction",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "lsid": { "id": { "$binary": { "base64": "ABEiM0RVZneImaq7zN3uAQ==", "subType": "04" } } },
+                    "txnNumber": { "$numberInt": "5" },
+                    "autocommit": false,
+                    "documents": [{ "_id": 1, "v": "typed" }],
+                    "as": "r1"
+                }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "14" } },
+                { "at": "/r1/errmsg", "equals": "BSON field 'request.txnNumber' is the wrong type 'int', expected type 'long'" }
+            ]
         }
     ]
 }

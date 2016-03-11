@@ -483,6 +483,12 @@ def run_case(case):
                     command[key] = step[key]
             reply = mongo.count(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "explain":
+            command = {"explain": step["explain"]}
+            if "verbosity" in step:
+                command["verbosity"] = step["verbosity"]
+            reply = mongo.explain(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "aggregate":
             command = {"aggregate": step["collection"], "pipeline": step["pipeline"], "cursor": {}}
             reply = mongo.aggregate(store_of(step.get("store")), json.dumps(command_of(case, step, command)))

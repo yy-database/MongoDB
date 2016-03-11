@@ -146,6 +146,12 @@ pub fn count(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::count(&decode_command(&command)?, store_of(store))))
 }
 
+/// `explain` reply.
+#[napi]
+pub fn explain(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::explain(&decode_command(&command)?, store_of(store))))
+}
+
 /// `aggregate` reply.
 #[napi]
 pub fn aggregate(store: &MongoStore, command: String) -> Result<String> {
