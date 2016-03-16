@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '198'))
+const COUNT = Number(option('count', '219'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -176,6 +176,10 @@ function localCommand(store, cursors, command) {
             return JSON.parse(binding.distinct(store, text))
         case 'bulkWrite':
             return JSON.parse(binding.bulkWrite(store, text))
+        case 'count':
+            return JSON.parse(binding.count(store, text))
+        case 'explain':
+            return JSON.parse(binding.explain(store, text))
         case 'create':
             return JSON.parse(binding.create(store, text))
         case 'collMod':
@@ -219,8 +223,16 @@ function numericId(value) {
 // entry cannot become a gate case whose expectation is a literal reply.
 const CURSOR_FIELDS = new Set(['cursorsKilled', 'cursorsNotFound', 'cursorsAlive', 'cursorsUnknown'])
 
+// Planner hashes are minted by `mongod` from internal plan state, so the gateway
+// derives its own deterministic stand-ins and the corpus compares structure only.
+const EXPLAIN_HASH_FIELDS = new Set(['queryHash', 'planCacheShapeHash', 'planCacheKey', 'queryShapeHash'])
+
+// Wall-clock measurements move between runs even on the same oracle, so they
+// are compared structurally and never used as gate material.
+const EXPLAIN_TIMING_FIELDS = new Set(['executionTimeMillis', 'executionTimeMillisEstimate'])
+
 function normalizeReply(reply) {
-    const flags = { cursor: false, uuid: false, oid: false }
+    const flags = { cursor: false, uuid: false, oid: false, hash: false, serverInfo: false, timing: false }
     function walk(node, parentKey) {
         if (CURSOR_FIELDS.has(parentKey) && numericId(node)) {
             flags.cursor = true
@@ -244,6 +256,22 @@ function normalizeReply(reply) {
                 if (key === 'uuid' && value && typeof value === 'object' && value.$binary) {
                     flags.uuid = true
                     out[key] = '<uuid>'
+                    continue
+                }
+                if (EXPLAIN_HASH_FIELDS.has(key) && typeof value === 'string') {
+                    flags.hash = true
+                    out[key] = '<hash>'
+                    continue
+                }
+                if (EXPLAIN_TIMING_FIELDS.has(key) && typeof value === 'object' && value !== null && '$numberInt' in value) {
+                    flags.timing = true
+                    out[key] = '<millis>'
+                    continue
+                }
+                // `serverInfo` describes where the oracle happens to listen.
+                if (parentKey === 'serverInfo' && (key === 'host' || key === 'port')) {
+                    flags.serverInfo = true
+                    out[key] = key === 'host' ? '<host>' : '<port>'
                     continue
                 }
                 out[key] = walk(value, key)
@@ -304,7 +332,10 @@ function repliesMatch(oracle, local) {
         flags: {
             cursor: normalizedOracle.flags.cursor || normalizedLocal.flags.cursor,
             uuid: normalizedOracle.flags.uuid || normalizedLocal.flags.uuid,
-            oid: normalizedOracle.flags.oid || normalizedLocal.flags.oid
+            oid: normalizedOracle.flags.oid || normalizedLocal.flags.oid,
+            hash: normalizedOracle.flags.hash || normalizedLocal.flags.hash,
+            serverInfo: normalizedOracle.flags.serverInfo || normalizedLocal.flags.serverInfo,
+            timing: normalizedOracle.flags.timing || normalizedLocal.flags.timing
         },
         oracle: normalizedOracle.value,
         local: normalizedLocal.value
@@ -506,6 +537,111 @@ function buildAggregate(seed) {
         { $sort: { _id: 1 } }
     ])
     add('sort_multi_key', [{ $sort: { score: -1, name: 1 } }])
+    add('lookup_pipeline_let', [
+        {
+            $lookup: {
+                from: `diff_agg_${n}_foreign`,
+                let: { bucket: '$grp' },
+                pipeline: [{ $match: { $expr: { $eq: ['$key', '$$bucket'] } } }, { $project: { _id: 0, key: 1, label: 1 } }],
+                as: 'joined'
+            }
+        },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, joined: 1 } }
+    ], {
+        setup: [{
+            op: 'insert',
+            collection: `diff_agg_${n}_foreign`,
+            documents: [{ _id: 1, key: 'a', label: 'first' }, { _id: 2, key: 'b', label: 'second' }]
+        }]
+    })
+    add('lookup_combined', [
+        {
+            $lookup: {
+                from: `diff_agg_${n}_foreign`,
+                localField: 'grp',
+                foreignField: 'key',
+                pipeline: [{ $project: { _id: 0, key: 1 } }],
+                as: 'joined'
+            }
+        },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 1, joined: 1 } }
+    ], {
+        setup: [{
+            op: 'insert',
+            collection: `diff_agg_${n}_foreign`,
+            documents: [{ _id: 1, key: 'a', label: 'first' }, { _id: 2, key: 'b', label: 'second' }, { _id: 3, key: 'c', label: 'third' }]
+        }]
+    })
+    add('facet_two', [
+        {
+            $facet: {
+                low: [{ $match: { score: { $lt: 40 } } }, { $count: 'n' }],
+                high: [{ $match: { score: { $gte: 40 } } }, { $count: 'n' }]
+            }
+        }
+    ])
+    add('bucket_default', [
+        { $bucket: { groupBy: '$score', boundaries: [20, 50], default: 'other', output: { n: { $sum: 1 } } } }
+    ])
+    add('bucket_no_output', [
+        { $bucket: { groupBy: '$score', boundaries: [20, 50] } }
+    ], {
+        docs: [
+            { _id: 1, score: 20 },
+            { _id: 2, score: 30 },
+            { _id: 3, score: 40 },
+            { _id: 4, score: 45 }
+        ]
+    })
+    add('bucket_no_default_out_of_range', [
+        { $bucket: { groupBy: '$score', boundaries: [20, 50] } }
+    ])
+    add('bucket_auto', [
+        { $bucketAuto: { groupBy: '$score', buckets: 3 } }
+    ], {
+        docs: [
+            { _id: 1, score: 10 },
+            { _id: 2, score: 20 },
+            { _id: 3, score: 30 },
+            { _id: 4, score: 40 },
+            { _id: 5, score: 50 }
+        ]
+    })
+    add('window_document_number', [
+        {
+            $setWindowFields: {
+                partitionBy: '$grp',
+                sortBy: { score: 1 },
+                output: { row: { $documentNumber: {} }, total: { $sum: '$score' } }
+            }
+        },
+        { $project: { _id: 1, grp: 1, score: 1, row: 1, total: 1 } }
+    ])
+    add('window_rank', [
+        {
+            $setWindowFields: {
+                partitionBy: '$grp',
+                sortBy: { score: 1 },
+                output: { rank: { $rank: {} }, row: { $documentNumber: {} } }
+            }
+        },
+        { $project: { _id: 1, grp: 1, score: 1, rank: 1, row: 1 } }
+    ])
+    add('window_cumulative_sum', [
+        {
+            $setWindowFields: {
+                partitionBy: '$grp',
+                sortBy: { score: 1 },
+                output: { running: { $sum: '$score', window: { documents: ['unbounded', 'current'] } } }
+            }
+        },
+        { $project: { _id: 1, grp: 1, score: 1, running: 1 } }
+    ])
+    add('window_requires_sort', [
+        { $setWindowFields: { output: { row: { $documentNumber: {} } } } }
+    ])
     return entries
 }
 
@@ -1126,6 +1262,60 @@ function buildListCollections(seed) {
     return entries
 }
 
+function buildCountExplain(seed) {
+    const entries = []
+    let n = 0
+    const docs = () => [
+        { _id: 1, grp: 'a', v: 1 },
+        { _id: 2, grp: 'a', v: 2 },
+        { _id: 3, grp: 'b', v: 3 },
+        { _id: 4, grp: 'b', v: 4 },
+        { _id: 5, grp: 'c', v: 5 }
+    ]
+    function add(suffix, steps) {
+        const collection = `diff_count_${n}`
+        entries.push({
+            id: `diff.count.${suffix}`,
+            cluster: 'count',
+            collection,
+            setup: [{ op: 'insert', collection, documents: docs() }],
+            steps: steps.map((step) => {
+                if (step.op !== 'explain') return { ...step, collection }
+                const inner = { ...step.explain }
+                for (const key of ['find', 'count']) if (inner[key] !== undefined) inner[key] = collection
+                return { ...step, explain: inner, collection }
+            })
+        })
+        n += 1
+    }
+    add('query_skip_limit', [
+        { op: 'count', query: { grp: { $in: ['a', 'b'] } }, skip: 2, limit: 2 },
+        { op: 'count', query: { grp: 'a' } }
+    ])
+    add('skip_negative', [{ op: 'count', skip: { $numberInt: '-1' } }])
+    add('limit_negative', [{ op: 'count', limit: { $numberInt: '-2' } }])
+    add('skip_beyond', [{ op: 'count', skip: 9 }])
+    add('explain_find_planner', [
+        { op: 'explain', explain: { find: 'items', filter: { grp: 'a' } }, verbosity: 'queryPlanner' }
+    ])
+    add('explain_count_planner', [
+        { op: 'explain', explain: { count: 'items', query: { grp: 'a' }, skip: 1, limit: 2 }, verbosity: 'queryPlanner' }
+    ])
+    add('explain_find_stats', [
+        { op: 'explain', explain: { find: 'items', filter: { grp: 'a' }, skip: 1, limit: 2 }, verbosity: 'executionStats' }
+    ])
+    add('explain_count_stats', [
+        { op: 'explain', explain: { count: 'items', query: { grp: 'a' }, skip: 1, limit: 2 }, verbosity: 'executionStats' }
+    ])
+    add('explain_all_plans', [
+        { op: 'explain', explain: { find: 'items', filter: { grp: 'a' } }, verbosity: 'allPlansExecution' }
+    ])
+    add('explain_bad_verbosity', [
+        { op: 'explain', explain: { find: 'items' }, verbosity: 'bogus' }
+    ])
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -1138,7 +1328,8 @@ const CLUSTERS = [
     ['distinct', buildDistinct],
     ['bulkWrite', buildBulkWrite],
     ['validators', buildValidators],
-    ['listCollections', buildListCollections]
+    ['listCollections', buildListCollections],
+    ['count', buildCountExplain]
 ]
 
 function generate(seed) {
@@ -1215,6 +1406,18 @@ function commandOf(step, replies) {
             if (step.ordered !== undefined) command.ordered = step.ordered
             if (step.errorsOnly !== undefined) command.errorsOnly = step.errorsOnly
             return { ...command, $db: step.db ?? 'admin' }
+        }
+        case 'count': {
+            const command = { count: collection }
+            for (const key of ['query', 'skip', 'limit']) {
+                if (step[key] !== undefined) command[key] = step[key]
+            }
+            return { ...command, $db: DB }
+        }
+        case 'explain': {
+            const command = { explain: step.explain }
+            if (step.verbosity !== undefined) command.verbosity = step.verbosity
+            return { ...command, $db: DB }
         }
         case 'create': {
             const command = { create: collection }
@@ -1309,7 +1512,16 @@ async function classify(entry, oracleReplies, localReplies) {
         const result = repliesMatch(oracleReplies[index], localReplies[index])
         const okSame = okEncoding(oracleReplies[index]) === okEncoding(localReplies[index])
         if (!result.match) matched = false
-        if (result.flags.cursor || result.flags.uuid || result.flags.oid) gateable = false
+        if (
+            result.flags.cursor ||
+            result.flags.uuid ||
+            result.flags.oid ||
+            result.flags.hash ||
+            result.flags.serverInfo ||
+            result.flags.timing
+        ) {
+            gateable = false
+        }
         steps.push({
             index,
             op: entry.steps[index].op,

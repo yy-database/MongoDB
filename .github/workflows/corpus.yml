@@ -43,4 +43,4 @@ jobs:
       - name: Build the native binding
         run: node scripts/build-napi.mjs
       - name: Differential corpus gate
-        run: pnpm corpus -- --host 127.0.0.1 --port 27017 --seed 20261106 --count 198 --check
+        run: pnpm corpus -- --host 127.0.0.1 --port 27017 --seed 20261106 --count 219 --check

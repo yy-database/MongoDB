@@ -8892,6 +8892,1999 @@
       ]
     },
     {
+      "id": "diff.aggregate.lookup_pipeline_let",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.lookup_pipeline_let",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_25",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_25_foreign",
+          "documents": [
+            {
+              "_id": 1,
+              "key": "a",
+              "label": "first"
+            },
+            {
+              "_id": 2,
+              "key": "b",
+              "label": "second"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_25",
+          "pipeline": [
+            {
+              "$lookup": {
+                "from": "diff_agg_25_foreign",
+                "let": {
+                  "bucket": "$grp"
+                },
+                "pipeline": [
+                  {
+                    "$match": {
+                      "$expr": {
+                        "$eq": [
+                          "$key",
+                          "$$bucket"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "$project": {
+                      "_id": 0,
+                      "key": 1,
+                      "label": 1
+                    }
+                  }
+                ],
+                "as": "joined"
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "joined": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "joined": [
+                  {
+                    "key": "b",
+                    "label": "second"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "joined": [
+                  {
+                    "key": "b",
+                    "label": "second"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "joined": [
+                  {
+                    "key": "a",
+                    "label": "first"
+                  }
+                ]
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_25"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.lookup_combined",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.lookup_combined",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_26",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_26_foreign",
+          "documents": [
+            {
+              "_id": 1,
+              "key": "a",
+              "label": "first"
+            },
+            {
+              "_id": 2,
+              "key": "b",
+              "label": "second"
+            },
+            {
+              "_id": 3,
+              "key": "c",
+              "label": "third"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_26",
+          "pipeline": [
+            {
+              "$lookup": {
+                "from": "diff_agg_26_foreign",
+                "localField": "grp",
+                "foreignField": "key",
+                "pipeline": [
+                  {
+                    "$project": {
+                      "_id": 0,
+                      "key": 1
+                    }
+                  }
+                ],
+                "as": "joined"
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "joined": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "joined": [
+                  {
+                    "key": "b"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "joined": [
+                  {
+                    "key": "b"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "joined": [
+                  {
+                    "key": "a"
+                  }
+                ]
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_26"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.facet_two",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.facet_two",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_27",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_27",
+          "pipeline": [
+            {
+              "$facet": {
+                "low": [
+                  {
+                    "$match": {
+                      "score": {
+                        "$lt": 40
+                      }
+                    }
+                  },
+                  {
+                    "$count": "n"
+                  }
+                ],
+                "high": [
+                  {
+                    "$match": {
+                      "score": {
+                        "$gte": 40
+                      }
+                    }
+                  },
+                  {
+                    "$count": "n"
+                  }
+                ]
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "low": [
+                  {
+                    "n": {
+                      "$numberInt": "3"
+                    }
+                  }
+                ],
+                "high": [
+                  {
+                    "n": {
+                      "$numberInt": "5"
+                    }
+                  }
+                ]
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_27"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.bucket_default",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.bucket_default",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_28",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_28",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ],
+                "default": "other",
+                "output": {
+                  "n": {
+                    "$sum": 1
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "20"
+                },
+                "n": {
+                  "$numberInt": "3"
+                }
+              },
+              {
+                "_id": "other",
+                "n": {
+                  "$numberInt": "5"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_28"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.bucket_no_output",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.bucket_no_output",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_29",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 20
+            },
+            {
+              "_id": 2,
+              "score": 30
+            },
+            {
+              "_id": 3,
+              "score": 40
+            },
+            {
+              "_id": 4,
+              "score": 45
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_29",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ]
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "20"
+                },
+                "count": {
+                  "$numberInt": "4"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_29"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.bucket_no_default_out_of_range",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.bucket_no_default_out_of_range",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_30",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_30",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ]
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $switch could not find a matching branch for an input, and no default was specified."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "7158303"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location7158303"
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.bucket_auto",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.bucket_auto",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_31",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10
+            },
+            {
+              "_id": 2,
+              "score": 20
+            },
+            {
+              "_id": 3,
+              "score": 30
+            },
+            {
+              "_id": 4,
+              "score": 40
+            },
+            {
+              "_id": 5,
+              "score": 50
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_31",
+          "pipeline": [
+            {
+              "$bucketAuto": {
+                "groupBy": "$score",
+                "buckets": 3
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "min": {
+                    "$numberInt": "10"
+                  },
+                  "max": {
+                    "$numberInt": "30"
+                  }
+                },
+                "count": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "_id": {
+                  "min": {
+                    "$numberInt": "30"
+                  },
+                  "max": {
+                    "$numberInt": "50"
+                  }
+                },
+                "count": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "_id": {
+                  "min": {
+                    "$numberInt": "50"
+                  },
+                  "max": {
+                    "$numberInt": "50"
+                  }
+                },
+                "count": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_31"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.window_document_number",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.window_document_number",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_32",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_32",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "row": {
+                    "$documentNumber": {}
+                  },
+                  "total": {
+                    "$sum": "$score"
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "row": 1,
+                "total": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "1"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "2"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "3"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "4"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "5"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "row": {
+                  "$numberInt": "6"
+                },
+                "total": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b",
+                "row": {
+                  "$numberInt": "1"
+                },
+                "total": {
+                  "$numberInt": "70"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "row": {
+                  "$numberInt": "2"
+                },
+                "total": {
+                  "$numberInt": "70"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_32"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.window_rank",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.window_rank",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_33",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_33",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "rank": {
+                    "$rank": {}
+                  },
+                  "row": {
+                    "$documentNumber": {}
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "rank": 1,
+                "row": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "1"
+                },
+                "row": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "2"
+                },
+                "row": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "3"
+                },
+                "row": {
+                  "$numberInt": "3"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "4"
+                },
+                "row": {
+                  "$numberInt": "4"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "5"
+                },
+                "row": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "rank": {
+                  "$numberInt": "6"
+                },
+                "row": {
+                  "$numberInt": "6"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b",
+                "rank": {
+                  "$numberInt": "1"
+                },
+                "row": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "rank": {
+                  "$numberInt": "2"
+                },
+                "row": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_33"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.window_cumulative_sum",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.window_cumulative_sum",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_34",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_34",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "running": {
+                    "$sum": "$score",
+                    "window": {
+                      "documents": [
+                        "unbounded",
+                        "current"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "running": 1
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "score": {
+                  "$numberInt": "10"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "10"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "score": {
+                  "$numberInt": "20"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "30"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "score": {
+                  "$numberInt": "50"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "80"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                },
+                "score": {
+                  "$numberInt": "60"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "140"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "7"
+                },
+                "score": {
+                  "$numberInt": "70"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "210"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "8"
+                },
+                "score": {
+                  "$numberInt": "80"
+                },
+                "grp": "a",
+                "running": {
+                  "$numberInt": "290"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "score": {
+                  "$numberInt": "30"
+                },
+                "grp": "b",
+                "running": {
+                  "$numberInt": "30"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "score": {
+                  "$numberInt": "40"
+                },
+                "grp": "b",
+                "running": {
+                  "$numberInt": "70"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_agg_34"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.aggregate.window_requires_sort",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.aggregate.window_requires_sort",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_35",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_35",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "output": {
+                  "row": {
+                    "$documentNumber": {}
+                  }
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "$documentNumber must be specified with a top level sortBy expression with exactly one element"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "5371602"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location5371602"
+        }
+      ]
+    },
+    {
       "id": "diff.update.set_scalar",
       "surface": "diff",
       "db": "diff",
@@ -25191,6 +27184,373 @@
         {
           "at": "/r0/codeName",
           "equals": "TypeMismatch"
+        }
+      ]
+    },
+    {
+      "id": "diff.count.query_skip_limit",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.count.query_skip_limit",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_count_0",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        },
+        {
+          "op": "count",
+          "query": {
+            "grp": {
+              "$in": [
+                "a",
+                "b"
+              ]
+            }
+          },
+          "skip": 2,
+          "limit": 2,
+          "collection": "diff_count_0",
+          "as": "r0"
+        },
+        {
+          "op": "count",
+          "query": {
+            "grp": "a"
+          },
+          "collection": "diff_count_0",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/n",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.count.skip_negative",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.count.skip_negative",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_count_1",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        },
+        {
+          "op": "count",
+          "skip": {
+            "$numberInt": "-1"
+          },
+          "collection": "diff_count_1",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "BSON field 'skip' value must be >= 0, actual value '-1'"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "BadValue"
+        }
+      ]
+    },
+    {
+      "id": "diff.count.limit_negative",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.count.limit_negative",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_count_2",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        },
+        {
+          "op": "count",
+          "limit": {
+            "$numberInt": "-2"
+          },
+          "collection": "diff_count_2",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.count.skip_beyond",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.count.skip_beyond",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_count_3",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        },
+        {
+          "op": "count",
+          "skip": 9,
+          "collection": "diff_count_3",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.count.explain_bad_verbosity",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.count.explain_bad_verbosity",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_count_9",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        },
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_count_9"
+          },
+          "verbosity": "bogus",
+          "collection": "diff_count_9",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Enumeration value 'bogus' for field 'explain.verbosity' is not a valid value."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "BadValue"
         }
       ]
     }

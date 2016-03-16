@@ -282,6 +282,8 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         40414 => "IDLFailedToParse",
         40148 => "Location40148",
         40149 => "Location40149",
+        5371602 => "Location5371602",
+        7158303 => "Location7158303",
         _ => return None,
     })
 }
@@ -767,7 +769,7 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
             if !["queryPlanner", "executionStats", "allPlansExecution"].contains(&verbosity.as_str()) {
                 return Err(CommandError::new(
                     2,
-                    format!("verbosity string must be one of {{queryPlanner, executionStats, allPlansExecution}}, but found '{verbosity}'"),
+                    format!("Enumeration value '{verbosity}' for field 'explain.verbosity' is not a valid value."),
                 ));
             }
             verbosity.clone()
@@ -845,7 +847,8 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
     reply.push("command".to_string(), BsonValue::Document(echoed));
     reply.push("serverInfo".to_string(), BsonValue::Document(server_info()));
     reply.push("serverParameters".to_string(), BsonValue::Document(server_parameters()));
-    reply.push("ok".to_string(), BsonValue::Int32(1));
+    // `explain` replies carry `ok` as a double, unlike the plain command replies.
+    reply.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(reply)
 }
 
@@ -904,7 +907,6 @@ fn normalize_query(filter: &BsonDocument) -> BsonDocument {
 
 fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize) -> BsonDocument {
     let mut scan = BsonDocument::new();
-    scan.push("isCached".to_string(), BsonValue::Bool(false));
     scan.push("stage".to_string(), BsonValue::String("COLLSCAN".to_string()));
     if !filter.fields.is_empty() {
         scan.push("filter".to_string(), BsonValue::Document(filter.clone()));
@@ -912,7 +914,6 @@ fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize)
     scan.push("direction".to_string(), BsonValue::String("forward".to_string()));
     let mut stage = if command == "count" {
         let mut counted = BsonDocument::new();
-        counted.push("isCached".to_string(), BsonValue::Bool(false));
         counted.push("stage".to_string(), BsonValue::String("COUNT".to_string()));
         counted.push("inputStage".to_string(), BsonValue::Document(scan));
         counted
@@ -929,14 +930,19 @@ fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize)
         }
         if limit > 0 {
             let mut limited = BsonDocument::new();
-            limited.push("isCached".to_string(), BsonValue::Bool(false));
             limited.push("stage".to_string(), BsonValue::String("LIMIT".to_string()));
             limited.push("limitAmount".to_string(), count_value(limit as i64));
             limited.push("inputStage".to_string(), BsonValue::Document(stage));
             stage = limited;
         }
     }
-    stage
+    // `isCached` marks only the outermost stage; nested input stages omit it.
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in stage.fields {
+        cached.push(field, value);
+    }
+    cached
 }
 
 fn explain_execution_stats(
@@ -954,7 +960,6 @@ fn explain_execution_stats(
     let scan = execution_stage("COLLSCAN", matched as i64, works, total as i64, filter);
     let stage = if command == "count" {
         let mut counted_stage = BsonDocument::new();
-        counted_stage.push("isCached".to_string(), BsonValue::Bool(false));
         for (field, value) in execution_stage("COUNT", 0, works, total as i64, &BsonDocument::new()).fields {
             counted_stage.push(field, value);
         }
@@ -972,7 +977,6 @@ fn explain_execution_stats(
         }
         if limit > 0 {
             let mut limited = BsonDocument::new();
-            limited.push("isCached".to_string(), BsonValue::Bool(false));
             for (field, value) in execution_stage("LIMIT", returned as i64, works, total as i64, &BsonDocument::new()).fields {
                 limited.push(field, value);
             }
@@ -982,6 +986,13 @@ fn explain_execution_stats(
         }
         stage
     };
+    // `isCached` marks only the outermost execution stage; nested stages omit it.
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in stage.fields {
+        cached.push(field, value);
+    }
+    let stage = cached;
     let mut stats = BsonDocument::new();
     stats.push("executionSuccess".to_string(), BsonValue::Bool(true));
     stats.push("nReturned".to_string(), count_value(returned as i64));
@@ -1034,12 +1045,12 @@ fn server_parameters() -> BsonDocument {
         "internalLookupStageIntermediateDocumentMaxSizeBytes",
         "internalDocumentSourceGroupMaxMemoryBytes",
         "internalQueryMaxBlockingSortMemoryUsageBytes",
-        "internalQueryMaxAddToSetBytes",
-        "internalDocumentSourceSetWindowFieldsMaxMemoryBytes",
     ] {
         parameters.push(name.to_string(), BsonValue::Int32(104857600));
     }
     parameters.push("internalQueryProhibitBlockingMergeOnMongoS".to_string(), BsonValue::Int32(0));
+    parameters.push("internalQueryMaxAddToSetBytes".to_string(), BsonValue::Int32(104857600));
+    parameters.push("internalDocumentSourceSetWindowFieldsMaxMemoryBytes".to_string(), BsonValue::Int32(104857600));
     parameters.push("internalQueryFrameworkControl".to_string(), BsonValue::String("trySbeRestricted".to_string()));
     parameters.push("internalQueryPlannerIgnoreIndexWithCollationForRegex".to_string(), BsonValue::Int32(1));
     parameters
@@ -2903,15 +2914,6 @@ fn transaction_mismatch_error(txn_number: i64, active: i64) -> CommandError {
         ),
     )
     .with_detail("errorLabels", BsonValue::Array(vec![BsonValue::String("TransientTransactionError".to_string())]))
-}
-
-fn integral_field(document: &BsonDocument, field: &str) -> Option<i64> {
-    match document.get(field) {
-        Some(BsonValue::Int32(value)) => Some(i64::from(*value)),
-        Some(BsonValue::Int64(value)) => Some(*value),
-        Some(BsonValue::Double(value)) => integral_value(*value),
-        _ => None,
-    }
 }
 
 fn ok_reply() -> BsonDocument {

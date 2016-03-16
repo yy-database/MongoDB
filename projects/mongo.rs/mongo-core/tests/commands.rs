@@ -263,7 +263,7 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
     assert_eq!(error.code, 59);
     assert_eq!(
         error.message,
-        "unknown aggregation stage: $out (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $sortByCount, $group, $project)"
+        "unknown aggregation stage: $out (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $project)"
     );
 }
 

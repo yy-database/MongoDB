@@ -1,11 +1,11 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 198,
+  "count": 219,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
-    "aggregate": 25,
+    "aggregate": 36,
     "update": 43,
     "delete": 8,
     "insert": 10,
@@ -15,9 +15,10 @@
     "distinct": 11,
     "bulkWrite": 15,
     "validators": 16,
-    "listCollections": 8
+    "listCollections": 8,
+    "count": 10
   },
-  "digest": "09be908c7805e3f35840fcddb3f9043746e678b1dbe486085f4083051cea3e78",
+  "digest": "67aa2a60e2e8a342f01cb45f4b6e79a1542876c088b441c68142d613387c4756",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -5361,6 +5362,1170 @@
               "$sort": {
                 "score": -1,
                 "name": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.lookup_pipeline_let",
+      "cluster": "aggregate",
+      "collection": "diff_agg_25",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_25",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_25_foreign",
+          "documents": [
+            {
+              "_id": 1,
+              "key": "a",
+              "label": "first"
+            },
+            {
+              "_id": 2,
+              "key": "b",
+              "label": "second"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_25",
+          "pipeline": [
+            {
+              "$lookup": {
+                "from": "diff_agg_25_foreign",
+                "let": {
+                  "bucket": "$grp"
+                },
+                "pipeline": [
+                  {
+                    "$match": {
+                      "$expr": {
+                        "$eq": [
+                          "$key",
+                          "$$bucket"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "$project": {
+                      "_id": 0,
+                      "key": 1,
+                      "label": 1
+                    }
+                  }
+                ],
+                "as": "joined"
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "joined": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.lookup_combined",
+      "cluster": "aggregate",
+      "collection": "diff_agg_26",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_26",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_agg_26_foreign",
+          "documents": [
+            {
+              "_id": 1,
+              "key": "a",
+              "label": "first"
+            },
+            {
+              "_id": 2,
+              "key": "b",
+              "label": "second"
+            },
+            {
+              "_id": 3,
+              "key": "c",
+              "label": "third"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_26",
+          "pipeline": [
+            {
+              "$lookup": {
+                "from": "diff_agg_26_foreign",
+                "localField": "grp",
+                "foreignField": "key",
+                "pipeline": [
+                  {
+                    "$project": {
+                      "_id": 0,
+                      "key": 1
+                    }
+                  }
+                ],
+                "as": "joined"
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "joined": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.facet_two",
+      "cluster": "aggregate",
+      "collection": "diff_agg_27",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_27",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_27",
+          "pipeline": [
+            {
+              "$facet": {
+                "low": [
+                  {
+                    "$match": {
+                      "score": {
+                        "$lt": 40
+                      }
+                    }
+                  },
+                  {
+                    "$count": "n"
+                  }
+                ],
+                "high": [
+                  {
+                    "$match": {
+                      "score": {
+                        "$gte": 40
+                      }
+                    }
+                  },
+                  {
+                    "$count": "n"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.bucket_default",
+      "cluster": "aggregate",
+      "collection": "diff_agg_28",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_28",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_28",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ],
+                "default": "other",
+                "output": {
+                  "n": {
+                    "$sum": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.bucket_no_output",
+      "cluster": "aggregate",
+      "collection": "diff_agg_29",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_29",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 20
+            },
+            {
+              "_id": 2,
+              "score": 30
+            },
+            {
+              "_id": 3,
+              "score": 40
+            },
+            {
+              "_id": 4,
+              "score": 45
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_29",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.bucket_no_default_out_of_range",
+      "cluster": "aggregate",
+      "collection": "diff_agg_30",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_30",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_30",
+          "pipeline": [
+            {
+              "$bucket": {
+                "groupBy": "$score",
+                "boundaries": [
+                  20,
+                  50
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.bucket_auto",
+      "cluster": "aggregate",
+      "collection": "diff_agg_31",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_31",
+          "documents": [
+            {
+              "_id": 1,
+              "score": 10
+            },
+            {
+              "_id": 2,
+              "score": 20
+            },
+            {
+              "_id": 3,
+              "score": 30
+            },
+            {
+              "_id": 4,
+              "score": 40
+            },
+            {
+              "_id": 5,
+              "score": 50
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_31",
+          "pipeline": [
+            {
+              "$bucketAuto": {
+                "groupBy": "$score",
+                "buckets": 3
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.window_document_number",
+      "cluster": "aggregate",
+      "collection": "diff_agg_32",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_32",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_32",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "row": {
+                    "$documentNumber": {}
+                  },
+                  "total": {
+                    "$sum": "$score"
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "row": 1,
+                "total": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.window_rank",
+      "cluster": "aggregate",
+      "collection": "diff_agg_33",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_33",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_33",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "rank": {
+                    "$rank": {}
+                  },
+                  "row": {
+                    "$documentNumber": {}
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "rank": 1,
+                "row": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.window_cumulative_sum",
+      "cluster": "aggregate",
+      "collection": "diff_agg_34",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_34",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_34",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "partitionBy": "$grp",
+                "sortBy": {
+                  "score": 1
+                },
+                "output": {
+                  "running": {
+                    "$sum": "$score",
+                    "window": {
+                      "documents": [
+                        "unbounded",
+                        "current"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "grp": 1,
+                "score": 1,
+                "running": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20269025
+    },
+    {
+      "id": "diff.aggregate.window_requires_sort",
+      "cluster": "aggregate",
+      "collection": "diff_agg_35",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_agg_35",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "alpha",
+              "score": 10,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "name": "beta",
+              "score": 20,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "name": "gamma",
+              "score": 30,
+              "grp": "b",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": 4,
+              "name": "delta",
+              "score": 40,
+              "grp": "b",
+              "tags": []
+            },
+            {
+              "_id": 5,
+              "name": "epsilon",
+              "score": 50,
+              "grp": "a",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 6,
+              "name": "zeta",
+              "score": 60,
+              "grp": "a",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 7,
+              "name": "eta",
+              "score": 70,
+              "grp": "a",
+              "tags": null
+            },
+            {
+              "_id": 8,
+              "name": "theta",
+              "score": 80,
+              "grp": "a",
+              "tags": [
+                "blue"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "diff_agg_35",
+          "pipeline": [
+            {
+              "$setWindowFields": {
+                "output": {
+                  "row": {
+                    "$documentNumber": {}
+                  }
+                }
               }
             }
           ]
@@ -16520,6 +17685,525 @@
         }
       ],
       "seed": 20348215
+    },
+    {
+      "id": "diff.count.query_skip_limit",
+      "cluster": "count",
+      "collection": "diff_count_0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_0",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "count",
+          "query": {
+            "grp": {
+              "$in": [
+                "a",
+                "b"
+              ]
+            }
+          },
+          "skip": 2,
+          "limit": 2,
+          "collection": "diff_count_0"
+        },
+        {
+          "op": "count",
+          "query": {
+            "grp": "a"
+          },
+          "collection": "diff_count_0"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.skip_negative",
+      "cluster": "count",
+      "collection": "diff_count_1",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_1",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "count",
+          "skip": {
+            "$numberInt": "-1"
+          },
+          "collection": "diff_count_1"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.limit_negative",
+      "cluster": "count",
+      "collection": "diff_count_2",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_2",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "count",
+          "limit": {
+            "$numberInt": "-2"
+          },
+          "collection": "diff_count_2"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.skip_beyond",
+      "cluster": "count",
+      "collection": "diff_count_3",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_3",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "count",
+          "skip": 9,
+          "collection": "diff_count_3"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_find_planner",
+      "cluster": "count",
+      "collection": "diff_count_4",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_4",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_count_4",
+            "filter": {
+              "grp": "a"
+            }
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_count_4"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_count_planner",
+      "cluster": "count",
+      "collection": "diff_count_5",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_5",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_count_5",
+            "query": {
+              "grp": "a"
+            },
+            "skip": 1,
+            "limit": 2
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_count_5"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_find_stats",
+      "cluster": "count",
+      "collection": "diff_count_6",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_6",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_count_6",
+            "filter": {
+              "grp": "a"
+            },
+            "skip": 1,
+            "limit": 2
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_count_6"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_count_stats",
+      "cluster": "count",
+      "collection": "diff_count_7",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_7",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_count_7",
+            "query": {
+              "grp": "a"
+            },
+            "skip": 1,
+            "limit": 2
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_count_7"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_all_plans",
+      "cluster": "count",
+      "collection": "diff_count_8",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_8",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_count_8",
+            "filter": {
+              "grp": "a"
+            }
+          },
+          "verbosity": "allPlansExecution",
+          "collection": "diff_count_8"
+        }
+      ],
+      "seed": 20356134
+    },
+    {
+      "id": "diff.count.explain_bad_verbosity",
+      "cluster": "count",
+      "collection": "diff_count_9",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_count_9",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "v": 1
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "v": 2
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "v": 3
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "v": 4
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "v": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_count_9"
+          },
+          "verbosity": "bogus",
+          "collection": "diff_count_9"
+        }
+      ],
+      "seed": 20356134
     }
   ]
 }

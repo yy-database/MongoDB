@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 198,
+  "count": 219,
   "mongod": "8.0.9",
-  "corpusDigest": "09be908c7805e3f35840fcddb3f9043746e678b1dbe486085f4083051cea3e78",
-  "replyDigest": "1b556a3b427487db9390eae3d21750c32e0d60faf2b36a8652f1197b09d83dc7",
+  "corpusDigest": "67aa2a60e2e8a342f01cb45f4b6e79a1542876c088b441c68142d613387c4756",
+  "replyDigest": "02ddfe3c2abb404e8d464498a61f3c855df4e46618b7c8aac6242895b76cb18c",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -3366,6 +3366,746 @@
         "ok": {
           "$numberDouble": "1.0"
         }
+      }
+    ],
+    "diff.aggregate.lookup_pipeline_let": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "joined": [
+                {
+                  "key": "b",
+                  "label": "second"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "joined": [
+                {
+                  "key": "b",
+                  "label": "second"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "joined": [
+                {
+                  "key": "a",
+                  "label": "first"
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_25"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.lookup_combined": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "joined": [
+                {
+                  "key": "b"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "joined": [
+                {
+                  "key": "b"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "joined": [
+                {
+                  "key": "a"
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_26"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.facet_two": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "low": [
+                {
+                  "n": {
+                    "$numberInt": "3"
+                  }
+                }
+              ],
+              "high": [
+                {
+                  "n": {
+                    "$numberInt": "5"
+                  }
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_27"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.bucket_default": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "20"
+              },
+              "n": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": "other",
+              "n": {
+                "$numberInt": "5"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_28"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.bucket_no_output": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "20"
+              },
+              "count": {
+                "$numberInt": "4"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_29"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.bucket_no_default_out_of_range": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $switch could not find a matching branch for an input, and no default was specified.",
+        "code": {
+          "$numberInt": "7158303"
+        },
+        "codeName": "Location7158303"
+      }
+    ],
+    "diff.aggregate.bucket_auto": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "min": {
+                  "$numberInt": "10"
+                },
+                "max": {
+                  "$numberInt": "30"
+                }
+              },
+              "count": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "min": {
+                  "$numberInt": "30"
+                },
+                "max": {
+                  "$numberInt": "50"
+                }
+              },
+              "count": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "min": {
+                  "$numberInt": "50"
+                },
+                "max": {
+                  "$numberInt": "50"
+                }
+              },
+              "count": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_31"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.window_document_number": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "1"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "2"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "3"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "4"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "5"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "row": {
+                "$numberInt": "6"
+              },
+              "total": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "row": {
+                "$numberInt": "1"
+              },
+              "total": {
+                "$numberInt": "70"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "row": {
+                "$numberInt": "2"
+              },
+              "total": {
+                "$numberInt": "70"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_32"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.window_rank": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "1"
+              },
+              "row": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "2"
+              },
+              "row": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "3"
+              },
+              "row": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "4"
+              },
+              "row": {
+                "$numberInt": "4"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "5"
+              },
+              "row": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "rank": {
+                "$numberInt": "6"
+              },
+              "row": {
+                "$numberInt": "6"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "rank": {
+                "$numberInt": "1"
+              },
+              "row": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "rank": {
+                "$numberInt": "2"
+              },
+              "row": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_33"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.window_cumulative_sum": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "score": {
+                "$numberInt": "10"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "score": {
+                "$numberInt": "20"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "30"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "score": {
+                "$numberInt": "50"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "80"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "score": {
+                "$numberInt": "60"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "140"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "score": {
+                "$numberInt": "70"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "210"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "score": {
+                "$numberInt": "80"
+              },
+              "grp": "a",
+              "running": {
+                "$numberInt": "290"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "score": {
+                "$numberInt": "30"
+              },
+              "grp": "b",
+              "running": {
+                "$numberInt": "30"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "score": {
+                "$numberInt": "40"
+              },
+              "grp": "b",
+              "running": {
+                "$numberInt": "70"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_agg_34"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.aggregate.window_requires_sort": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$documentNumber must be specified with a top level sortBy expression with exactly one element",
+        "code": {
+          "$numberInt": "5371602"
+        },
+        "codeName": "Location5371602"
       }
     ],
     "diff.update.set_scalar": [
@@ -7801,6 +8541,762 @@
         "ok": {
           "$numberDouble": "1.0"
         }
+      }
+    ],
+    "diff.count.query_skip_limit": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.skip_negative": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field 'skip' value must be >= 0, actual value '-1'",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      }
+    ],
+    "diff.count.limit_negative": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.skip_beyond": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_find_planner": [
+      {
+        "explainVersion": "1",
+        "queryPlanner": {
+          "namespace": "diff.diff_count_4",
+          "parsedQuery": {
+            "grp": {
+              "$eq": "a"
+            }
+          },
+          "indexFilterSet": false,
+          "queryHash": "<hash>",
+          "planCacheShapeHash": "<hash>",
+          "planCacheKey": "<hash>",
+          "optimizationTimeMillis": {
+            "$numberInt": "0"
+          },
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "stage": "COLLSCAN",
+            "filter": {
+              "grp": {
+                "$eq": "a"
+              }
+            },
+            "direction": "forward"
+          },
+          "rejectedPlans": []
+        },
+        "queryShapeHash": "<hash>",
+        "command": {
+          "find": "diff_count_4",
+          "filter": {
+            "grp": "a"
+          },
+          "$db": "diff"
+        },
+        "serverInfo": {
+          "host": "<host>",
+          "port": "<port>",
+          "version": "8.0.9",
+          "gitVersion": "f882ef816d531ecfbb593843e4c554fda90ca416"
+        },
+        "serverParameters": {
+          "internalQueryFacetBufferSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFacetMaxOutputDocSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalLookupStageIntermediateDocumentMaxSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceGroupMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryMaxBlockingSortMemoryUsageBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryProhibitBlockingMergeOnMongoS": {
+            "$numberInt": "0"
+          },
+          "internalQueryMaxAddToSetBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFrameworkControl": "trySbeRestricted",
+          "internalQueryPlannerIgnoreIndexWithCollationForRegex": {
+            "$numberInt": "1"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_count_planner": [
+      {
+        "explainVersion": "1",
+        "queryPlanner": {
+          "namespace": "diff.diff_count_5",
+          "parsedQuery": {
+            "grp": {
+              "$eq": "a"
+            }
+          },
+          "indexFilterSet": false,
+          "queryHash": "<hash>",
+          "planCacheShapeHash": "<hash>",
+          "planCacheKey": "<hash>",
+          "optimizationTimeMillis": {
+            "$numberInt": "0"
+          },
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "stage": "COUNT",
+            "inputStage": {
+              "stage": "COLLSCAN",
+              "filter": {
+                "grp": {
+                  "$eq": "a"
+                }
+              },
+              "direction": "forward"
+            }
+          },
+          "rejectedPlans": []
+        },
+        "command": {
+          "count": "diff_count_5",
+          "query": {
+            "grp": "a"
+          },
+          "skip": {
+            "$numberInt": "1"
+          },
+          "limit": {
+            "$numberInt": "2"
+          },
+          "$db": "diff"
+        },
+        "serverInfo": {
+          "host": "<host>",
+          "port": "<port>",
+          "version": "8.0.9",
+          "gitVersion": "f882ef816d531ecfbb593843e4c554fda90ca416"
+        },
+        "serverParameters": {
+          "internalQueryFacetBufferSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFacetMaxOutputDocSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalLookupStageIntermediateDocumentMaxSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceGroupMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryMaxBlockingSortMemoryUsageBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryProhibitBlockingMergeOnMongoS": {
+            "$numberInt": "0"
+          },
+          "internalQueryMaxAddToSetBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFrameworkControl": "trySbeRestricted",
+          "internalQueryPlannerIgnoreIndexWithCollationForRegex": {
+            "$numberInt": "1"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_find_stats": [
+      {
+        "explainVersion": "1",
+        "queryPlanner": {
+          "namespace": "diff.diff_count_6",
+          "parsedQuery": {
+            "grp": {
+              "$eq": "a"
+            }
+          },
+          "indexFilterSet": false,
+          "queryHash": "<hash>",
+          "planCacheShapeHash": "<hash>",
+          "planCacheKey": "<hash>",
+          "optimizationTimeMillis": {
+            "$numberInt": "0"
+          },
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "stage": "LIMIT",
+            "limitAmount": {
+              "$numberInt": "2"
+            },
+            "inputStage": {
+              "stage": "SKIP",
+              "skipAmount": {
+                "$numberInt": "1"
+              },
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "filter": {
+                  "grp": {
+                    "$eq": "a"
+                  }
+                },
+                "direction": "forward"
+              }
+            }
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": {
+            "$numberInt": "1"
+          },
+          "executionTimeMillis": "<millis>",
+          "totalKeysExamined": {
+            "$numberInt": "0"
+          },
+          "totalDocsExamined": {
+            "$numberInt": "5"
+          },
+          "executionStages": {
+            "isCached": false,
+            "stage": "LIMIT",
+            "nReturned": {
+              "$numberInt": "1"
+            },
+            "executionTimeMillisEstimate": "<millis>",
+            "works": {
+              "$numberInt": "6"
+            },
+            "advanced": {
+              "$numberInt": "1"
+            },
+            "needTime": {
+              "$numberInt": "4"
+            },
+            "needYield": {
+              "$numberInt": "0"
+            },
+            "saveState": {
+              "$numberInt": "0"
+            },
+            "restoreState": {
+              "$numberInt": "0"
+            },
+            "isEOF": {
+              "$numberInt": "1"
+            },
+            "limitAmount": {
+              "$numberInt": "2"
+            },
+            "inputStage": {
+              "stage": "SKIP",
+              "nReturned": {
+                "$numberInt": "1"
+              },
+              "executionTimeMillisEstimate": "<millis>",
+              "works": {
+                "$numberInt": "6"
+              },
+              "advanced": {
+                "$numberInt": "1"
+              },
+              "needTime": {
+                "$numberInt": "4"
+              },
+              "needYield": {
+                "$numberInt": "0"
+              },
+              "saveState": {
+                "$numberInt": "0"
+              },
+              "restoreState": {
+                "$numberInt": "0"
+              },
+              "isEOF": {
+                "$numberInt": "1"
+              },
+              "skipAmount": {
+                "$numberInt": "1"
+              },
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "filter": {
+                  "grp": {
+                    "$eq": "a"
+                  }
+                },
+                "nReturned": {
+                  "$numberInt": "2"
+                },
+                "executionTimeMillisEstimate": "<millis>",
+                "works": {
+                  "$numberInt": "6"
+                },
+                "advanced": {
+                  "$numberInt": "2"
+                },
+                "needTime": {
+                  "$numberInt": "3"
+                },
+                "needYield": {
+                  "$numberInt": "0"
+                },
+                "saveState": {
+                  "$numberInt": "0"
+                },
+                "restoreState": {
+                  "$numberInt": "0"
+                },
+                "isEOF": {
+                  "$numberInt": "1"
+                },
+                "direction": "forward",
+                "docsExamined": {
+                  "$numberInt": "5"
+                }
+              }
+            }
+          }
+        },
+        "queryShapeHash": "<hash>",
+        "command": {
+          "find": "diff_count_6",
+          "filter": {
+            "grp": "a"
+          },
+          "skip": {
+            "$numberInt": "1"
+          },
+          "limit": {
+            "$numberInt": "2"
+          },
+          "$db": "diff"
+        },
+        "serverInfo": {
+          "host": "<host>",
+          "port": "<port>",
+          "version": "8.0.9",
+          "gitVersion": "f882ef816d531ecfbb593843e4c554fda90ca416"
+        },
+        "serverParameters": {
+          "internalQueryFacetBufferSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFacetMaxOutputDocSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalLookupStageIntermediateDocumentMaxSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceGroupMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryMaxBlockingSortMemoryUsageBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryProhibitBlockingMergeOnMongoS": {
+            "$numberInt": "0"
+          },
+          "internalQueryMaxAddToSetBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFrameworkControl": "trySbeRestricted",
+          "internalQueryPlannerIgnoreIndexWithCollationForRegex": {
+            "$numberInt": "1"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_count_stats": [
+      {
+        "explainVersion": "1",
+        "queryPlanner": {
+          "namespace": "diff.diff_count_7",
+          "parsedQuery": {
+            "grp": {
+              "$eq": "a"
+            }
+          },
+          "indexFilterSet": false,
+          "queryHash": "<hash>",
+          "planCacheShapeHash": "<hash>",
+          "planCacheKey": "<hash>",
+          "optimizationTimeMillis": {
+            "$numberInt": "0"
+          },
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "stage": "COUNT",
+            "inputStage": {
+              "stage": "COLLSCAN",
+              "filter": {
+                "grp": {
+                  "$eq": "a"
+                }
+              },
+              "direction": "forward"
+            }
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": {
+            "$numberInt": "0"
+          },
+          "executionTimeMillis": "<millis>",
+          "totalKeysExamined": {
+            "$numberInt": "0"
+          },
+          "totalDocsExamined": {
+            "$numberInt": "5"
+          },
+          "executionStages": {
+            "isCached": false,
+            "stage": "COUNT",
+            "nReturned": {
+              "$numberInt": "0"
+            },
+            "executionTimeMillisEstimate": "<millis>",
+            "works": {
+              "$numberInt": "6"
+            },
+            "advanced": {
+              "$numberInt": "0"
+            },
+            "needTime": {
+              "$numberInt": "5"
+            },
+            "needYield": {
+              "$numberInt": "0"
+            },
+            "saveState": {
+              "$numberInt": "0"
+            },
+            "restoreState": {
+              "$numberInt": "0"
+            },
+            "isEOF": {
+              "$numberInt": "1"
+            },
+            "nCounted": {
+              "$numberInt": "1"
+            },
+            "nSkipped": {
+              "$numberInt": "1"
+            },
+            "inputStage": {
+              "stage": "COLLSCAN",
+              "filter": {
+                "grp": {
+                  "$eq": "a"
+                }
+              },
+              "nReturned": {
+                "$numberInt": "2"
+              },
+              "executionTimeMillisEstimate": "<millis>",
+              "works": {
+                "$numberInt": "6"
+              },
+              "advanced": {
+                "$numberInt": "2"
+              },
+              "needTime": {
+                "$numberInt": "3"
+              },
+              "needYield": {
+                "$numberInt": "0"
+              },
+              "saveState": {
+                "$numberInt": "0"
+              },
+              "restoreState": {
+                "$numberInt": "0"
+              },
+              "isEOF": {
+                "$numberInt": "1"
+              },
+              "direction": "forward",
+              "docsExamined": {
+                "$numberInt": "5"
+              }
+            }
+          }
+        },
+        "command": {
+          "count": "diff_count_7",
+          "query": {
+            "grp": "a"
+          },
+          "skip": {
+            "$numberInt": "1"
+          },
+          "limit": {
+            "$numberInt": "2"
+          },
+          "$db": "diff"
+        },
+        "serverInfo": {
+          "host": "<host>",
+          "port": "<port>",
+          "version": "8.0.9",
+          "gitVersion": "f882ef816d531ecfbb593843e4c554fda90ca416"
+        },
+        "serverParameters": {
+          "internalQueryFacetBufferSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFacetMaxOutputDocSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalLookupStageIntermediateDocumentMaxSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceGroupMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryMaxBlockingSortMemoryUsageBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryProhibitBlockingMergeOnMongoS": {
+            "$numberInt": "0"
+          },
+          "internalQueryMaxAddToSetBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFrameworkControl": "trySbeRestricted",
+          "internalQueryPlannerIgnoreIndexWithCollationForRegex": {
+            "$numberInt": "1"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_all_plans": [
+      {
+        "explainVersion": "1",
+        "queryPlanner": {
+          "namespace": "diff.diff_count_8",
+          "parsedQuery": {
+            "grp": {
+              "$eq": "a"
+            }
+          },
+          "indexFilterSet": false,
+          "queryHash": "<hash>",
+          "planCacheShapeHash": "<hash>",
+          "planCacheKey": "<hash>",
+          "optimizationTimeMillis": {
+            "$numberInt": "0"
+          },
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "stage": "COLLSCAN",
+            "filter": {
+              "grp": {
+                "$eq": "a"
+              }
+            },
+            "direction": "forward"
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": {
+            "$numberInt": "2"
+          },
+          "executionTimeMillis": "<millis>",
+          "totalKeysExamined": {
+            "$numberInt": "0"
+          },
+          "totalDocsExamined": {
+            "$numberInt": "5"
+          },
+          "executionStages": {
+            "isCached": false,
+            "stage": "COLLSCAN",
+            "filter": {
+              "grp": {
+                "$eq": "a"
+              }
+            },
+            "nReturned": {
+              "$numberInt": "2"
+            },
+            "executionTimeMillisEstimate": "<millis>",
+            "works": {
+              "$numberInt": "6"
+            },
+            "advanced": {
+              "$numberInt": "2"
+            },
+            "needTime": {
+              "$numberInt": "3"
+            },
+            "needYield": {
+              "$numberInt": "0"
+            },
+            "saveState": {
+              "$numberInt": "0"
+            },
+            "restoreState": {
+              "$numberInt": "0"
+            },
+            "isEOF": {
+              "$numberInt": "1"
+            },
+            "direction": "forward",
+            "docsExamined": {
+              "$numberInt": "5"
+            }
+          },
+          "allPlansExecution": []
+        },
+        "queryShapeHash": "<hash>",
+        "command": {
+          "find": "diff_count_8",
+          "filter": {
+            "grp": "a"
+          },
+          "$db": "diff"
+        },
+        "serverInfo": {
+          "host": "<host>",
+          "port": "<port>",
+          "version": "8.0.9",
+          "gitVersion": "f882ef816d531ecfbb593843e4c554fda90ca416"
+        },
+        "serverParameters": {
+          "internalQueryFacetBufferSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFacetMaxOutputDocSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalLookupStageIntermediateDocumentMaxSizeBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceGroupMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryMaxBlockingSortMemoryUsageBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryProhibitBlockingMergeOnMongoS": {
+            "$numberInt": "0"
+          },
+          "internalQueryMaxAddToSetBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": {
+            "$numberInt": "104857600"
+          },
+          "internalQueryFrameworkControl": "trySbeRestricted",
+          "internalQueryPlannerIgnoreIndexWithCollationForRegex": {
+            "$numberInt": "1"
+          }
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.count.explain_bad_verbosity": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Enumeration value 'bogus' for field 'explain.verbosity' is not a valid value.",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
       }
     ]
   }

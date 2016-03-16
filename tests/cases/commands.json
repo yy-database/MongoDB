@@ -339,6 +339,280 @@
                 { "at": "/getMore/ok", "equals": { "$numberDouble": "0.0" } },
                 { "at": "/kill/ok", "equals": { "$numberDouble": "1.0" } }
             ]
+        },
+        {
+            "id": "cmd.count.query_skip_limit",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                { "op": "count", "collection": "items", "query": { "grp": { "$in": ["a", "b"] } }, "skip": 2, "limit": 2, "as": "r2" },
+                { "op": "count", "collection": "items", "query": { "grp": "a" }, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/n", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "cmd.count.skip_negative",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                { "op": "count", "collection": "items", "skip": { "$numberInt": "-1" }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r2/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/codeName", "equals": "BadValue" },
+                { "at": "/r2/errmsg", "equals": "BSON field 'skip' value must be >= 0, actual value '-1'" }
+            ]
+        },
+        {
+            "id": "cmd.count.limit_negative",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }],
+                    "as": "r1"
+                },
+                { "op": "count", "collection": "items", "limit": { "$numberInt": "-2" }, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberInt": "2" } }]
+        },
+        {
+            "id": "cmd.count.skip_beyond",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "count", "collection": "items", "skip": 9, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberInt": "0" } }]
+        },
+        {
+            "id": "cmd.explain.find_planner",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                { "op": "explain", "explain": { "find": "items", "filter": { "grp": "a" } }, "verbosity": "queryPlanner", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/explainVersion", "equals": "1" },
+                { "at": "/r2/queryPlanner/namespace", "equals": "app.items" },
+                { "at": "/r2/queryPlanner/parsedQuery", "equals": { "grp": { "$eq": "a" } } },
+                { "at": "/r2/queryPlanner/indexFilterSet", "equals": false },
+                { "at": "/r2/queryPlanner/optimizationTimeMillis", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/queryPlanner/winningPlan/isCached", "equals": false },
+                { "at": "/r2/queryPlanner/winningPlan/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/queryPlanner/winningPlan/filter", "equals": { "grp": { "$eq": "a" } } },
+                { "at": "/r2/queryPlanner/winningPlan/direction", "equals": "forward" },
+                { "at": "/r2/queryPlanner/rejectedPlans/#", "equals": 0 },
+                { "at": "/r2/queryShapeHash/#", "equals": 64 },
+                { "at": "/r2/command/find", "equals": "items" },
+                { "at": "/r2/command/filter", "equals": { "grp": "a" } },
+                { "at": "/r2/command/$db", "equals": "app" },
+                { "at": "/r2/serverInfo/version", "equals": "8.0.9" },
+                { "at": "/r2/serverInfo/gitVersion", "equals": "f882ef816d531ecfbb593843e4c554fda90ca416" },
+                { "at": "/r2/serverParameters/internalQueryProhibitBlockingMergeOnMongoS", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/serverParameters/internalQueryFrameworkControl", "equals": "trySbeRestricted" },
+                { "at": "/r2/executionStats", "absent": true },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.explain.count_planner",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                {
+                    "op": "explain",
+                    "explain": { "count": "items", "query": { "grp": "a" }, "skip": 1, "limit": 2 },
+                    "verbosity": "queryPlanner",
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                { "at": "/r2/queryPlanner/winningPlan/isCached", "equals": false },
+                { "at": "/r2/queryPlanner/winningPlan/stage", "equals": "COUNT" },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/isCached", "absent": true },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/filter", "equals": { "grp": { "$eq": "a" } } },
+                { "at": "/r2/command/count", "equals": "items" },
+                { "at": "/r2/command/skip", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/command/limit", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/queryShapeHash", "absent": true },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.explain.find_stats",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                {
+                    "op": "explain",
+                    "explain": { "find": "items", "filter": { "grp": "a" }, "skip": 1, "limit": 2 },
+                    "verbosity": "executionStats",
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                { "at": "/r2/queryPlanner/winningPlan/stage", "equals": "LIMIT" },
+                { "at": "/r2/queryPlanner/winningPlan/limitAmount", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/stage", "equals": "SKIP" },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/skipAmount", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/inputStage/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/queryPlanner/winningPlan/inputStage/inputStage/isCached", "absent": true },
+                { "at": "/r2/executionStats/executionSuccess", "equals": true },
+                { "at": "/r2/executionStats/nReturned", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/executionStats/totalKeysExamined", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/executionStats/totalDocsExamined", "equals": { "$numberInt": "5" } },
+                { "at": "/r2/executionStats/executionStages/stage", "equals": "LIMIT" },
+                { "at": "/r2/executionStats/executionStages/works", "equals": { "$numberInt": "6" } },
+                { "at": "/r2/executionStats/executionStages/advanced", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/executionStats/executionStages/needTime", "equals": { "$numberInt": "4" } },
+                { "at": "/r2/executionStats/executionStages/isEOF", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/executionStats/executionStages/inputStage/stage", "equals": "SKIP" },
+                { "at": "/r2/executionStats/executionStages/inputStage/inputStage/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/executionStats/executionStages/inputStage/inputStage/docsExamined", "equals": { "$numberInt": "5" } },
+                { "at": "/r2/executionStats/allPlansExecution", "absent": true },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.explain.count_stats",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                {
+                    "op": "explain",
+                    "explain": { "count": "items", "query": { "grp": "a" }, "skip": 1, "limit": 2 },
+                    "verbosity": "executionStats",
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                { "at": "/r2/executionStats/nReturned", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/executionStats/totalDocsExamined", "equals": { "$numberInt": "5" } },
+                { "at": "/r2/executionStats/executionStages/stage", "equals": "COUNT" },
+                { "at": "/r2/executionStats/executionStages/works", "equals": { "$numberInt": "6" } },
+                { "at": "/r2/executionStats/executionStages/advanced", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/executionStats/executionStages/needTime", "equals": { "$numberInt": "5" } },
+                { "at": "/r2/executionStats/executionStages/nCounted", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/executionStats/executionStages/nSkipped", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/executionStats/executionStages/inputStage/isCached", "absent": true },
+                { "at": "/r2/executionStats/executionStages/inputStage/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.explain.all_plans",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "documents": [
+                        { "_id": 1, "grp": "a", "v": 1 },
+                        { "_id": 2, "grp": "a", "v": 2 },
+                        { "_id": 3, "grp": "b", "v": 3 },
+                        { "_id": 4, "grp": "b", "v": 4 },
+                        { "_id": 5, "grp": "c", "v": 5 }
+                    ],
+                    "as": "r1"
+                },
+                { "op": "explain", "explain": { "find": "items", "filter": { "grp": "a" } }, "verbosity": "allPlansExecution", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/executionStats/nReturned", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/executionStats/totalDocsExamined", "equals": { "$numberInt": "5" } },
+                { "at": "/r2/executionStats/executionStages/stage", "equals": "COLLSCAN" },
+                { "at": "/r2/executionStats/executionStages/isCached", "equals": false },
+                { "at": "/r2/executionStats/executionStages/works", "equals": { "$numberInt": "6" } },
+                { "at": "/r2/executionStats/executionStages/advanced", "equals": { "$numberInt": "2" } },
+                { "at": "/r2/executionStats/executionStages/needTime", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/executionStats/allPlansExecution/#", "equals": 0 },
+                { "at": "/r2/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.explain.bad_verbosity",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "explain", "explain": { "find": "items" }, "verbosity": "bogus", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/codeName", "equals": "BadValue" },
+                { "at": "/r1/errmsg", "equals": "Enumeration value 'bogus' for field 'explain.verbosity' is not a valid value." }
+            ]
         }
     ]
 }
