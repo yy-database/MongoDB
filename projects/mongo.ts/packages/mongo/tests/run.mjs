@@ -168,14 +168,14 @@ function runCase(testCase) {
             }
             case 'find': {
                 const command = { find: step.collection }
-                for (const key of ['filter', 'projection', 'sort', 'skip', 'limit', 'batchSize']) {
+                for (const key of ['filter', 'projection', 'sort', 'skip', 'limit', 'batchSize', 'hint']) {
                     if (step[key] !== undefined) command[key] = step[key]
                 }
                 return JSON.parse(binding.find(storeOf(step.store), cursorTable(), commandText(testCase, step, command)))
             }
             case 'count': {
                 const command = { count: step.collection }
-                for (const key of ['query', 'skip', 'limit']) {
+                for (const key of ['query', 'skip', 'limit', 'hint']) {
                     if (step[key] !== undefined) command[key] = step[key]
                 }
                 return JSON.parse(binding.count(storeOf(step.store), commandText(testCase, step, command)))

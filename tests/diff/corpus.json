@@ -1,7 +1,7 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 228,
+  "count": 253,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
@@ -16,9 +16,10 @@
     "bulkWrite": 15,
     "validators": 16,
     "listCollections": 8,
-    "count": 10
+    "count": 10,
+    "hint": 25
   },
-  "digest": "0fae9b4660f5a2ffeea50e61d2dfe1203620109e4eecaf5d8d9aa07911af59e8",
+  "digest": "a722c24e1b49148a7c12b32ff320927389c3cf30f23342dc0294cccc8b7046a9",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -19001,6 +19002,1669 @@
         }
       ],
       "seed": 20356134
+    },
+    {
+      "id": "diff.hint.planner_eq",
+      "cluster": "hint",
+      "collection": "diff_hint_0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_0",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_0",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_0",
+            "filter": {
+              "a": 10
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_0"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_empty",
+      "cluster": "hint",
+      "collection": "diff_hint_1",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_1",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_1",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_1",
+            "filter": {},
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_1"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_range_forward",
+      "cluster": "hint",
+      "collection": "diff_hint_2",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_2",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_2",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_2",
+            "filter": {
+              "a": {
+                "$gte": 20
+              }
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_2"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_range_backward",
+      "cluster": "hint",
+      "collection": "diff_hint_3",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_3",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_3",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_3",
+            "filter": {
+              "a": {
+                "$gte": 20
+              }
+            },
+            "sort": {
+              "a": -1
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_3"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_residual",
+      "cluster": "hint",
+      "collection": "diff_hint_4",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_4",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_4",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_4",
+            "filter": {
+              "a": 10,
+              "b": "x"
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_4"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_compound",
+      "cluster": "hint",
+      "collection": "diff_hint_5",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_5",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_5",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_5",
+            "filter": {
+              "a": 10,
+              "b": "x"
+            },
+            "hint": "ba"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_5"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_sort",
+      "cluster": "hint",
+      "collection": "diff_hint_6",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_6",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_6",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_6",
+            "filter": {
+              "a": 10
+            },
+            "sort": {
+              "_id": 1
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_6"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_multikey",
+      "cluster": "hint",
+      "collection": "diff_hint_7",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_7",
+          "documents": [
+            {
+              "_id": 1,
+              "a": [
+                1,
+                2
+              ],
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": [
+                3
+              ],
+              "b": "y"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_7",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_7",
+            "filter": {
+              "a": 1
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_7"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_unique",
+      "cluster": "hint",
+      "collection": "diff_hint_8",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_8",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 20
+            },
+            {
+              "_id": 3,
+              "a": 30
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_8",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "u",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_8",
+            "filter": {
+              "a": 10
+            },
+            "hint": "u"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_8"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_sparse",
+      "cluster": "hint",
+      "collection": "diff_hint_9",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_9",
+          "documents": [
+            {
+              "_id": 1,
+              "b": 1
+            },
+            {
+              "_id": 2,
+              "b": 2
+            },
+            {
+              "_id": 3,
+              "c": 1
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_9",
+          "indexes": [
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "sp",
+              "sparse": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_9",
+            "filter": {
+              "b": 1
+            },
+            "hint": "sp"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_9"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_partial",
+      "cluster": "hint",
+      "collection": "diff_hint_10",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_10",
+          "documents": [
+            {
+              "_id": 1,
+              "c": 10
+            },
+            {
+              "_id": 2,
+              "c": 1
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_10",
+          "indexes": [
+            {
+              "key": {
+                "c": 1
+              },
+              "name": "p",
+              "partialFilterExpression": {
+                "c": {
+                  "$gt": 5
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_10",
+            "filter": {
+              "c": 10
+            },
+            "hint": "p"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_10"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.planner_partial_outside",
+      "cluster": "hint",
+      "collection": "diff_hint_11",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_11",
+          "documents": [
+            {
+              "_id": 1,
+              "c": 10
+            },
+            {
+              "_id": 2,
+              "c": 1
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_11",
+          "indexes": [
+            {
+              "key": {
+                "c": 1
+              },
+              "name": "p",
+              "partialFilterExpression": {
+                "c": {
+                  "$gt": 5
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_11",
+            "filter": {
+              "c": 1
+            },
+            "hint": "p"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_11"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.stats_eq",
+      "cluster": "hint",
+      "collection": "diff_hint_12",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_12",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_12",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_12",
+            "filter": {
+              "a": 10
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_12"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.stats_limit",
+      "cluster": "hint",
+      "collection": "diff_hint_13",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_13",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_13",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_13",
+            "filter": {
+              "b": "x"
+            },
+            "limit": 2,
+            "hint": "ba"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_13"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.stats_skip",
+      "cluster": "hint",
+      "collection": "diff_hint_14",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_14",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_14",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_14",
+            "filter": {
+              "a": {
+                "$gte": 20
+              }
+            },
+            "skip": 1,
+            "hint": "a_1"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_14"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.count_planner",
+      "cluster": "hint",
+      "collection": "diff_hint_15",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_15",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_15",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_hint_15",
+            "query": {
+              "a": 10
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_15"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.count_stats",
+      "cluster": "hint",
+      "collection": "diff_hint_16",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_16",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_16",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_hint_16",
+            "query": {
+              "a": 10
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_16"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.count_skip_stats",
+      "cluster": "hint",
+      "collection": "diff_hint_17",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_17",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_17",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_hint_17",
+            "query": {
+              "a": {
+                "$gte": 20
+              }
+            },
+            "skip": 1,
+            "limit": 1,
+            "hint": "a_1"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_17"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.count_residual_stats",
+      "cluster": "hint",
+      "collection": "diff_hint_18",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_18",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_hint_18",
+            "query": {
+              "a": 10,
+              "b": "x"
+            },
+            "hint": "a_1"
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_18"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.natural_find",
+      "cluster": "hint",
+      "collection": "diff_hint_19",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_19",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_19",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "find",
+          "filter": {},
+          "hint": {
+            "$natural": -1
+          },
+          "collection": "diff_hint_19"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.natural_planner",
+      "cluster": "hint",
+      "collection": "diff_hint_20",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_20",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "find": "diff_hint_20",
+            "filter": {
+              "a": 10
+            },
+            "hint": {
+              "$natural": -1
+            }
+          },
+          "verbosity": "queryPlanner",
+          "collection": "diff_hint_20"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.natural_count_stats",
+      "cluster": "hint",
+      "collection": "diff_hint_21",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_21",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_21",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "explain",
+          "explain": {
+            "count": "diff_hint_21",
+            "query": {
+              "a": 10
+            },
+            "hint": {
+              "$natural": 1
+            }
+          },
+          "verbosity": "executionStats",
+          "collection": "diff_hint_21"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.errors",
+      "cluster": "hint",
+      "collection": "diff_hint_22",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_22",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_22",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": "ghost",
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": "$natural",
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": null,
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": 5,
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "a": 1,
+            "b": 1
+          },
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "a": -1
+          },
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "b": "x"
+          },
+          "sort": {
+            "a": -1
+          },
+          "projection": {
+            "_id": 1,
+            "a": 1
+          },
+          "hint": "ghost",
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "count",
+          "query": {
+            "a": 10
+          },
+          "skip": 1,
+          "limit": 2,
+          "hint": "ghost",
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {},
+          "collection": "diff_hint_22"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "$natural": 0
+          },
+          "collection": "diff_hint_22"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.hidden_hint",
+      "cluster": "hint",
+      "collection": "diff_hint_23",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_hint_23",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_23",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "h",
+              "hidden": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "find",
+          "filter": {
+            "b": "x"
+          },
+          "hint": "h",
+          "collection": "diff_hint_23"
+        }
+      ],
+      "seed": 20364053
+    },
+    {
+      "id": "diff.hint.missing_namespace",
+      "cluster": "hint",
+      "collection": "diff_hint_missing",
+      "setup": [],
+      "steps": [
+        {
+          "op": "find",
+          "collection": "diff_hint_missing",
+          "filter": {
+            "a": 10
+          },
+          "hint": "a_1"
+        }
+      ],
+      "seed": 20364053
     }
   ]
 }

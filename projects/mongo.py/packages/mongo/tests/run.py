@@ -471,14 +471,14 @@ def run_case(case):
             return json.loads(mongo.insert(store_of(step.get("store")), json.dumps(command_of(case, step, command))))
         if op == "find":
             command = {"find": step["collection"]}
-            for key in ("filter", "projection", "sort", "skip", "limit", "batchSize"):
+            for key in ("filter", "projection", "sort", "skip", "limit", "batchSize", "hint"):
                 if key in step:
                     command[key] = step[key]
             reply = mongo.find(store_of(step.get("store")), cursor_table(), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
         if op == "count":
             command = {"count": step["collection"]}
-            for key in ("query", "skip", "limit"):
+            for key in ("query", "skip", "limit", "hint"):
                 if key in step:
                     command[key] = step[key]
             reply = mongo.count(store_of(step.get("store")), json.dumps(command_of(case, step, command)))

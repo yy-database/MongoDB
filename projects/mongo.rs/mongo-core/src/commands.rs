@@ -705,6 +705,783 @@ fn duplicate_index_error(index: usize, namespace: &str, specification: &IndexSpe
     )
 }
 
+/// A `hint` resolved against the catalog.
+enum Hint {
+    /// No hint, or `hint: {}` which `mongod 8.0.9` ignores.
+    None,
+    /// `{$natural: 1}` or `{$natural: -1}`.
+    Natural(i32),
+    /// A named or key-pattern hint that matched one visible index.
+    Index(IndexSpec),
+}
+
+/// One equality/range bound the planner derives for an index key field.
+enum KeyBound {
+    Full,
+    Eq(BsonValue),
+    In(Vec<BsonValue>),
+    NotEq(BsonValue),
+    Range {
+        start: BsonValue,
+        start_inclusive: bool,
+        end: BsonValue,
+        end_inclusive: bool,
+    },
+}
+
+/// `COUNT_SCAN` reports bounds as `startKey` / `endKey` documents instead of
+/// the rendered strings `IXSCAN` uses.
+struct CountRange {
+    start: BsonValue,
+    start_inclusive: bool,
+    end: BsonValue,
+    end_inclusive: bool,
+}
+
+struct FieldPlan {
+    field: String,
+    bound: KeyBound,
+    count: CountRange,
+    residual: Option<BsonDocument>,
+}
+
+struct HintedPlan {
+    spec: IndexSpec,
+    fields: Vec<FieldPlan>,
+    residual: BsonDocument,
+    direction: &'static str,
+    sort_covered: bool,
+    is_multi_key: bool,
+}
+
+/// Resolves `hint` exactly as `mongod 8.0.9` does for `find` and `count`.
+///
+/// A hint against a namespace that does not exist is ignored (the command
+/// simply returns no documents), while the same hint against an existing
+/// collection fails. A named index must exist and must not be hidden; a key
+/// pattern must match one index key document, including field order.
+fn resolve_hint(
+    command: &BsonDocument,
+    store: &Store,
+    namespace: &str,
+    filter: &BsonDocument,
+    sort: Option<&BsonValue>,
+    projection: Option<&BsonValue>,
+) -> Result<Hint, CommandError> {
+    let Some(value) = command.get("hint") else { return Ok(Hint::None) };
+    match value {
+        BsonValue::String(_) | BsonValue::Document(_) => {}
+        _ => return Err(CommandError::new(9, "Hint must be a string or an object")),
+    }
+    if !store.namespace_exists(namespace) {
+        return Ok(Hint::None);
+    }
+    let planner_error =
+        || hint_planner_error(namespace, filter, sort, projection);
+    match value {
+        BsonValue::String(name) => store
+            .index_specs(namespace)
+            .into_iter()
+            .find(|spec| spec.is_visible() && spec.name == *name)
+            .map(Hint::Index)
+            .ok_or_else(planner_error),
+        BsonValue::Document(document) => {
+            if document.fields.is_empty() {
+                return Ok(Hint::None);
+            }
+            if let Some(direction) = document.get("$natural") {
+                if document.fields.len() == 1 {
+                    if let Some(number) = int_value(direction) {
+                        if number == 1 || number == -1 {
+                            return Ok(Hint::Natural(number as i32));
+                        }
+                    }
+                }
+                return Err(CommandError::new(2, "$natural hint cannot be set to a value other than -1 or 1."));
+            }
+            store
+                .index_specs(namespace)
+                .into_iter()
+                .find(|spec| spec.is_visible() && spec.key == *document)
+                .map(Hint::Index)
+                .ok_or_else(planner_error)
+        }
+        _ => Ok(Hint::None),
+    }
+}
+
+fn hint_planner_error(
+    namespace: &str,
+    filter: &BsonDocument,
+    sort: Option<&BsonValue>,
+    projection: Option<&BsonValue>,
+) -> CommandError {
+    CommandError::new(
+        2,
+        format!(
+            "error processing query: ns={namespace}Tree: {}\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index",
+            render_query_tree(filter),
+            render_inline_document(sort),
+            render_inline_document(projection)
+        ),
+    )
+}
+
+/// Renders the parsed filter the way the planner's `Tree:` line does.
+fn render_query_tree(filter: &BsonDocument) -> String {
+    let normalized = normalize_query(filter);
+    if filter.fields.is_empty() {
+        return "$and".to_string();
+    }
+    match normalized.get("$and") {
+        Some(BsonValue::Array(clauses)) => {
+            let mut text = "$and".to_string();
+            for clause in clauses {
+                if let BsonValue::Document(clause) = clause {
+                    for line in render_clause_lines(clause) {
+                        text.push_str("\n    ");
+                        text.push_str(&line);
+                    }
+                }
+            }
+            text
+        }
+        _ => render_clause_lines(&normalized).join("\n    "),
+    }
+}
+
+fn render_clause_lines(clause: &BsonDocument) -> Vec<String> {
+    let mut lines = Vec::new();
+    for (field, value) in &clause.fields {
+        match value {
+            BsonValue::Document(operators) if has_operator(operators) => {
+                for (operator, operand) in &operators.fields {
+                    if operator == "$options" {
+                        continue;
+                    }
+                    lines.push(format!("{field} {operator} {}", render_tree_value(operand)));
+                }
+            }
+            other => lines.push(format!("{field} $eq {}", render_tree_value(other))),
+        }
+    }
+    lines
+}
+
+fn render_tree_value(value: &BsonValue) -> String {
+    match value {
+        BsonValue::String(text) => format!("{text:?}"),
+        BsonValue::Array(items) => {
+            format!("[ {}]", items.iter().map(render_tree_value).collect::<Vec<_>>().join(" "))
+        }
+        BsonValue::Document(document) => render_inline_document(Some(&BsonValue::Document(document.clone()))),
+        _ => scalar_text(value),
+    }
+}
+
+/// `{ a: -1 }` / `{}` rendering used by the `Sort:` and `Proj:` lines.
+fn render_inline_document(value: Option<&BsonValue>) -> String {
+    match value {
+        Some(BsonValue::Document(document)) if !document.fields.is_empty() => format!(
+            "{{ {} }}",
+            document
+                .fields
+                .iter()
+                .map(|(field, value)| format!("{field}: {}", render_tree_value(value)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        _ => "{}".to_string(),
+    }
+}
+
+fn scalar_text(value: &BsonValue) -> String {
+    match value {
+        BsonValue::Int32(number) => number.to_string(),
+        BsonValue::Int64(number) => number.to_string(),
+        BsonValue::Double(number) => {
+            if number.is_nan() {
+                "nan.0".to_string()
+            }
+            else if number.is_infinite() {
+                if number.is_sign_positive() { "inf.0".to_string() } else { "-inf.0".to_string() }
+            }
+            else {
+                format!("{number:?}")
+            }
+        }
+        BsonValue::String(text) => format!("{text:?}"),
+        BsonValue::Bool(flag) => flag.to_string(),
+        BsonValue::Null => "null".to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+fn min_key_value() -> BsonValue {
+    let mut document = BsonDocument::new();
+    document.push("$minKey".to_string(), BsonValue::Int32(1));
+    BsonValue::Document(document)
+}
+
+fn max_key_value() -> BsonValue {
+    let mut document = BsonDocument::new();
+    document.push("$maxKey".to_string(), BsonValue::Int32(1));
+    BsonValue::Document(document)
+}
+
+fn normalized_clause(field: &str, value: &BsonValue) -> BsonDocument {
+    let mut clause = BsonDocument::new();
+    let normalized = match value {
+        BsonValue::Document(operators) if has_operator(operators) => value.clone(),
+        other => {
+            let mut equality = BsonDocument::new();
+            equality.push("$eq".to_string(), other.clone());
+            BsonValue::Document(equality)
+        }
+    };
+    clause.push(field.to_string(), normalized);
+    clause
+}
+
+fn combine_clauses(clauses: Vec<BsonDocument>) -> BsonDocument {
+    if clauses.len() == 1 {
+        return clauses.into_iter().next().unwrap();
+    }
+    let mut combined = BsonDocument::new();
+    combined.push("$and".to_string(), BsonValue::Array(clauses.into_iter().map(BsonValue::Document).collect()));
+    combined
+}
+
+fn full_count_range() -> CountRange {
+    CountRange { start: min_key_value(), start_inclusive: true, end: max_key_value(), end_inclusive: true }
+}
+
+/// Derives bounds for one key field from the top-level filter predicate.
+fn field_plan(field: &str, predicate: Option<&BsonValue>) -> FieldPlan {
+    let Some(predicate) = predicate else {
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::Full,
+            count: full_count_range(),
+            residual: None,
+        };
+    };
+    let operators = match predicate {
+        BsonValue::Document(operators) if has_operator(operators) => operators,
+        other => {
+            return FieldPlan {
+                field: field.to_string(),
+                bound: KeyBound::Eq(other.clone()),
+                count: CountRange {
+                    start: other.clone(),
+                    start_inclusive: true,
+                    end: other.clone(),
+                    end_inclusive: true,
+                },
+                residual: None,
+            };
+        }
+    };
+    let residual = normalized_clause(field, predicate);
+    let get = |name: &str| operators.get(name);
+    if let Some(value) = get("$eq") {
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::Eq(value.clone()),
+            count: CountRange {
+                start: value.clone(),
+                start_inclusive: true,
+                end: value.clone(),
+                end_inclusive: true,
+            },
+            residual: if operators.fields.len() > 1 { Some(residual) } else { None },
+        };
+    }
+    if let Some(BsonValue::Array(values)) = get("$in") {
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::In(values.clone()),
+            count: full_count_range(),
+            residual: None,
+        };
+    }
+    if let Some(value) = get("$ne") {
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::NotEq(value.clone()),
+            count: full_count_range(),
+            residual: None,
+        };
+    }
+    if let Some(BsonValue::Bool(_)) = get("$exists") {
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::Full,
+            count: full_count_range(),
+            residual: Some(residual),
+        };
+    }
+    if let Some(BsonValue::String(kind)) = get("$type") {
+        if kind == "number" {
+            let mut count = full_count_range();
+            count.start = BsonValue::Double(f64::NAN);
+            count.end = BsonValue::Double(f64::INFINITY);
+            return FieldPlan {
+                field: field.to_string(),
+                bound: KeyBound::Range {
+                    start: BsonValue::Double(f64::NAN),
+                    start_inclusive: true,
+                    end: BsonValue::Double(f64::INFINITY),
+                    end_inclusive: true,
+                },
+                count,
+                residual: None,
+            };
+        }
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::Full,
+            count: full_count_range(),
+            residual: Some(residual),
+        };
+    }
+    let lower = get("$gt").map(|value| (value, false)).or_else(|| get("$gte").map(|value| (value, true)));
+    let upper = get("$lt").map(|value| (value, false)).or_else(|| get("$lte").map(|value| (value, true)));
+    if lower.is_some() || upper.is_some() {
+        let (start, start_inclusive) =
+            lower.map(|(value, inclusive)| (value.clone(), inclusive)).unwrap_or((BsonValue::Double(f64::NEG_INFINITY), false));
+        let (end, end_inclusive) =
+            upper.map(|(value, inclusive)| (value.clone(), inclusive)).unwrap_or((BsonValue::Double(f64::INFINITY), true));
+        return FieldPlan {
+            field: field.to_string(),
+            bound: KeyBound::Range { start: start.clone(), start_inclusive, end: end.clone(), end_inclusive },
+            count: CountRange { start, start_inclusive, end, end_inclusive },
+            residual: None,
+        };
+    }
+    FieldPlan { field: field.to_string(), bound: KeyBound::Full, count: full_count_range(), residual: Some(residual) }
+}
+
+fn field_holds_array(documents: &[BsonDocument], field: &str) -> bool {
+    documents.iter().any(|document| match document.get(field) {
+        Some(BsonValue::Array(items)) => !items.is_empty(),
+        _ => false,
+    })
+}
+
+fn build_hinted_plan(
+    documents: &[BsonDocument],
+    spec: &IndexSpec,
+    filter: &BsonDocument,
+    sort: &[(String, i32)],
+) -> HintedPlan {
+    let mut fields = Vec::with_capacity(spec.key.fields.len());
+    for (field, _) in &spec.key.fields {
+        let predicate = filter.fields.iter().find(|(name, _)| name == field).map(|(_, value)| value);
+        fields.push(field_plan(field, predicate));
+    }
+    // A hinted partial index only keeps its bounds when the query is known to
+    // land inside the index filter; otherwise `mongod 8.0.9` falls back to a
+    // full index scan plus a residual FETCH filter.
+    if let Some(partial) = &spec.partial_filter_expression {
+        for plan in &mut fields {
+            if plan.residual.is_some() {
+                continue;
+            }
+            if let KeyBound::Eq(value) = &plan.bound {
+                let mut probe = BsonDocument::new();
+                probe.push(plan.field.clone(), value.clone());
+                if !document_matches(&probe, partial).unwrap_or(false) {
+                    if let Some(predicate) = filter.get(&plan.field) {
+                        plan.bound = KeyBound::Full;
+                        plan.count = full_count_range();
+                        plan.residual = Some(normalized_clause(&plan.field, predicate));
+                    }
+                }
+            }
+        }
+    }
+    let mut residuals: Vec<BsonDocument> = fields.iter().filter_map(|plan| plan.residual.clone()).collect();
+    for (field, value) in &filter.fields {
+        if field.starts_with('$') || spec.key.fields.iter().any(|(name, _)| name == field) {
+            continue;
+        }
+        residuals.push(normalized_clause(field, value));
+    }
+    residuals.sort_by(|left, right| left.fields.first().map(|(name, _)| name.clone()).cmp(&right.fields.first().map(|(name, _)| name.clone())));
+    let residual = if residuals.is_empty() { BsonDocument::new() } else { combine_clauses(residuals) };
+    // A sort is served by the index only when it repeats the key pattern in
+    // the same or the exactly reversed direction.
+    let sort_covered = sort.is_empty()
+        || (sort.len() == spec.key.fields.len()
+            && sort.iter().zip(spec.key.fields.iter()).all(|((field, direction), (key_field, key_direction))| {
+                field == key_field
+                    && int_value(key_direction).map(|value| value as i32).is_some_and(|value| value == *direction || value == -*direction)
+            }));
+    let backward = !sort.is_empty()
+        && sort_covered
+        && sort.iter().zip(spec.key.fields.iter()).all(|((_, direction), (_, key_direction))| {
+            int_value(key_direction).map(|value| value as i32).is_some_and(|value| value == -*direction)
+        });
+    let multi_paths = spec.key.fields.iter().map(|(field, _)| field_holds_array(documents, field)).collect::<Vec<_>>();
+    HintedPlan {
+        spec: spec.clone(),
+        fields,
+        residual,
+        direction: if backward { "backward" } else { "forward" },
+        sort_covered,
+        is_multi_key: multi_paths.iter().any(|flag| *flag),
+    }
+}
+
+fn bound_text(bound: &KeyBound, backward: bool) -> Vec<String> {
+    match bound {
+        KeyBound::Full => vec![if backward {
+            "[MaxKey, MinKey]".to_string()
+        }
+        else {
+            "[MinKey, MaxKey]".to_string()
+        }],
+        KeyBound::Eq(value) => vec![format!("[{}, {}]", scalar_text(value), scalar_text(value))],
+        KeyBound::In(values) => values.iter().map(|value| format!("[{}, {}]", scalar_text(value), scalar_text(value))).collect(),
+        KeyBound::NotEq(value) => {
+            vec![format!("[MinKey, {})", scalar_text(value)), format!("({}, MaxKey]", scalar_text(value))]
+        }
+        KeyBound::Range { start, start_inclusive, end, end_inclusive } => {
+            if backward {
+                vec![format!(
+                    "{}{}, {}{}",
+                    if *end_inclusive { "[" } else { "(" },
+                    scalar_text(end),
+                    scalar_text(start),
+                    if *start_inclusive { "]" } else { ")" }
+                )]
+            }
+            else {
+                vec![format!(
+                    "{}{}, {}{}",
+                    if *start_inclusive { "[" } else { "(" },
+                    scalar_text(start),
+                    scalar_text(end),
+                    if *end_inclusive { "]" } else { ")" }
+                )]
+            }
+        }
+    }
+}
+
+fn bound_contains(bound: &KeyBound, value: &BsonValue) -> bool {
+    match bound {
+        KeyBound::Full => true,
+        KeyBound::Eq(expected) => compare_values(value, expected) == Ordering::Equal,
+        KeyBound::In(values) => values.iter().any(|expected| compare_values(value, expected) == Ordering::Equal),
+        KeyBound::NotEq(expected) => compare_values(value, expected) != Ordering::Equal,
+        KeyBound::Range { start, start_inclusive, end, end_inclusive } => {
+            let lower = compare_values(value, start);
+            let upper = compare_values(value, end);
+            (if *start_inclusive { lower != Ordering::Less } else { lower == Ordering::Greater })
+                && (if *end_inclusive { upper != Ordering::Greater } else { upper == Ordering::Less })
+        }
+    }
+}
+
+fn tuple_in_bounds(tuple: &[BsonValue], fields: &[FieldPlan]) -> bool {
+    tuple.iter().zip(fields.iter()).all(|(value, plan)| bound_contains(&plan.bound, value))
+}
+
+fn plan_key_pattern(plan: &HintedPlan) -> BsonDocument {
+    plan.spec.key.clone()
+}
+
+fn plan_multi_key_paths(plan: &HintedPlan, documents: &[BsonDocument]) -> BsonDocument {
+    let mut paths = BsonDocument::new();
+    for (field, _) in &plan.spec.key.fields {
+        let mut values = Vec::new();
+        if field_holds_array(documents, field) {
+            values.push(BsonValue::String(field.clone()));
+        }
+        paths.push(field.clone(), BsonValue::Array(values));
+    }
+    paths
+}
+
+/// `IXSCAN` / `COUNT_SCAN` shared metadata.
+fn scan_stage_document(plan: &HintedPlan, documents: &[BsonDocument], count_scan: bool) -> BsonDocument {
+    let mut stage = BsonDocument::new();
+    stage.push("stage".to_string(), BsonValue::String(if count_scan { "COUNT_SCAN" } else { "IXSCAN" }.to_string()));
+    stage.push("keyPattern".to_string(), BsonValue::Document(plan_key_pattern(plan)));
+    stage.push("indexName".to_string(), BsonValue::String(plan.spec.name.clone()));
+    stage.push("isMultiKey".to_string(), BsonValue::Bool(plan.is_multi_key));
+    stage.push("multiKeyPaths".to_string(), BsonValue::Document(plan_multi_key_paths(plan, documents)));
+    stage.push("isUnique".to_string(), BsonValue::Bool(plan.spec.unique));
+    stage.push("isSparse".to_string(), BsonValue::Bool(plan.spec.is_sparse()));
+    stage.push("isPartial".to_string(), BsonValue::Bool(plan.spec.partial_filter_expression.is_some()));
+    stage.push("indexVersion".to_string(), BsonValue::Int32(2));
+    if count_scan {
+        let mut bounds = BsonDocument::new();
+        let mut start = BsonDocument::new();
+        let mut end = BsonDocument::new();
+        let mut start_inclusive = true;
+        let mut end_inclusive = true;
+        for field in &plan.fields {
+            start.push(field.field.clone(), field.count.start.clone());
+            end.push(field.field.clone(), field.count.end.clone());
+            start_inclusive &= field.count.start_inclusive;
+            end_inclusive &= field.count.end_inclusive;
+        }
+        bounds.push("startKey".to_string(), BsonValue::Document(start));
+        bounds.push("startKeyInclusive".to_string(), BsonValue::Bool(start_inclusive));
+        bounds.push("endKey".to_string(), BsonValue::Document(end));
+        bounds.push("endKeyInclusive".to_string(), BsonValue::Bool(end_inclusive));
+        stage.push("indexBounds".to_string(), BsonValue::Document(bounds));
+    }
+    else {
+        stage.push("direction".to_string(), BsonValue::String(plan.direction.to_string()));
+        let mut bounds = BsonDocument::new();
+        for field in &plan.fields {
+            let backward = plan.direction == "backward";
+            bounds.push(
+                field.field.clone(),
+                BsonValue::Array(bound_text(&field.bound, backward).into_iter().map(BsonValue::String).collect()),
+            );
+        }
+        stage.push("indexBounds".to_string(), BsonValue::Document(bounds));
+    }
+    stage
+}
+
+fn add_fetch_wrapper(stage: BsonDocument, filter: &BsonDocument) -> BsonDocument {
+    let mut fetch = BsonDocument::new();
+    fetch.push("stage".to_string(), BsonValue::String("FETCH".to_string()));
+    if !filter.fields.is_empty() {
+        fetch.push("filter".to_string(), BsonValue::Document(filter.clone()));
+    }
+    fetch.push("inputStage".to_string(), BsonValue::Document(stage));
+    fetch
+}
+
+fn hinted_find_plan(plan: &HintedPlan, documents: &[BsonDocument], skip: usize, limit: usize, sort: &[(String, i32)]) -> BsonDocument {
+    let mut stage = scan_stage_document(plan, documents, false);
+    if skip > 0 {
+        let mut skipped = BsonDocument::new();
+        skipped.push("stage".to_string(), BsonValue::String("SKIP".to_string()));
+        skipped.push("skipAmount".to_string(), count_value(skip as i64));
+        skipped.push("inputStage".to_string(), BsonValue::Document(stage));
+        stage = skipped;
+    }
+    stage = add_fetch_wrapper(stage, &plan.residual);
+    if !plan.sort_covered {
+        let mut pattern = BsonDocument::new();
+        for (field, direction) in sort {
+            pattern.push(field.clone(), BsonValue::Int32(*direction));
+        }
+        let mut sorted = BsonDocument::new();
+        sorted.push("stage".to_string(), BsonValue::String("SORT".to_string()));
+        sorted.push("sortPattern".to_string(), BsonValue::Document(pattern));
+        sorted.push("memLimit".to_string(), BsonValue::Int32(104857600));
+        sorted.push("type".to_string(), BsonValue::String("simple".to_string()));
+        sorted.push("inputStage".to_string(), BsonValue::Document(stage));
+        stage = sorted;
+    }
+    if limit > 0 {
+        let mut limited = BsonDocument::new();
+        limited.push("stage".to_string(), BsonValue::String("LIMIT".to_string()));
+        limited.push("limitAmount".to_string(), count_value(limit as i64));
+        limited.push("inputStage".to_string(), BsonValue::Document(stage));
+        stage = limited;
+    }
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in stage.fields {
+        cached.push(field, value);
+    }
+    cached
+}
+
+fn hinted_count_plan(plan: &HintedPlan, documents: &[BsonDocument]) -> BsonDocument {
+    let mut stage = scan_stage_document(plan, documents, plan.residual.fields.is_empty());
+    if !plan.residual.fields.is_empty() {
+        stage = add_fetch_wrapper(stage, &plan.residual);
+    }
+    let mut counted = BsonDocument::new();
+    counted.push("stage".to_string(), BsonValue::String("COUNT".to_string()));
+    counted.push("inputStage".to_string(), BsonValue::Document(stage));
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in counted.fields {
+        cached.push(field, value);
+    }
+    cached
+}
+
+fn execution_base(stage: &str, advanced: i64, works: i64, eof: bool) -> BsonDocument {
+    let mut document = BsonDocument::new();
+    document.push("stage".to_string(), BsonValue::String(stage.to_string()));
+    document.push("nReturned".to_string(), count_value(advanced));
+    document.push("executionTimeMillisEstimate".to_string(), BsonValue::Int32(0));
+    document.push("works".to_string(), count_value(works));
+    document.push("advanced".to_string(), count_value(advanced));
+    document.push("needTime".to_string(), count_value(if eof { (works - advanced - 1).max(0) } else { 0 }));
+    document.push("needYield".to_string(), BsonValue::Int32(0));
+    document.push("saveState".to_string(), BsonValue::Int32(0));
+    document.push("restoreState".to_string(), BsonValue::Int32(0));
+    document.push("isEOF".to_string(), BsonValue::Int32(if eof { 1 } else { 0 }));
+    document
+}
+
+fn scan_stats(
+    plan: &HintedPlan,
+    documents: &[BsonDocument],
+    count_scan: bool,
+    scanned: i64,
+    works: i64,
+    eof: bool,
+) -> BsonDocument {
+    let mut stage = execution_base(if count_scan { "COUNT_SCAN" } else { "IXSCAN" }, scanned, works, eof);
+    for (field, value) in scan_stage_document(plan, documents, count_scan).fields.into_iter().skip(1) {
+        stage.push(field, value);
+    }
+    stage.push("keysExamined".to_string(), count_value(if count_scan { works } else { scanned }));
+    if !count_scan {
+        stage.push("seeks".to_string(), BsonValue::Int32(if scanned > 0 { 1 } else { 0 }));
+        stage.push("dupsTested".to_string(), BsonValue::Int32(0));
+        stage.push("dupsDropped".to_string(), BsonValue::Int32(0));
+    }
+    stage
+}
+
+/// Scans the hinted index conceptually: returns whether each selected key
+/// belongs to a document that passes the full filter, in catalog order.
+fn hinted_entries(documents: &[BsonDocument], plan: &HintedPlan, filter: &BsonDocument) -> Vec<bool> {
+    let mut entries = Vec::new();
+    for document in documents {
+        let matches = document_matches(document, filter).unwrap_or(false);
+        for tuple in index_entries(document, &plan.spec) {
+            if tuple_in_bounds(&tuple, &plan.fields) {
+                entries.push(matches);
+            }
+        }
+    }
+    entries
+}
+
+fn hinted_find_stats(
+    plan: &HintedPlan,
+    documents: &[BsonDocument],
+    filter: &BsonDocument,
+    skip: usize,
+    limit: usize,
+    all_plans: bool,
+) -> BsonDocument {
+    let entries = hinted_entries(documents, plan, filter);
+    let keys = entries.len();
+    let scanned = if limit > 0 { (skip + limit).min(keys) } else { keys };
+    let skipped = skip.min(scanned);
+    let fetched = scanned - skipped;
+    let fetch_advanced = entries[skipped..scanned].iter().filter(|matched| **matched).count();
+    let returned = if limit > 0 { fetch_advanced.min(limit) } else { fetch_advanced };
+    // A satisfied LIMIT stops the scan without pulling the EOF key, even when
+    // the last key happened to exhaust the bounds.
+    let limit_satisfied = limit > 0 && fetch_advanced >= limit;
+    let eof = scanned == keys && !limit_satisfied;
+    let works = (scanned + usize::from(eof)) as i64;
+
+    let mut stage = scan_stats(plan, documents, false, scanned as i64, works, eof);
+    if skipped > 0 {
+        let mut skipped_stage = execution_base("SKIP", fetched as i64, works, eof);
+        skipped_stage.push("skipAmount".to_string(), count_value(skip as i64));
+        skipped_stage.push("inputStage".to_string(), BsonValue::Document(stage));
+        stage = skipped_stage;
+    }
+    let mut fetch = execution_base("FETCH", fetch_advanced as i64, works, eof);
+    if !plan.residual.fields.is_empty() {
+        fetch.push("filter".to_string(), BsonValue::Document(plan.residual.clone()));
+    }
+    fetch.push("docsExamined".to_string(), count_value(fetched as i64));
+    fetch.push("alreadyHasObj".to_string(), BsonValue::Int32(0));
+    fetch.push("inputStage".to_string(), BsonValue::Document(stage));
+    stage = fetch;
+    if limit > 0 {
+        let mut limited = execution_base("LIMIT", returned as i64, returned as i64 + 1, true);
+        limited.push("limitAmount".to_string(), count_value(limit as i64));
+        limited.push("inputStage".to_string(), BsonValue::Document(stage));
+        stage = limited;
+    }
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in stage.fields {
+        cached.push(field, value);
+    }
+    let mut stats = BsonDocument::new();
+    stats.push("executionSuccess".to_string(), BsonValue::Bool(true));
+    stats.push("nReturned".to_string(), count_value(returned as i64));
+    stats.push("executionTimeMillis".to_string(), BsonValue::Int32(0));
+    stats.push("totalKeysExamined".to_string(), count_value(scanned as i64));
+    stats.push("totalDocsExamined".to_string(), count_value(fetched as i64));
+    stats.push("executionStages".to_string(), BsonValue::Document(cached));
+    if all_plans {
+        stats.push("allPlansExecution".to_string(), BsonValue::Array(Vec::new()));
+    }
+    stats
+}
+
+fn hinted_count_stats(
+    plan: &HintedPlan,
+    documents: &[BsonDocument],
+    filter: &BsonDocument,
+    skip: usize,
+    limit: usize,
+    all_plans: bool,
+) -> BsonDocument {
+    let entries = hinted_entries(documents, plan, filter);
+    let keys = entries.len();
+    let scanned = if limit > 0 { (skip + limit).min(keys) } else { keys };
+    let works = (scanned + usize::from(scanned == keys)) as i64;
+    let eof = scanned == keys;
+    let count_scan = plan.residual.fields.is_empty();
+    let mut input = scan_stats(plan, documents, count_scan, scanned as i64, works, eof);
+    let fetch_advanced = if count_scan {
+        scanned
+    }
+    else {
+        let advanced = entries[..scanned].iter().filter(|matched| **matched).count();
+        let mut fetch = execution_base("FETCH", advanced as i64, works, eof);
+        fetch.push("filter".to_string(), BsonValue::Document(plan.residual.clone()));
+        fetch.push("docsExamined".to_string(), count_value(scanned as i64));
+        fetch.push("alreadyHasObj".to_string(), BsonValue::Int32(0));
+        fetch.push("inputStage".to_string(), BsonValue::Document(input));
+        input = fetch;
+        advanced
+    };
+    let skipped = skip.min(scanned);
+    let skipped_matches = entries[..skipped].iter().filter(|matched| **matched).count();
+    let available = fetch_advanced - skipped_matches;
+    let counted = if limit > 0 { available.min(limit) } else { available };
+    let input_works = reply_count(&input, "works");
+    let input_eof = input.get("isEOF").and_then(integer_of).unwrap_or(1) != 0;
+    let count_works = input_works + i64::from(!input_eof);
+    let mut counted_stage = execution_base("COUNT", 0, count_works, true);
+    counted_stage.push("nCounted".to_string(), count_value(counted as i64));
+    counted_stage.push("nSkipped".to_string(), count_value(skipped_matches as i64));
+    counted_stage.push("inputStage".to_string(), BsonValue::Document(input));
+    let mut cached = BsonDocument::new();
+    cached.push("isCached".to_string(), BsonValue::Bool(false));
+    for (field, value) in counted_stage.fields {
+        cached.push(field, value);
+    }
+    let mut stats = BsonDocument::new();
+    stats.push("executionSuccess".to_string(), BsonValue::Bool(true));
+    stats.push("nReturned".to_string(), BsonValue::Int32(0));
+    stats.push("executionTimeMillis".to_string(), BsonValue::Int32(0));
+    stats.push("totalKeysExamined".to_string(), count_value(if count_scan { works } else { scanned as i64 }));
+    stats.push("totalDocsExamined".to_string(), count_value(if count_scan { 0 } else { scanned as i64 }));
+    stats.push("executionStages".to_string(), BsonValue::Document(cached));
+    if all_plans {
+        stats.push("allPlansExecution".to_string(), BsonValue::Array(Vec::new()));
+    }
+    stats
+}
+
 /// `find` with filter, sort, skip, limit and cursor batching.
 pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) -> Result<BsonDocument, CommandError> {
     let namespace =
@@ -724,8 +1501,12 @@ pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) ->
         Some(BsonValue::Document(projection)) => Some(projection.clone()),
         _ => None,
     };
+    let hint = resolve_hint(command, store, &namespace, &filter, command.get("sort"), command.get("projection"))?;
 
     let mut documents = collect_matching(store, &namespace, &filter, session.key())?;
+    if matches!(hint, Hint::Natural(-1)) {
+        documents.reverse();
+    }
     sort_documents(&mut documents, &sort);
 
     let start = skip.min(documents.len());
@@ -757,6 +1538,7 @@ pub fn count(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Comm
         _ => BsonDocument::new(),
     };
     validate_filter(&filter, "count")?;
+    resolve_hint(command, store, &namespace, &filter, None, None)?;
     let skip = match command.get("skip") {
         Some(value) => match int_value(value) {
             Some(number) if number >= 0 => number as usize,
@@ -829,13 +1611,23 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
         None => BsonDocument::new(),
     };
     validate_filter(&filter, "explain")?;
+    let hint = resolve_hint(inner, store, &namespace, &filter, inner.get("sort"), inner.get("projection"))?;
     let (skip, limit) = explain_skip_limit(inner)?;
     let normalized = normalize_query(&filter);
+    let sort = if name == "find" { parse_sort(inner.get("sort")) } else { Vec::new() };
 
     let all_documents = collect_matching(store, &namespace, &BsonDocument::new(), None)?;
     let total = all_documents.len();
     let matched = all_documents.iter().filter(|document| document_matches(document, &filter).unwrap_or(false)).count();
     let counted = if limit > 0 { matched.saturating_sub(skip).min(limit) } else { matched.saturating_sub(skip) };
+    let hinted_plan = match &hint {
+        Hint::Index(spec) => Some(build_hinted_plan(&all_documents, spec, &filter, &sort)),
+        _ => None,
+    };
+    let direction = match hint {
+        Hint::Natural(-1) => "backward",
+        _ => "forward",
+    };
 
     let mut query_planner = BsonDocument::new();
     query_planner.push("namespace".to_string(), BsonValue::String(namespace.clone()));
@@ -851,7 +1643,12 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
     query_planner.push("maxIndexedAndSolutionsReached".to_string(), BsonValue::Bool(false));
     query_planner.push("maxScansToExplodeReached".to_string(), BsonValue::Bool(false));
     query_planner.push("prunedSimilarIndexes".to_string(), BsonValue::Bool(false));
-    query_planner.push("winningPlan".to_string(), BsonValue::Document(winning_plan(name, &normalized, skip, limit)));
+    let plan = match (&hinted_plan, name) {
+        (Some(plan), "find") => hinted_find_plan(plan, &all_documents, skip, limit, &sort),
+        (Some(plan), _) => hinted_count_plan(plan, &all_documents),
+        (None, _) => winning_plan(name, &normalized, skip, limit, direction),
+    };
+    query_planner.push("winningPlan".to_string(), BsonValue::Document(plan));
     query_planner.push("rejectedPlans".to_string(), BsonValue::Array(Vec::new()));
 
     let mut reply = BsonDocument::new();
@@ -862,10 +1659,22 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
         reply.push("queryShapeHash".to_string(), BsonValue::String(stable_shape_hash(&hash_seed)));
     }
     if verbosity != "queryPlanner" {
-        reply.push(
-            "executionStats".to_string(),
-            BsonValue::Document(explain_execution_stats(name, &normalized, total, matched, skip, limit, counted, verbosity == "allPlansExecution")),
-        );
+        let stats = match (&hinted_plan, name) {
+            (Some(plan), "find") => hinted_find_stats(plan, &all_documents, &filter, skip, limit, verbosity == "allPlansExecution"),
+            (Some(plan), _) => hinted_count_stats(plan, &all_documents, &filter, skip, limit, verbosity == "allPlansExecution"),
+            (None, _) => explain_execution_stats(
+                name,
+                &normalized,
+                total,
+                matched,
+                skip,
+                limit,
+                counted,
+                verbosity == "allPlansExecution",
+                direction,
+            ),
+        };
+        reply.push("executionStats".to_string(), BsonValue::Document(stats));
     }
     let mut echoed = inner.clone();
     if echoed.get("$db").is_none() {
@@ -932,13 +1741,13 @@ fn normalize_query(filter: &BsonDocument) -> BsonDocument {
     combined
 }
 
-fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize) -> BsonDocument {
+fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize, direction: &str) -> BsonDocument {
     let mut scan = BsonDocument::new();
     scan.push("stage".to_string(), BsonValue::String("COLLSCAN".to_string()));
     if !filter.fields.is_empty() {
         scan.push("filter".to_string(), BsonValue::Document(filter.clone()));
     }
-    scan.push("direction".to_string(), BsonValue::String("forward".to_string()));
+    scan.push("direction".to_string(), BsonValue::String(direction.to_string()));
     let mut stage = if command == "count" {
         let mut counted = BsonDocument::new();
         counted.push("stage".to_string(), BsonValue::String("COUNT".to_string()));
@@ -981,13 +1790,14 @@ fn explain_execution_stats(
     limit: usize,
     counted: usize,
     all_plans: bool,
+    direction: &str,
 ) -> BsonDocument {
     let works = (total + 1) as i64;
     let returned = if command == "count" { 0 } else { counted };
-    let scan = execution_stage("COLLSCAN", matched as i64, works, total as i64, filter);
+    let scan = execution_stage("COLLSCAN", matched as i64, works, total as i64, filter, direction);
     let stage = if command == "count" {
         let mut counted_stage = BsonDocument::new();
-        for (field, value) in execution_stage("COUNT", 0, works, total as i64, &BsonDocument::new()).fields {
+        for (field, value) in execution_stage("COUNT", 0, works, total as i64, &BsonDocument::new(), direction).fields {
             counted_stage.push(field, value);
         }
         counted_stage.push("nCounted".to_string(), count_value(counted as i64));
@@ -997,14 +1807,14 @@ fn explain_execution_stats(
     } else {
         let mut stage = scan;
         if skip > 0 {
-            let mut skipped = execution_stage("SKIP", returned as i64, works, total as i64, &BsonDocument::new());
+            let mut skipped = execution_stage("SKIP", returned as i64, works, total as i64, &BsonDocument::new(), direction);
             skipped.push("skipAmount".to_string(), count_value(skip as i64));
             skipped.push("inputStage".to_string(), BsonValue::Document(stage));
             stage = skipped;
         }
         if limit > 0 {
             let mut limited = BsonDocument::new();
-            for (field, value) in execution_stage("LIMIT", returned as i64, works, total as i64, &BsonDocument::new()).fields {
+            for (field, value) in execution_stage("LIMIT", returned as i64, works, total as i64, &BsonDocument::new(), direction).fields {
                 limited.push(field, value);
             }
             limited.push("limitAmount".to_string(), count_value(limit as i64));
@@ -1033,7 +1843,7 @@ fn explain_execution_stats(
     stats
 }
 
-fn execution_stage(stage: &str, advanced: i64, works: i64, examined: i64, filter: &BsonDocument) -> BsonDocument {
+fn execution_stage(stage: &str, advanced: i64, works: i64, examined: i64, filter: &BsonDocument, direction: &str) -> BsonDocument {
     let mut document = BsonDocument::new();
     document.push("stage".to_string(), BsonValue::String(stage.to_string()));
     if !filter.fields.is_empty() {
@@ -1049,7 +1859,7 @@ fn execution_stage(stage: &str, advanced: i64, works: i64, examined: i64, filter
     document.push("restoreState".to_string(), BsonValue::Int32(0));
     document.push("isEOF".to_string(), BsonValue::Int32(1));
     if stage == "COLLSCAN" {
-        document.push("direction".to_string(), BsonValue::String("forward".to_string()));
+        document.push("direction".to_string(), BsonValue::String(direction.to_string()));
         document.push("docsExamined".to_string(), count_value(examined));
     }
     document

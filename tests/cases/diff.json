@@ -28834,6 +28834,632 @@
           "equals": "BadValue"
         }
       ]
+    },
+    {
+      "id": "diff.hint.natural_find",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.hint.natural_find",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_hint_19",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_19",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "filter": {},
+          "hint": {
+            "$natural": -1
+          },
+          "collection": "diff_hint_19",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "a": {
+                  "$numberInt": "40"
+                },
+                "b": "z"
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "30"
+                },
+                "b": "x"
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": "y"
+              },
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": "x"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_hint_19"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.hint.errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.hint.errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_hint_22",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_22",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": "ghost",
+          "collection": "diff_hint_22",
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": "$natural",
+          "collection": "diff_hint_22",
+          "as": "r1"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": null,
+          "collection": "diff_hint_22",
+          "as": "r2"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": 5,
+          "collection": "diff_hint_22",
+          "as": "r3"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "a": 1,
+            "b": 1
+          },
+          "collection": "diff_hint_22",
+          "as": "r4"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "a": -1
+          },
+          "collection": "diff_hint_22",
+          "as": "r5"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "b": "x"
+          },
+          "sort": {
+            "a": -1
+          },
+          "projection": {
+            "_id": 1,
+            "a": 1
+          },
+          "hint": "ghost",
+          "collection": "diff_hint_22",
+          "as": "r6"
+        },
+        {
+          "op": "count",
+          "query": {
+            "a": 10
+          },
+          "skip": 1,
+          "limit": 2,
+          "hint": "ghost",
+          "collection": "diff_hint_22",
+          "as": "r7"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {},
+          "collection": "diff_hint_22",
+          "as": "r8"
+        },
+        {
+          "op": "find",
+          "filter": {
+            "a": 10
+          },
+          "hint": {
+            "$natural": 0
+          },
+          "collection": "diff_hint_22",
+          "as": "r9"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: a $eq 10\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: a $eq 10\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "Hint must be a string or an object"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "9"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "FailedToParse"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "Hint must be a string or an object"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "9"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "FailedToParse"
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r4/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: a $eq 10\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r4/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r4/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r5/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: a $eq 10\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r5/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r5/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r6/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r6/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: b $eq \"x\"\nSort: { a: -1 }\nProj: { _id: 1, a: 1 }\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r6/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r6/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r7/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r7/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_22Tree: a $eq 10\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r7/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r7/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r8/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": "x"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_hint_22"
+          }
+        },
+        {
+          "at": "/r8/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r9/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r9/errmsg",
+          "equals": "$natural hint cannot be set to a value other than -1 or 1."
+        },
+        {
+          "at": "/r9/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r9/codeName",
+          "equals": "BadValue"
+        }
+      ]
+    },
+    {
+      "id": "diff.hint.hidden_hint",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.hint.hidden_hint",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_hint_23",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "x"
+            },
+            {
+              "_id": 4,
+              "a": 40,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_hint_23",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            },
+            {
+              "key": {
+                "b": 1,
+                "a": 1
+              },
+              "name": "ba"
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "h",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "filter": {
+            "b": "x"
+          },
+          "hint": "h",
+          "collection": "diff_hint_23",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "error processing query: ns=diff.diff_hint_23Tree: b $eq \"x\"\nSort: {}\nProj: {}\n planner returned error :: caused by :: hint provided does not correspond to an existing index"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "BadValue"
+        }
+      ]
+    },
+    {
+      "id": "diff.hint.missing_namespace",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.hint.missing_namespace",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "find",
+          "collection": "diff_hint_missing",
+          "filter": {
+            "a": 10
+          },
+          "hint": "a_1",
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_hint_missing"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
     }
   ]
 }

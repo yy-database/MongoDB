@@ -9,7 +9,7 @@
 //
 // Usage:
 //   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
-//                                [--count 198] [--only <entry-id>]
+//                                [--count 253] [--only <entry-id>]
 //                                [--write] [--emit-cases] [--verify] [--check]
 //
 // `--check` is the regression gate: it verifies the fixed seed, count and corpus
@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '219'))
+const COUNT = Number(option('count', '253'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -1419,6 +1419,144 @@ function buildCountExplain(seed) {
     return entries
 }
 
+// `hint` against `mongod 8.0.9`: valid, natural, error and plan-shape cases.
+//
+// Every case uses the same four documents and two indexes unless a case needs
+// different index options. `explain` entries compare the whole reply with the
+// server's own plan, including `indexBounds`, `direction` and executionStats.
+function buildHint(seed) {
+    let n = 0
+    const entries = []
+    const baseDocuments = () => [
+        { _id: 1, a: 10, b: 'x' },
+        { _id: 2, a: 20, b: 'y' },
+        { _id: 3, a: 30, b: 'x' },
+        { _id: 4, a: 40, b: 'z' }
+    ]
+    const baseIndexes = () => [
+        { key: { a: 1 }, name: 'a_1' },
+        { key: { b: 1, a: 1 }, name: 'ba' }
+    ]
+    function add(suffix, steps, options = {}) {
+        const collection = `diff_hint_${n}`
+        entries.push({
+            id: `diff.hint.${suffix}`,
+            cluster: 'hint',
+            collection,
+            setup: [
+                { op: 'insert', collection, documents: options.documents ?? baseDocuments() },
+                { op: 'createIndexes', collection, indexes: options.indexes ?? baseIndexes() }
+            ],
+            steps: steps.map((step) => {
+                if (step.op !== 'explain') return { ...step, collection }
+                const inner = { ...step.explain }
+                for (const key of ['find', 'count']) if (inner[key] !== undefined) inner[key] = collection
+                return { ...step, explain: inner, collection }
+            })
+        })
+        n += 1
+    }
+    const explain = (inner, verbosity) => ({ op: 'explain', explain: inner, verbosity })
+
+    add('planner_eq', [explain({ find: 'items', filter: { a: 10 }, hint: 'a_1' }, 'queryPlanner')])
+    add('planner_empty', [explain({ find: 'items', filter: {}, hint: 'a_1' }, 'queryPlanner')])
+    add('planner_range_forward', [explain({ find: 'items', filter: { a: { $gte: 20 } }, hint: 'a_1' }, 'queryPlanner')])
+    add('planner_range_backward', [
+        explain({ find: 'items', filter: { a: { $gte: 20 } }, sort: { a: -1 }, hint: 'a_1' }, 'queryPlanner')
+    ])
+    add('planner_residual', [explain({ find: 'items', filter: { a: 10, b: 'x' }, hint: 'a_1' }, 'queryPlanner')])
+    add('planner_compound', [explain({ find: 'items', filter: { a: 10, b: 'x' }, hint: 'ba' }, 'queryPlanner')])
+    add('planner_sort', [explain({ find: 'items', filter: { a: 10 }, sort: { _id: 1 }, hint: 'a_1' }, 'queryPlanner')])
+    add(
+        'planner_multikey',
+        [explain({ find: 'items', filter: { a: 1 }, hint: 'a_1' }, 'queryPlanner')],
+        {
+            documents: [
+                { _id: 1, a: [1, 2], b: 'x' },
+                { _id: 2, a: [3], b: 'y' }
+            ],
+            indexes: [{ key: { a: 1 }, name: 'a_1' }]
+        }
+    )
+    add(
+        'planner_unique',
+        [explain({ find: 'items', filter: { a: 10 }, hint: 'u' }, 'queryPlanner')],
+        {
+            documents: [
+                { _id: 1, a: 10 },
+                { _id: 2, a: 20 },
+                { _id: 3, a: 30 }
+            ],
+            indexes: [{ key: { a: 1 }, name: 'u', unique: true }]
+        }
+    )
+    add(
+        'planner_sparse',
+        [explain({ find: 'items', filter: { b: 1 }, hint: 'sp' }, 'queryPlanner')],
+        {
+            documents: [
+                { _id: 1, b: 1 },
+                { _id: 2, b: 2 },
+                { _id: 3, c: 1 }
+            ],
+            indexes: [{ key: { b: 1 }, name: 'sp', sparse: true }]
+        }
+    )
+    const partialOptions = {
+        documents: [
+            { _id: 1, c: 10 },
+            { _id: 2, c: 1 }
+        ],
+        indexes: [{ key: { c: 1 }, name: 'p', partialFilterExpression: { c: { $gt: 5 } } }]
+    }
+    add('planner_partial', [explain({ find: 'items', filter: { c: 10 }, hint: 'p' }, 'queryPlanner')], partialOptions)
+    add('planner_partial_outside', [explain({ find: 'items', filter: { c: 1 }, hint: 'p' }, 'queryPlanner')], partialOptions)
+
+    add('stats_eq', [explain({ find: 'items', filter: { a: 10 }, hint: 'a_1' }, 'executionStats')])
+    add('stats_limit', [
+        explain({ find: 'items', filter: { b: 'x' }, limit: 2, hint: 'ba' }, 'executionStats')
+    ])
+    add('stats_skip', [explain({ find: 'items', filter: { a: { $gte: 20 } }, skip: 1, hint: 'a_1' }, 'executionStats')])
+    add('count_planner', [explain({ count: 'items', query: { a: 10 }, hint: 'a_1' }, 'queryPlanner')])
+    add('count_stats', [explain({ count: 'items', query: { a: 10 }, hint: 'a_1' }, 'executionStats')])
+    add('count_skip_stats', [
+        explain({ count: 'items', query: { a: { $gte: 20 } }, skip: 1, limit: 1, hint: 'a_1' }, 'executionStats')
+    ])
+    add('count_residual_stats', [
+        explain({ count: 'items', query: { a: 10, b: 'x' }, hint: 'a_1' }, 'executionStats')
+    ])
+    add('natural_find', [{ op: 'find', filter: {}, hint: { $natural: -1 } }])
+    add('natural_planner', [explain({ find: 'items', filter: { a: 10 }, hint: { $natural: -1 } }, 'queryPlanner')])
+    add('natural_count_stats', [explain({ count: 'items', query: { a: 10 }, hint: { $natural: 1 } }, 'executionStats')])
+    add('errors', [
+        { op: 'find', filter: { a: 10 }, hint: 'ghost' },
+        { op: 'find', filter: { a: 10 }, hint: '$natural' },
+        { op: 'find', filter: { a: 10 }, hint: null },
+        { op: 'find', filter: { a: 10 }, hint: 5 },
+        { op: 'find', filter: { a: 10 }, hint: { a: 1, b: 1 } },
+        { op: 'find', filter: { a: 10 }, hint: { a: -1 } },
+        { op: 'find', filter: { b: 'x' }, sort: { a: -1 }, projection: { _id: 1, a: 1 }, hint: 'ghost' },
+        { op: 'count', query: { a: 10 }, skip: 1, limit: 2, hint: 'ghost' },
+        { op: 'find', filter: { a: 10 }, hint: {} },
+        { op: 'find', filter: { a: 10 }, hint: { $natural: 0 } }
+    ])
+    add(
+        'hidden_hint',
+        [{ op: 'find', filter: { b: 'x' }, hint: 'h' }],
+        {
+            indexes: [...baseIndexes(), { key: { b: 1 }, name: 'h', hidden: true }]
+        }
+    )
+    entries.push({
+        id: 'diff.hint.missing_namespace',
+        cluster: 'hint',
+        collection: 'diff_hint_missing',
+        setup: [],
+        steps: [{ op: 'find', collection: 'diff_hint_missing', filter: { a: 10 }, hint: 'a_1' }]
+    })
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -1432,7 +1570,8 @@ const CLUSTERS = [
     ['bulkWrite', buildBulkWrite],
     ['validators', buildValidators],
     ['listCollections', buildListCollections],
-    ['count', buildCountExplain]
+    ['count', buildCountExplain],
+    ['hint', buildHint]
 ]
 
 function generate(seed) {
@@ -1464,7 +1603,7 @@ function commandOf(step, replies) {
         }
         case 'find': {
             const command = { find: collection, filter: step.filter ?? {} }
-            for (const key of ['projection', 'sort', 'skip', 'limit', 'batchSize']) {
+            for (const key of ['projection', 'sort', 'skip', 'limit', 'batchSize', 'hint']) {
                 if (step[key] !== undefined) command[key] = step[key]
             }
             return { ...command, $db: DB }
@@ -1512,7 +1651,7 @@ function commandOf(step, replies) {
         }
         case 'count': {
             const command = { count: collection }
-            for (const key of ['query', 'skip', 'limit']) {
+            for (const key of ['query', 'skip', 'limit', 'hint']) {
                 if (step[key] !== undefined) command[key] = step[key]
             }
             return { ...command, $db: DB }

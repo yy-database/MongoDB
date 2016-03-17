@@ -16,7 +16,7 @@ pub fn to_json(value: &BsonValue) -> Value {
         BsonValue::String(text) => Value::String(text.clone()),
         BsonValue::Int32(number) => tagged("$numberInt", number.to_string()),
         BsonValue::Int64(number) => tagged("$numberLong", number.to_string()),
-        BsonValue::Double(number) => tagged("$numberDouble", format!("{number:?}")),
+        BsonValue::Double(number) => tagged("$numberDouble", double_text(*number)),
         BsonValue::Bool(flag) => Value::Bool(*flag),
         BsonValue::Null => Value::Null,
         BsonValue::Undefined => {
@@ -114,6 +114,20 @@ fn tagged(tag: &str, payload: String) -> Value {
     let mut object = Map::new();
     object.insert(tag.to_string(), Value::String(payload));
     Value::Object(object)
+}
+
+/// Extended JSON spells non-finite doubles out instead of using Rust's `inf` /
+/// `NaN` debug forms.
+fn double_text(number: f64) -> String {
+    if number.is_nan() {
+        "NaN".to_string()
+    }
+    else if number.is_infinite() {
+        if number.is_sign_positive() { "Infinity".to_string() } else { "-Infinity".to_string() }
+    }
+    else {
+        format!("{number:?}")
+    }
 }
 
 fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String> {
