@@ -593,6 +593,18 @@ fn traverses_array(value: &BsonValue, segments: &[&str]) -> bool {
 /// inside one document are collapsed, which is why `{a: [3, 3]}` can be stored
 /// under a unique index while a second document with `a: 3` cannot.
 fn index_entries(document: &BsonDocument, specification: &IndexSpec) -> Vec<Vec<BsonValue>> {
+    if specification.is_sparse()
+        && specification.key.fields.iter().all(|(field, _)| collect_field(document, field).is_empty())
+    {
+        // A sparse index only holds documents that carry at least one of the
+        // indexed fields. An explicit `null` counts as present.
+        return Vec::new();
+    }
+    if let Some(filter) = &specification.partial_filter_expression {
+        if !document_matches(document, filter).unwrap_or(false) {
+            return Vec::new();
+        }
+    }
     let mut tuples: Vec<Vec<BsonValue>> = vec![Vec::new()];
     for (field, _) in &specification.key.fields {
         let values = field_values(document, field);
@@ -605,6 +617,21 @@ fn index_entries(document: &BsonDocument, specification: &IndexSpec) -> Vec<Vec<
             }
         }
         tuples = expanded;
+    }
+    if let Some(collation) = &specification.collation {
+        let strength = collation
+            .get("strength")
+            .and_then(integer_of)
+            .unwrap_or(3);
+        if strength <= 2 {
+            for tuple in &mut tuples {
+                for value in tuple.iter_mut() {
+                    if let BsonValue::String(text) = value {
+                        *text = text.to_lowercase();
+                    }
+                }
+            }
+        }
     }
     let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
     tuples.retain(|tuple| seen.insert(index_tuple(tuple)));
@@ -3516,6 +3543,277 @@ pub fn list_databases(store: &Store) -> BsonDocument {
     response
 }
 
+/// Index options read from one `createIndexes` specification, already validated.
+fn index_type_error(specification: &BsonDocument, detail: String) -> CommandError {
+    CommandError::new(
+        14,
+        format!(
+            "Error in specification {} :: caused by :: {detail}",
+            render_shell_value(&BsonValue::Document(specification.clone()))
+        ),
+    )
+}
+
+fn requested_bool(specification: &BsonDocument, field: &str, quirky: bool) -> Result<Option<bool>, CommandError> {
+    match specification.get(field) {
+        None => Ok(None),
+        Some(BsonValue::Bool(value)) => Ok(Some(*value)),
+        Some(other) => {
+            let detail = if quirky {
+                format!(
+                    "The field '{field} has value {field}: {}, which is not convertible to bool",
+                    render_shell_value(other)
+                )
+            } else {
+                format!("The field 'name' must be a bool, but got {}", type_label(other))
+            };
+            Err(index_type_error(specification, detail))
+        }
+    }
+}
+
+fn requested_ttl(specification: &BsonDocument) -> Result<Option<i32>, CommandError> {
+    let Some(value) = specification.get("expireAfterSeconds") else { return Ok(None) };
+    let numeric = match value {
+        BsonValue::Int32(seconds) => i64::from(*seconds),
+        BsonValue::Int64(seconds) => *seconds,
+        BsonValue::Double(seconds) => *seconds as i64,
+        other => {
+            return Err(CommandError::new(
+                67,
+                format!(
+                    ". Index spec: {} :: caused by :: TTL index 'expireAfterSeconds' option must be numeric, but received a type of '{}",
+                    render_shell_value(&BsonValue::Document(specification.clone())),
+                    type_label(other)
+                ),
+            ))
+        }
+    };
+    if !(i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&numeric) {
+        return Err(CommandError::new(
+            67,
+            format!(
+                ". Index spec: {} :: caused by :: TTL index 'expireAfterSeconds' must be within the range of a 32-bit integer",
+                render_shell_value(&BsonValue::Document(specification.clone()))
+            ),
+        ));
+    }
+    if numeric < 0 {
+        return Err(CommandError::new(
+            67,
+            format!(
+                ". Index spec: {} :: caused by :: TTL index 'expireAfterSeconds' option cannot be less than 0",
+                render_shell_value(&BsonValue::Document(specification.clone()))
+            ),
+        ));
+    }
+    Ok(Some(numeric as i32))
+}
+
+fn type_label(value: &BsonValue) -> &'static str {
+    match value {
+        BsonValue::Document(_) => "object",
+        BsonValue::Array(_) => "array",
+        BsonValue::String(_) => "string",
+        BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => "number",
+        BsonValue::Bool(_) => "bool",
+        BsonValue::Null => "null",
+        BsonValue::Undefined => "undefined",
+        BsonValue::ObjectId(_) => "objectId",
+        BsonValue::Binary(_) => "binData",
+    }
+}
+
+/// Normalizes one `collation` document the way `listIndexes` reports it.
+fn requested_collation(specification: &BsonDocument) -> Result<Option<BsonDocument>, CommandError> {
+    let Some(value) = specification.get("collation") else { return Ok(None) };
+    let BsonValue::Document(collation) = value else {
+        return Err(index_type_error(
+            specification,
+            format!("The field 'collation' must be an object, but got {}", type_label(value)),
+        ));
+    };
+    let mut definition = specification.clone();
+    definition.push("v".to_string(), BsonValue::Int32(2));
+    let failed = |code: i32, detail: String| {
+        CommandError::new(
+            code,
+            format!(
+                "failed to add collation information to index spec for index creation: {} :: caused by :: {detail}",
+                render_shell_value(&BsonValue::Document(definition.clone()))
+            ),
+        )
+    };
+    let Some(BsonValue::String(locale)) = collation.get("locale") else {
+        if collation.get("locale").is_none() {
+            return Err(failed(40414, "BSON field 'collation.locale' is missing but a required field".to_string()));
+        }
+        return Err(failed(
+            2,
+            format!("Field 'locale' is invalid in: {}", render_shell_value(&BsonValue::Document(collation.clone()))),
+        ));
+    };
+    if !known_locale(locale) {
+        return Err(failed(
+            2,
+            format!("Field 'locale' is invalid in: {}", render_shell_value(&BsonValue::Document(collation.clone()))),
+        ));
+    }
+    let strength = match collation.get("strength") {
+        None => 3,
+        Some(BsonValue::Int32(value)) => i64::from(*value),
+        Some(BsonValue::Int64(value)) => *value,
+        Some(BsonValue::Double(value)) => *value as i64,
+        Some(other) => {
+            return Err(failed(
+                2,
+                format!("BSON field 'strength' value must be a number, actual value '{}'", render_shell_value(other)),
+            ))
+        }
+    };
+    if !(1..=5).contains(&strength) {
+        let detail = if strength > 5 {
+            format!("BSON field 'strength' value must be <= 5, actual value '{strength}'")
+        } else {
+            format!("BSON field 'strength' value must be >= 1, actual value '{strength}'")
+        };
+        return Err(failed(2, detail));
+    }
+    let flag = |field: &str| matches!(collation.get(field), Some(BsonValue::Bool(true)));
+    let case_first = match collation.get("caseFirst") {
+        Some(BsonValue::String(value)) if ["off", "upper", "lower"].contains(&value.as_str()) => value.clone(),
+        _ => "off".to_string(),
+    };
+    let alternate = match collation.get("alternate") {
+        Some(BsonValue::String(value)) if ["non-ignorable", "shifted"].contains(&value.as_str()) => value.clone(),
+        _ => "non-ignorable".to_string(),
+    };
+    let max_variable = match collation.get("maxVariable") {
+        Some(BsonValue::String(value)) if ["punct", "space"].contains(&value.as_str()) => value.clone(),
+        _ => "punct".to_string(),
+    };
+    let mut normalized = BsonDocument::new();
+    normalized.push("locale".to_string(), BsonValue::String(locale.clone()));
+    normalized.push("caseLevel".to_string(), BsonValue::Bool(flag("caseLevel")));
+    normalized.push("caseFirst".to_string(), BsonValue::String(case_first));
+    normalized.push("strength".to_string(), BsonValue::Int32(strength as i32));
+    normalized.push("numericOrdering".to_string(), BsonValue::Bool(flag("numericOrdering")));
+    normalized.push("alternate".to_string(), BsonValue::String(alternate));
+    normalized.push("maxVariable".to_string(), BsonValue::String(max_variable));
+    normalized.push("normalization".to_string(), BsonValue::Bool(flag("normalization")));
+    normalized.push("backwards".to_string(), BsonValue::Bool(flag("backwards")));
+    normalized.push("version".to_string(), BsonValue::String("57.1".to_string()));
+    Ok(Some(normalized))
+}
+
+/// ICU knows far more locales than this gateway needs; the corpus uses `en`, and
+/// an obviously synthetic token such as `bogus` must not silently pass.
+fn known_locale(locale: &str) -> bool {
+    matches!(
+        locale,
+        "en"
+            | "en_US"
+            | "fr"
+            | "fr_FR"
+            | "es"
+            | "de"
+            | "it"
+            | "pt"
+            | "nl"
+            | "sv"
+            | "da"
+            | "fi"
+            | "no"
+            | "zh"
+            | "zh_Hans"
+            | "zh_Hant"
+            | "ja"
+            | "ko"
+            | "ru"
+            | "ar"
+            | "hi"
+            | "th"
+            | "vi"
+            | "tr"
+            | "pl"
+            | "cs"
+            | "hu"
+            | "ro"
+            | "el"
+            | "he"
+            | "id"
+            | "ms"
+            | "uk"
+            | "simple"
+    )
+}
+
+fn partial_filter_from(specification: &BsonDocument) -> Result<Option<BsonDocument>, CommandError> {
+    let Some(value) = specification.get("partialFilterExpression") else { return Ok(None) };
+    let BsonValue::Document(filter) = value else {
+        return Err(index_type_error(
+            specification,
+            format!("The field 'partialFilterExpression' must be an object, but got {}", type_label(value)),
+        ));
+    };
+    if let Err(error) = validate_filter(filter, "createIndexes") {
+        // `createIndexes` reports the bare operator message; the field/operator
+        // indices `validate_filter` appends belong to query commands.
+        let message = error.message.split(" (operation:").next().unwrap_or(&error.message);
+        return Err(CommandError::new(
+            error.code,
+            format!(
+                "Error in specification {} :: caused by :: {message}",
+                render_shell_value(&BsonValue::Document(specification.clone()))
+            ),
+        ));
+    }
+    Ok(Some(filter.clone()))
+}
+
+fn is_id_key(key: &BsonDocument) -> bool {
+    key.fields.len() == 1
+        && key.fields[0].0 == "_id"
+        && matches!(key.fields[0].1, BsonValue::Int32(1) | BsonValue::Int64(1) | BsonValue::Double(1.0))
+}
+
+fn same_index_options(left: &IndexSpec, right: &IndexSpec) -> bool {
+    // `hidden` is not part of index equivalence on `mongod 8.0.9`: a visible
+    // index and a hidden index over the same key are the same index.
+    left.key == right.key
+        && left.unique == right.unique
+        && left.is_sparse() == right.is_sparse()
+        && left.expire_after_seconds == right.expire_after_seconds
+        && left.collation == right.collation
+        && left.partial_filter_expression == right.partial_filter_expression
+}
+
+fn render_index_definition(specification: &IndexSpec) -> String {
+    let mut definition = BsonDocument::new();
+    definition.push("v".to_string(), BsonValue::Int32(2));
+    if specification.unique {
+        definition.push("unique".to_string(), BsonValue::Bool(true));
+    }
+    if specification.hidden {
+        definition.push("hidden".to_string(), BsonValue::Bool(true));
+    }
+    definition.push("key".to_string(), BsonValue::Document(specification.key.clone()));
+    definition.push("name".to_string(), BsonValue::String(specification.name.clone()));
+    if let Some(sparse) = specification.sparse {
+        definition.push("sparse".to_string(), BsonValue::Bool(sparse));
+    }
+    if let Some(seconds) = specification.expire_after_seconds {
+        definition.push("expireAfterSeconds".to_string(), BsonValue::Int32(seconds));
+    }
+    if let Some(collation) = &specification.collation {
+        definition.push("collation".to_string(), BsonValue::Document(collation.clone()));
+    }
+    if let Some(filter) = &specification.partial_filter_expression {
+        definition.push("partialFilterExpression".to_string(), BsonValue::Document(filter.clone()));
+    }
+    render_shell_value(&BsonValue::Document(definition))
+}
+
 /// `createIndexes` for single-field and compound keys, `unique`, and explicit
 /// names.
 ///
@@ -3583,33 +3881,84 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
                 ),
             ));
         }
-        let unique = matches!(specification.get("unique"), Some(BsonValue::Bool(true)));
+        let unique = requested_bool(specification, "unique", true)?.unwrap_or(false);
+        let sparse = requested_bool(specification, "sparse", true)?;
+        let hidden = requested_bool(specification, "hidden", false)?.unwrap_or(false);
+        let expire_after_seconds = requested_ttl(specification)?;
+        let collation = requested_collation(specification)?;
+        let partial_filter_expression = partial_filter_from(specification)?;
 
-        if let Some(hit) = known.iter().find(|index| index.name == *name) {
-            if hit.key == *key && hit.unique == unique {
-                skipped += 1;
-                continue;
-            }
-            let requested = render_index_definition(key, name, unique);
-            let present = render_index_definition(&hit.key, &hit.name, hit.unique);
-            return Err(CommandError::new(
-                86,
-                format!(
-                    "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: {requested}, existing index: {present}"
-                ),
-            ));
-        }
-        if let Some(hit) = known.iter().find(|index| index.key == *key && index.unique == unique) {
-            return Err(CommandError::new(85, format!("Index already exists with a different name: {}", hit.name)));
-        }
-
-        let candidate = IndexSpec {
+        let mut candidate = IndexSpec {
             namespace: namespace.clone(),
             name: name.clone(),
             key: key.clone(),
             unique,
+            sparse,
+            hidden,
+            expire_after_seconds,
+            collation,
+            partial_filter_expression,
         };
-        if unique {
+
+        if is_id_key(key) {
+            // `_id` is always indexed under the implicit `_id_` name. A second
+            // specification for it never creates a second index.
+            if candidate.expire_after_seconds.is_some() {
+                let mut definition = specification.clone();
+                definition.push("v".to_string(), BsonValue::Int32(2));
+                return Err(CommandError::new(
+                    197,
+                    format!(
+                        "The field 'expireAfterSeconds' is not valid for an _id index specification. Specification: {}",
+                        render_shell_value(&BsonValue::Document(definition))
+                    ),
+                ));
+            }
+            skipped += 1;
+            continue;
+        }
+        if candidate.expire_after_seconds.is_some() {
+            if candidate.key.fields.len() != 1 {
+                return Err(CommandError::new(
+                    67,
+                    format!(
+                        "TTL indexes are single-field indexes, compound indexes do not support TTL. Index spec: {}",
+                        render_shell_value(&BsonValue::Document(specification.clone()))
+                    ),
+                ));
+            }
+        }
+
+        if let Some(hit) = known.iter().find(|index| index.name == *name) {
+            if same_index_options(hit, &candidate) {
+                skipped += 1;
+                continue;
+            }
+            return Err(CommandError::new(
+                86,
+                format!(
+                    "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: {}, existing index: {}",
+                    render_index_definition(&candidate),
+                    render_index_definition(hit)
+                ),
+            ));
+        }
+        if let Some(hit) = known.iter().find(|index| same_index_options(index, &candidate)) {
+            if hit.hidden == candidate.hidden {
+                return Err(CommandError::new(85, format!("Index already exists with a different name: {}", hit.name)));
+            }
+            return Err(CommandError::new(
+                85,
+                format!(
+                    "Index build failed: 00000000-0000-0000-0000-000000000000: Collection {namespace} ( 00000000-0000-0000-0000-000000000000 ) :: caused by :: An equivalent index already exists with a different name and options. Requested index: {}, existing index: {}",
+                    render_index_definition(&candidate),
+                    render_index_definition(hit)
+                ),
+            ));
+        }
+
+        candidate.name = name.clone();
+        if candidate.unique {
             verify_unique_build(store, &namespace, &candidate)?;
         }
         known.push(candidate.clone());
@@ -3637,17 +3986,6 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
     }
     reply.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(reply)
-}
-
-fn render_index_definition(key: &BsonDocument, name: &str, unique: bool) -> String {
-    let mut specification = BsonDocument::new();
-    specification.push("v".to_string(), BsonValue::Int32(2));
-    if unique {
-        specification.push("unique".to_string(), BsonValue::Bool(true));
-    }
-    specification.push("key".to_string(), BsonValue::Document(key.clone()));
-    specification.push("name".to_string(), BsonValue::String(name.to_string()));
-    render_shell_value(&BsonValue::Document(specification))
 }
 
 /// Refuses to build a unique index over documents that already collide.
@@ -3750,10 +4088,25 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     for specification in store.index_specs(&namespace) {
         let mut entry = BsonDocument::new();
         entry.push("v".to_string(), BsonValue::Int32(2));
-        entry.push("key".to_string(), BsonValue::Document(specification.key));
-        entry.push("name".to_string(), BsonValue::String(specification.name));
+        entry.push("key".to_string(), BsonValue::Document(specification.key.clone()));
+        entry.push("name".to_string(), BsonValue::String(specification.name.clone()));
         if specification.unique {
             entry.push("unique".to_string(), BsonValue::Bool(true));
+        }
+        if specification.hidden {
+            entry.push("hidden".to_string(), BsonValue::Bool(true));
+        }
+        if let Some(sparse) = specification.sparse {
+            entry.push("sparse".to_string(), BsonValue::Bool(sparse));
+        }
+        if let Some(collation) = &specification.collation {
+            entry.push("collation".to_string(), BsonValue::Document(collation.clone()));
+        }
+        if let Some(filter) = &specification.partial_filter_expression {
+            entry.push("partialFilterExpression".to_string(), BsonValue::Document(filter.clone()));
+        }
+        if let Some(seconds) = specification.expire_after_seconds {
+            entry.push("expireAfterSeconds".to_string(), BsonValue::Int32(seconds));
         }
         first_batch.push(BsonValue::Document(entry));
     }

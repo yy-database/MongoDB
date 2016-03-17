@@ -867,6 +867,109 @@ function buildIndexes(seed) {
         { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 8, a: 10 }] },
         { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_unique', unique: true }] }
     ])
+    function addWithDocs(suffix, documents, setupIndexes, steps) {
+        const collection = `diff_index_${n}`
+        const setup = [{ op: 'insert', collection, documents }]
+        if (setupIndexes) setup.push({ op: 'createIndexes', collection, indexes: setupIndexes })
+        entries.push({ id: `diff.index.${suffix}`, cluster: 'indexes', collection, setup, steps })
+        n += 1
+    }
+    addWithDocs('options_shape', docs(), [{
+        key: { a: 1 }, name: 'a_unique', unique: true
+    }, {
+        key: { b: 1 }, name: 'b_sparse', sparse: true
+    }, {
+        key: { b: 1 }, name: 'b_sparse_false', sparse: false
+    }, {
+        key: { tags: 1 }, name: 'tags_hidden', hidden: true
+    }, {
+        key: { tags: 1 }, name: 'tags_visible'
+    }, {
+        key: { name: 1 }, name: 'name_ci', collation: { locale: 'en', strength: 2 }
+    }, {
+        key: { score: 1 }, name: 'score_partial', partialFilterExpression: { score: { $gt: 5 } }
+    }, {
+        key: { active: 1 }, name: 'active_ttl', expireAfterSeconds: 60
+    }], [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{
+            key: { a: 1 }, name: 'a_unique', unique: true
+        }, {
+            key: { b: 1 }, name: 'b_sparse', sparse: true
+        }, {
+            key: { b: 1 }, name: 'b_sparse_false', sparse: false
+        }, {
+            key: { tags: 1 }, name: 'tags_hidden', hidden: true
+        }, {
+            key: { tags: 1 }, name: 'tags_visible'
+        }, {
+            key: { name: 1 }, name: 'name_ci', collation: { locale: 'en', strength: 2 }
+        }, {
+            key: { score: 1 }, name: 'score_partial', partialFilterExpression: { score: { $gt: 5 } }
+        }, {
+            key: { active: 1 }, name: 'active_ttl', expireAfterSeconds: 60
+        }, {
+            key: { grp: 1 }, name: 'grp_defaults', unique: false, hidden: false
+        }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('sparse_unique_null_and_missing', [
+        { _id: 1, a: 10, b: 'x' },
+        { _id: 2, a: 20, b: 'y' },
+        { _id: 3, b: 'z' }
+    ], [{ key: { a: 1 }, name: 'a_sparse', unique: true, sparse: true }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 4, a: null }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 5, a: null }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 6 }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 7, a: 10 }] },
+        { op: 'find', collection: `diff_index_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    addWithDocs('partial_unique_outside_filter', [
+        { _id: 1, a: 10 },
+        { _id: 2, a: 5 },
+        { _id: 3, a: 5 }
+    ], [{ key: { a: 1 }, name: 'a_partial', unique: true, partialFilterExpression: { a: { $gt: 7 } } }], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 4, a: 5 }, { _id: 5, a: 5 }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 6, a: 10 }] },
+        { op: 'find', collection: `diff_index_${n}`, filter: {}, sort: { _id: 1 } }
+    ])
+    addWithDocs('partial_build_outside_only', [
+        { _id: 1, a: 10 },
+        { _id: 2, a: 5 },
+        { _id: 3, a: 5 }
+    ], null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_partial', unique: true, partialFilterExpression: { a: { $gt: 7 } } }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('partial_build_inside_duplicates', [
+        { _id: 1, a: 10 },
+        { _id: 2, a: 10 }
+    ], null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_partial', unique: true, partialFilterExpression: { a: { $gt: 7 } } }] }
+    ])
+    addWithDocs('drop_errors', docs(), [{ key: { a: 1 }, name: 'a_1' }], [
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: '_id_' },
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: 'missing_name' },
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: { a: -1 } },
+        { op: 'dropIndexes', collection: `diff_index_ghost`, index: 'a_1' },
+        { op: 'dropIndexes', collection: `diff_index_${n}`, index: { a: 1 } },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('conflicts', docs(), [{ key: { a: 1 }, name: 'a_1' }], [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_2' }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_1', unique: true }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('recreate_id_custom', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { _id: 1 }, name: 'id_custom' }] }
+    ])
+    addWithDocs('bad_options', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'p_str', partialFilterExpression: 'x' }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'p_op', partialFilterExpression: { a: { $unknown: 1 } } }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'u_str', unique: 'yes' }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'c_bad', collation: { locale: 'bogus' } }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1, b: 1 }, name: 'ab_ttl', expireAfterSeconds: 60 }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_ttl_neg', expireAfterSeconds: -1 }] }
+    ])
     return entries
 }
 

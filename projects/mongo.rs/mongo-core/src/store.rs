@@ -30,7 +30,7 @@ use database::{
 };
 
 use crate::{
-    bson::BsonDocument,
+    bson::{BsonDocument, BsonValue},
     json,
 };
 
@@ -45,6 +45,29 @@ pub struct IndexSpec {
     pub key: BsonDocument,
     /// Whether the index rejects duplicate keys.
     pub unique: bool,
+    /// `sparse` exactly as requested. `mongod 8.0.9` reports an explicit
+    /// `sparse: false` in `listIndexes`, so the requested value is kept.
+    pub sparse: Option<bool>,
+    /// `hidden: true` keeps the index out of the planner but in the catalog.
+    pub hidden: bool,
+    /// TTL expiry in seconds, applied to single-field date values.
+    pub expire_after_seconds: Option<i32>,
+    /// `collation` normalized the way `listIndexes` reports it.
+    pub collation: Option<BsonDocument>,
+    /// `partialFilterExpression`: only matching documents join the index.
+    pub partial_filter_expression: Option<BsonDocument>,
+}
+
+impl IndexSpec {
+    /// Effective `sparse` flag.
+    pub fn is_sparse(&self) -> bool {
+        self.sparse.unwrap_or(false)
+    }
+
+    /// Whether the index is usable by the planner (`hidden` is not).
+    pub fn is_visible(&self) -> bool {
+        !self.hidden
+    }
 }
 
 /// Collection-level options kept in the catalog. Only non-default values are
@@ -254,7 +277,31 @@ impl IndexSpec {
             text.push_str(&serde_json::to_string(&json::to_json(value)).unwrap_or_else(|_| "null".to_string()));
             text.push(']');
         }
-        text.push_str("]}");
+        text.push(']');
+        if let Some(sparse) = self.sparse {
+            text.push_str(&format!(",\"sparse\":{sparse}"));
+        }
+        if self.hidden {
+            text.push_str(",\"hidden\":true");
+        }
+        if let Some(seconds) = self.expire_after_seconds {
+            text.push_str(&format!(",\"expireAfterSeconds\":{seconds}"));
+        }
+        if let Some(collation) = &self.collation {
+            text.push_str(&format!(
+                ",\"collation\":{}",
+                serde_json::to_string(&json::to_json(&BsonValue::Document(collation.clone())))
+                    .unwrap_or_else(|_| "null".to_string())
+            ));
+        }
+        if let Some(filter) = &self.partial_filter_expression {
+            text.push_str(&format!(
+                ",\"partialFilterExpression\":{}",
+                serde_json::to_string(&json::to_json(&BsonValue::Document(filter.clone())))
+                    .unwrap_or_else(|_| "null".to_string())
+            ));
+        }
+        text.push('}');
         text
     }
 }
@@ -276,7 +323,23 @@ fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
             .get("name")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| StoreError::Catalog("catalog index entry has no name".to_string()))?;
-        let unique = entry.get("unique").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        let sparse = entry.get("sparse").and_then(serde_json::Value::as_bool);
+        let hidden = entry.get("hidden").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        let expire_after_seconds = entry
+            .get("expireAfterSeconds")
+            .and_then(serde_json::Value::as_i64)
+            .map(|seconds| seconds as i32);
+        let collation = match entry.get("collation") {
+            Some(value) => Some(document_option(value).map_err(|error| StoreError::Catalog(format!("catalog index `{name}` collation is invalid: {error}")))?),
+            None => None,
+        };
+        let partial_filter_expression = match entry.get("partialFilterExpression") {
+            Some(value) => Some(
+                document_option(value)
+                    .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` partial filter is invalid: {error}")))?,
+            ),
+            None => None,
+        };
         let Some(pairs) = entry.get("key").and_then(serde_json::Value::as_array) else {
             return Err(StoreError::Catalog(format!("catalog index `{name}` has no key array")));
         };
@@ -295,9 +358,28 @@ fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
                 .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` key value is invalid: {error}")))?;
             key.push(field.to_string(), value);
         }
-        indexes.push(IndexSpec { namespace: namespace.to_string(), name: name.to_string(), key, unique });
+        let unique = entry.get("unique").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        indexes.push(IndexSpec {
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+            key,
+            unique,
+            sparse,
+            hidden,
+            expire_after_seconds,
+            collation,
+            partial_filter_expression,
+        });
     }
     Ok(indexes)
+}
+
+fn document_option(value: &serde_json::Value) -> Result<BsonDocument, String> {
+    match json::from_json(value) {
+        Ok(BsonValue::Document(document)) => Ok(document),
+        Ok(_) => Err("not a document".to_string()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn legacy_namespaces(shard: &FileShard) -> Vec<String> {

@@ -20189,6 +20189,1287 @@
       ]
     },
     {
+      "id": "diff.index.sparse_unique_null_and_missing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.sparse_unique_null_and_missing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_13",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_sparse",
+              "unique": true,
+              "sparse": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 4,
+              "a": null
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 5,
+              "a": null
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 6
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 7,
+              "a": 10
+            }
+          ],
+          "as": "r3"
+        },
+        {
+          "op": "find",
+          "collection": "diff_index_13",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r4"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r1/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_index_13 index: a_sparse dup key: { a: null }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": null
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/n",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r3/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r3/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_index_13 index: a_sparse dup key: { a: 10 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r4/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": "x"
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": "y"
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "b": "z"
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "a": null
+              },
+              {
+                "_id": {
+                  "$numberInt": "6"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_index_13"
+          }
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.partial_unique_outside_filter",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.partial_unique_outside_filter",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 5
+            },
+            {
+              "_id": 3,
+              "a": 5
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_14",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 4,
+              "a": 5
+            },
+            {
+              "_id": 5,
+              "a": 5
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 6,
+              "a": 10
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "find",
+          "collection": "diff_index_14",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r1/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_index_14 index: a_partial dup key: { a: 10 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_index_14"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.partial_build_outside_only",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.partial_build_outside_only",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_15",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 5
+            },
+            {
+              "_id": 3,
+              "a": 5
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_15",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": 7
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_15",
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/numIndexesBefore",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/numIndexesAfter",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/createdCollectionAutomatically",
+          "equals": false
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_index_15",
+            "firstBatch": [
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              },
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "a": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "a_partial",
+                "unique": true,
+                "partialFilterExpression": {
+                  "a": {
+                    "$gt": {
+                      "$numberInt": "7"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.drop_errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.drop_errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_17",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_17",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": "_id_",
+          "as": "r0"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": "missing_name",
+          "as": "r1"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": {
+            "a": -1
+          },
+          "as": "r2"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_ghost",
+          "index": "a_1",
+          "as": "r3"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": {
+            "a": 1
+          },
+          "as": "r4"
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_17",
+          "as": "r5"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "cannot drop _id index"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "72"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "InvalidOptions"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "index not found with name [missing_name]"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "27"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "IndexNotFound"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "can't find index with key: { a: -1 }"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "27"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "IndexNotFound"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "ns not found diff.diff_index_ghost"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "26"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "NamespaceNotFound"
+        },
+        {
+          "at": "/r4/nIndexesWas",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r5/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_index_17",
+            "firstBatch": [
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.conflicts",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.conflicts",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_18",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_2"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_18",
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Index already exists with a different name: a_1"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "85"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "IndexOptionsConflict"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, unique: true, key: { a: 1 }, name: \"a_1\" }, existing index: { v: 2, key: { a: 1 }, name: \"a_1\" }"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "86"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "IndexKeySpecsConflict"
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_index_18",
+            "firstBatch": [
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              },
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "a": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "a_1"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.recreate_id_custom",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.recreate_id_custom",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_19",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_19",
+          "indexes": [
+            {
+              "key": {
+                "_id": 1
+              },
+              "name": "id_custom"
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/numIndexesBefore",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/numIndexesAfter",
+          "equals": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "at": "/r0/note",
+          "equals": "all indexes already exist"
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.index.bad_options",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.index.bad_options",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_20",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "p_str",
+              "partialFilterExpression": "x"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "p_op",
+              "partialFilterExpression": {
+                "a": {
+                  "$unknown": 1
+                }
+              }
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "u_str",
+              "unique": "yes"
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "c_bad",
+              "collation": {
+                "locale": "bogus"
+              }
+            }
+          ],
+          "as": "r3"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1,
+                "b": 1
+              },
+              "name": "ab_ttl",
+              "expireAfterSeconds": 60
+            }
+          ],
+          "as": "r4"
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_ttl_neg",
+              "expireAfterSeconds": -1
+            }
+          ],
+          "as": "r5"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Error in specification { key: { a: 1 }, name: \"p_str\", partialFilterExpression: \"x\" } :: caused by :: The field 'partialFilterExpression' must be an object, but got string"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "14"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "TypeMismatch"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "Error in specification { key: { a: 1 }, name: \"p_op\", partialFilterExpression: { a: { $unknown: 1 } } } :: caused by :: unknown operator: $unknown"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "Error in specification { key: { a: 1 }, name: \"u_str\", unique: \"yes\" } :: caused by :: The field 'unique has value unique: \"yes\", which is not convertible to bool"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "14"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "TypeMismatch"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "failed to add collation information to index spec for index creation: { key: { a: 1 }, name: \"c_bad\", collation: { locale: \"bogus\" }, v: 2 } :: caused by :: Field 'locale' is invalid in: { locale: \"bogus\" }"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r4/errmsg",
+          "equals": "TTL indexes are single-field indexes, compound indexes do not support TTL. Index spec: { key: { a: 1, b: 1 }, name: \"ab_ttl\", expireAfterSeconds: 60 }"
+        },
+        {
+          "at": "/r4/code",
+          "equals": {
+            "$numberInt": "67"
+          }
+        },
+        {
+          "at": "/r4/codeName",
+          "equals": "CannotCreateIndex"
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r5/errmsg",
+          "equals": ". Index spec: { key: { a: 1 }, name: \"a_ttl_neg\", expireAfterSeconds: -1 } :: caused by :: TTL index 'expireAfterSeconds' option cannot be less than 0"
+        },
+        {
+          "at": "/r5/code",
+          "equals": {
+            "$numberInt": "67"
+          }
+        },
+        {
+          "at": "/r5/codeName",
+          "equals": "CannotCreateIndex"
+        }
+      ]
+    },
+    {
       "id": "diff.cursor.batch10_all",
       "surface": "diff",
       "db": "diff",

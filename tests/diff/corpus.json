@@ -1,7 +1,7 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 219,
+  "count": 228,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
@@ -9,7 +9,7 @@
     "update": 43,
     "delete": 8,
     "insert": 10,
-    "indexes": 12,
+    "indexes": 21,
     "cursor": 8,
     "findAndModify": 18,
     "distinct": 11,
@@ -18,7 +18,7 @@
     "listCollections": 8,
     "count": 10
   },
-  "digest": "67aa2a60e2e8a342f01cb45f4b6e79a1542876c088b441c68142d613387c4756",
+  "digest": "0fae9b4660f5a2ffeea50e61d2dfe1203620109e4eecaf5d8d9aa07911af59e8",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -13337,6 +13337,803 @@
               },
               "name": "a_unique",
               "unique": true
+            }
+          ]
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.options_shape",
+      "cluster": "indexes",
+      "collection": "diff_index_12",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_12",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_12",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_unique",
+              "unique": true
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "b_sparse",
+              "sparse": true
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "b_sparse_false",
+              "sparse": false
+            },
+            {
+              "key": {
+                "tags": 1
+              },
+              "name": "tags_hidden",
+              "hidden": true
+            },
+            {
+              "key": {
+                "tags": 1
+              },
+              "name": "tags_visible"
+            },
+            {
+              "key": {
+                "name": 1
+              },
+              "name": "name_ci",
+              "collation": {
+                "locale": "en",
+                "strength": 2
+              }
+            },
+            {
+              "key": {
+                "score": 1
+              },
+              "name": "score_partial",
+              "partialFilterExpression": {
+                "score": {
+                  "$gt": 5
+                }
+              }
+            },
+            {
+              "key": {
+                "active": 1
+              },
+              "name": "active_ttl",
+              "expireAfterSeconds": 60
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_12",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_unique",
+              "unique": true
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "b_sparse",
+              "sparse": true
+            },
+            {
+              "key": {
+                "b": 1
+              },
+              "name": "b_sparse_false",
+              "sparse": false
+            },
+            {
+              "key": {
+                "tags": 1
+              },
+              "name": "tags_hidden",
+              "hidden": true
+            },
+            {
+              "key": {
+                "tags": 1
+              },
+              "name": "tags_visible"
+            },
+            {
+              "key": {
+                "name": 1
+              },
+              "name": "name_ci",
+              "collation": {
+                "locale": "en",
+                "strength": 2
+              }
+            },
+            {
+              "key": {
+                "score": 1
+              },
+              "name": "score_partial",
+              "partialFilterExpression": {
+                "score": {
+                  "$gt": 5
+                }
+              }
+            },
+            {
+              "key": {
+                "active": 1
+              },
+              "name": "active_ttl",
+              "expireAfterSeconds": 60
+            },
+            {
+              "key": {
+                "grp": 1
+              },
+              "name": "grp_defaults",
+              "unique": false,
+              "hidden": false
+            }
+          ]
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_12"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.sparse_unique_null_and_missing",
+      "cluster": "indexes",
+      "collection": "diff_index_13",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x"
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y"
+            },
+            {
+              "_id": 3,
+              "b": "z"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_13",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_sparse",
+              "unique": true,
+              "sparse": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 4,
+              "a": null
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 5,
+              "a": null
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 6
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_13",
+          "documents": [
+            {
+              "_id": 7,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "diff_index_13",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.partial_unique_outside_filter",
+      "cluster": "indexes",
+      "collection": "diff_index_14",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 5
+            },
+            {
+              "_id": 3,
+              "a": 5
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_14",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": 7
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 4,
+              "a": 5
+            },
+            {
+              "_id": 5,
+              "a": 5
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_14",
+          "documents": [
+            {
+              "_id": 6,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "diff_index_14",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.partial_build_outside_only",
+      "cluster": "indexes",
+      "collection": "diff_index_15",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_15",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 5
+            },
+            {
+              "_id": 3,
+              "a": 5
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_15",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_15"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.partial_build_inside_duplicates",
+      "cluster": "indexes",
+      "collection": "diff_index_16",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_16",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 10
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_16",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": 7
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.drop_errors",
+      "cluster": "indexes",
+      "collection": "diff_index_17",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_17",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_17",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": "_id_"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": "missing_name"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": {
+            "a": -1
+          }
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_ghost",
+          "index": "a_1"
+        },
+        {
+          "op": "dropIndexes",
+          "collection": "diff_index_17",
+          "index": {
+            "a": 1
+          }
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_17"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.conflicts",
+      "cluster": "indexes",
+      "collection": "diff_index_18",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_18",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_2"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_18",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_18"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.recreate_id_custom",
+      "cluster": "indexes",
+      "collection": "diff_index_19",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_19",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_19",
+          "indexes": [
+            {
+              "key": {
+                "_id": 1
+              },
+              "name": "id_custom"
+            }
+          ]
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.bad_options",
+      "cluster": "indexes",
+      "collection": "diff_index_20",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_20",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "p_str",
+              "partialFilterExpression": "x"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "p_op",
+              "partialFilterExpression": {
+                "a": {
+                  "$unknown": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "u_str",
+              "unique": "yes"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "c_bad",
+              "collation": {
+                "locale": "bogus"
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1,
+                "b": 1
+              },
+              "name": "ab_ttl",
+              "expireAfterSeconds": 60
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_20",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_ttl_neg",
+              "expireAfterSeconds": -1
             }
           ]
         }

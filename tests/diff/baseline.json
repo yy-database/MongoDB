@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 219,
+  "count": 228,
   "mongod": "8.0.9",
-  "corpusDigest": "67aa2a60e2e8a342f01cb45f4b6e79a1542876c088b441c68142d613387c4756",
-  "replyDigest": "02ddfe3c2abb404e8d464498a61f3c855df4e46618b7c8aac6242895b76cb18c",
+  "corpusDigest": "0fae9b4660f5a2ffeea50e61d2dfe1203620109e4eecaf5d8d9aa07911af59e8",
+  "replyDigest": "ff4992dade1c671f1abe7797c60c038ded3f8fd0d108d3cc715bb2b225d18899",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -5886,6 +5886,542 @@
             "$numberInt": "10"
           }
         }
+      }
+    ],
+    "diff.index.options_shape": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.diff_index_12 ( <uuid> ) :: caused by :: An equivalent index already exists with a different name and options. Requested index: { v: 2, key: { tags: 1 }, name: \"tags_visible\" }, existing index: { v: 2, hidden: true, key: { tags: 1 }, name: \"tags_hidden\" }",
+        "code": {
+          "$numberInt": "85"
+        },
+        "codeName": "IndexOptionsConflict"
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_12",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.sparse_unique_null_and_missing": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_13 index: a_sparse dup key: { a: null }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": null
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_13 index: a_sparse dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": "x"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": "y"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "b": "z"
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "a": null
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_13"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.partial_unique_outside_filter": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_14 index: a_partial dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_14"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.partial_build_outside_only": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_15",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "a": {
+                  "$gt": {
+                    "$numberInt": "7"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.partial_build_inside_duplicates": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.diff_index_16 ( <uuid> ) :: caused by :: E11000 duplicate key error collection: diff.diff_index_16 index: a_partial dup key: { a: 10 }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "a": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "a": {
+            "$numberInt": "10"
+          }
+        }
+      }
+    ],
+    "diff.index.drop_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "cannot drop _id index",
+        "code": {
+          "$numberInt": "72"
+        },
+        "codeName": "InvalidOptions"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "index not found with name [missing_name]",
+        "code": {
+          "$numberInt": "27"
+        },
+        "codeName": "IndexNotFound"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "can't find index with key: { a: -1 }",
+        "code": {
+          "$numberInt": "27"
+        },
+        "codeName": "IndexNotFound"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "ns not found diff.diff_index_ghost",
+        "code": {
+          "$numberInt": "26"
+        },
+        "codeName": "NamespaceNotFound"
+      },
+      {
+        "nIndexesWas": {
+          "$numberInt": "2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_17",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.conflicts": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index already exists with a different name: a_1",
+        "code": {
+          "$numberInt": "85"
+        },
+        "codeName": "IndexOptionsConflict"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, unique: true, key: { a: 1 }, name: \"a_1\" }, existing index: { v: 2, key: { a: 1 }, name: \"a_1\" }",
+        "code": {
+          "$numberInt": "86"
+        },
+        "codeName": "IndexKeySpecsConflict"
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_18",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.recreate_id_custom": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "1"
+        },
+        "note": "all indexes already exist",
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.bad_options": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Error in specification { key: { a: 1 }, name: \"p_str\", partialFilterExpression: \"x\" } :: caused by :: The field 'partialFilterExpression' must be an object, but got string",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Error in specification { key: { a: 1 }, name: \"p_op\", partialFilterExpression: { a: { $unknown: 1 } } } :: caused by :: unknown operator: $unknown",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Error in specification { key: { a: 1 }, name: \"u_str\", unique: \"yes\" } :: caused by :: The field 'unique has value unique: \"yes\", which is not convertible to bool",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "failed to add collation information to index spec for index creation: { key: { a: 1 }, name: \"c_bad\", collation: { locale: \"bogus\" }, v: 2 } :: caused by :: Field 'locale' is invalid in: { locale: \"bogus\" }",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "TTL indexes are single-field indexes, compound indexes do not support TTL. Index spec: { key: { a: 1, b: 1 }, name: \"ab_ttl\", expireAfterSeconds: 60 }",
+        "code": {
+          "$numberInt": "67"
+        },
+        "codeName": "CannotCreateIndex"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": ". Index spec: { key: { a: 1 }, name: \"a_ttl_neg\", expireAfterSeconds: -1 } :: caused by :: TTL index 'expireAfterSeconds' option cannot be less than 0",
+        "code": {
+          "$numberInt": "67"
+        },
+        "codeName": "CannotCreateIndex"
       }
     ],
     "diff.cursor.batch2_once": [
