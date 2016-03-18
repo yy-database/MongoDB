@@ -221,30 +221,30 @@
             "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
         },
         {
-            "id": "err.cmd.unknown_stage_graph_lookup",
+            "id": "err.cmd.unknown_stage_sample",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $graphLookup is a documented stage this gateway does not implement",
+            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $sample is a documented stage this gateway does not implement",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$graphLookup": { "from": "items", "startWith": "$_id", "connectFromField": "to", "connectToField": "_id", "as": "graph" } }], "as": "r2" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sample": { "size": 1 } }], "as": "r2" }
             ],
             "checks": [
                 { "at": "/r2/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $graphLookup (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $project)" }
+                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $sample (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)" }
             ]
         },
         {
-            "id": "err.cmd.unknown_stage_out",
+            "id": "err.cmd.unknown_stage_union_with",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Stages: $out is a documented stage that writes a collection; not implemented here (https://www.mongodb.com/docs/manual/reference/operator/aggregation/out/)",
+            "source": "MongoDB manual, Aggregation Pipeline Stages: $unionWith combines streams; not implemented here (https://www.mongodb.com/docs/manual/reference/operator/aggregation/unionWith/)",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$out": "archive" }], "as": "r1" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unionWith": "archive" }], "as": "r1" }
             ],
             "checks": [
                 { "at": "/r1/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r1/errmsg", "matches": "unknown aggregation stage: \\$out" }
+                { "at": "/r1/errmsg", "matches": "unknown aggregation stage: \\$unionWith" }
             ]
         },
         {

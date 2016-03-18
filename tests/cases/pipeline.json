@@ -571,7 +571,7 @@
             ],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "unknown $project expression: $toUpper (supported: $add, $concat, $ifNull, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)" }
+                { "at": "/r/errmsg", "equals": "unknown $project expression: $toUpper (supported: $add, $concat, $ifNull, $size, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)" }
             ]
         },
         {

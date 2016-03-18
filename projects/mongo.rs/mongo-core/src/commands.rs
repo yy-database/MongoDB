@@ -279,7 +279,22 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         251 => "NoSuchTransaction",
         225 => "TransactionTooOld",
         256 => "TransactionCommitted",
+        66 => "ImmutableField",
+        28 => "PathNotViable",
+        16990 => "Location16990",
+        17124 => "Location17124",
+        40101 => "Location40101",
+        40102 => "Location40102",
+        40105 => "Location40105",
+        40228 => "Location40228",
         40414 => "IDLFailedToParse",
+        40415 => "IDLUnknownField",
+        51132 => "Location51132",
+        51178 => "Location51178",
+        51181 => "Location51181",
+        51183 => "Location51183",
+        51186 => "Location51186",
+        51187 => "Location51187",
         40148 => "Location40148",
         40149 => "Location40149",
         5371602 => "Location5371602",
@@ -2011,6 +2026,21 @@ fn run_pipeline(
             "$bucketAuto" => documents = bucket_auto_stage(&documents, body, variables)?,
             "$setWindowFields" => documents = set_window_fields_stage(&documents, body, variables)?,
             "$sortByCount" => documents = sort_by_count_stage(&documents, body)?,
+            "$graphLookup" => documents = graph_lookup_stage(documents, body, store, namespace, session, variables)?,
+            "$replaceWith" => documents = replace_with_stage(documents, body, variables)?,
+            "$merge" => {
+                documents = merge_stage(documents, body, store, namespace, session, variables)?;
+            }
+            "$out" => {
+                documents = out_stage(documents, body, store, namespace, session)?;
+            }
+            "$set" => {
+                let BsonValue::Document(specification) = body
+                else {
+                    return Err(CommandError::new(2, "$set requires a document"));
+                };
+                documents = add_fields_stage(&documents, specification)?;
+            }
             "$group" => {
                 let BsonValue::Document(specification) = body
                 else {
@@ -2687,6 +2717,41 @@ fn set_segments(document: &mut BsonDocument, segments: &[&str], value: BsonValue
         other => {
             let rendered = render_shell_value(other);
             Err(CommandError::new(28, format!("Cannot create field '{}' in element {{{head}: {rendered}}}", tail[0])))
+        }
+    }
+}
+
+/// `$addFields` / `$set`: like `set_segments`, but a scalar along the path is
+/// replaced by an embedded document (aggregation semantics), while arrays keep
+/// the update-style error.
+fn set_aggregation_segments(document: &mut BsonDocument, segments: &[&str], value: BsonValue) -> Result<(), CommandError> {
+    let head = segments[0];
+    if segments.len() == 1 {
+        if let Some(existing) = document.fields.iter_mut().find(|(field, _)| field == head) {
+            existing.1 = value;
+        } else {
+            document.push(head.to_string(), value);
+        }
+        return Ok(());
+    }
+    let tail = &segments[1..];
+    let Some(position) = document.fields.iter().position(|(field, _)| field == head) else {
+        let mut child = BsonDocument::new();
+        set_aggregation_segments(&mut child, tail, value)?;
+        document.push(head.to_string(), BsonValue::Document(child));
+        return Ok(());
+    };
+    if matches!(&document.fields[position].1, BsonValue::Array(_)) {
+        let rendered = render_shell_value(&document.fields[position].1);
+        return Err(CommandError::new(28, format!("Cannot create field '{}' in element {{{head}: {rendered}}}", tail[0])));
+    }
+    match &mut document.fields[position].1 {
+        BsonValue::Document(child) => set_aggregation_segments(child, tail, value),
+        _ => {
+            let mut child = BsonDocument::new();
+            set_aggregation_segments(&mut child, tail, value)?;
+            document.fields[position].1 = BsonValue::Document(child);
+            Ok(())
         }
     }
 }
@@ -5088,7 +5153,7 @@ fn unsupported_stage(stage: &str) -> CommandError {
     CommandError::new(
         59,
         format!(
-            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $project)"
+            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)"
         ),
     )
 }
@@ -5381,6 +5446,775 @@ fn lookup_stage(
         output.push(expanded);
     }
     Ok(output)
+}
+
+/// `$graphLookup`: breadth-first traversal of `connectFromField` →
+/// `connectToField` starting from `startWith`.
+///
+/// The result array order is not defined by `mongod 8.0.9`, so callers that
+/// need a stable shape project `$size` or a single-element chain.
+fn graph_lookup_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    store: &Store,
+    namespace: &str,
+    session: Option<&str>,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(40105, "$graphLookup requires a document"));
+    };
+    let required = ["from", "as", "startWith", "connectFromField", "connectToField"];
+    if required.iter().any(|field| specification.get(*field).is_none()) {
+        return Err(CommandError::new(
+            40105,
+            "$graphLookup requires 'from', 'as', 'startWith', 'connectFromField', and 'connectToField' to be specified.",
+        ));
+    }
+    let from = match specification.get("from") {
+        Some(BsonValue::String(name)) if !name.is_empty() => name.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                40105,
+                format!("$graphLookup 'from' must be a string, found {}", bson_type_name(other)),
+            ));
+        }
+        None => unreachable!(),
+    };
+    let as_field = match specification.get("as") {
+        Some(BsonValue::String(field)) if !field.is_empty() => field.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                40105,
+                format!("$graphLookup 'as' must be a non-empty string, found {}", bson_type_name(other)),
+            ));
+        }
+        None => unreachable!(),
+    };
+    let start_with = specification.get("startWith").cloned().unwrap_or(BsonValue::Null);
+    let connect_from = match specification.get("connectFromField") {
+        Some(BsonValue::String(field)) => field.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                40105,
+                format!("$graphLookup 'connectFromField' must be a string, found {}", bson_type_name(other)),
+            ));
+        }
+        None => unreachable!(),
+    };
+    let connect_to = match specification.get("connectToField") {
+        Some(BsonValue::String(field)) => field.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                40105,
+                format!("$graphLookup 'connectToField' must be a string, found {}", bson_type_name(other)),
+            ));
+        }
+        None => unreachable!(),
+    };
+    let max_depth = match specification.get("maxDepth") {
+        None => None,
+        Some(BsonValue::Int32(depth)) => {
+            if *depth < 0 {
+                return Err(CommandError::new(40101, format!("maxDepth requires a nonnegative argument, found: {depth}")));
+            }
+            Some(i64::from(*depth))
+        }
+        Some(BsonValue::Int64(depth)) => {
+            if *depth < 0 {
+                return Err(CommandError::new(40101, format!("maxDepth requires a nonnegative argument, found: {depth}")));
+            }
+            Some(*depth)
+        }
+        Some(BsonValue::Double(depth)) => {
+            if *depth < 0.0 {
+                return Err(CommandError::new(40101, format!("maxDepth requires a nonnegative argument, found: {depth}")));
+            }
+            if depth.fract() != 0.0 {
+                return Err(CommandError::new(
+                    40102,
+                    format!("maxDepth could not be represented as a long long: {}", *depth as i64),
+                ));
+            }
+            Some(*depth as i64)
+        }
+        Some(other) => {
+            return Err(CommandError::new(
+                40102,
+                format!("maxDepth could not be represented as a long long: {}", render_shell_value(other)),
+            ));
+        }
+    };
+    let depth_field = match specification.get("depthField") {
+        Some(BsonValue::String(field)) => Some(field.clone()),
+        Some(other) => {
+            return Err(CommandError::new(
+                40105,
+                format!("$graphLookup 'depthField' must be a string, found {}", bson_type_name(other)),
+            ));
+        }
+        None => None,
+    };
+    let restrict = match specification.get("restrictSearchWithMatch") {
+        Some(BsonValue::Document(filter)) => {
+            if filter.fields.iter().any(|(field, _)| field == "$where") {
+                return Err(CommandError::new(
+                    2,
+                    "Failed to parse 'restrictSearchWithMatch' option to $graphLookup :: caused by :: $where is not allowed in this context",
+                ));
+            }
+            validate_filter(filter, "$graphLookup restrictSearchWithMatch")?;
+            Some(filter.clone())
+        }
+        Some(other) => {
+            return Err(CommandError::new(2, format!("$graphLookup 'restrictSearchWithMatch' must be an object, found {}", bson_type_name(other))));
+        }
+        None => None,
+    };
+
+    let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+    let foreign_namespace = format!("{database}.{from}");
+    let foreign_documents = collect_matching(store, &foreign_namespace, &BsonDocument::new(), session)?;
+
+    let mut output = Vec::with_capacity(documents.len());
+    for document in documents {
+        let start = evaluate_expression_vars(&document, &start_with, variables)?;
+        let mut queue: Vec<(BsonValue, i64)> = match start {
+            BsonValue::Array(items) => items.into_iter().map(|item| (item, 0)).collect(),
+            BsonValue::Null => Vec::new(),
+            other => vec![(other, 0)],
+        };
+        let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
+        let mut collected: Vec<BsonDocument> = Vec::new();
+        while let Some((value, depth)) = queue.first().cloned() {
+            queue.remove(0);
+            for candidate in &foreign_documents {
+                let fields = collect_field(candidate, &connect_to);
+                if !equality_candidates(&fields, &value) {
+                    continue;
+                }
+                if let Some(filter) = &restrict {
+                    if !document_matches_vars(candidate, filter, variables)? {
+                        continue;
+                    }
+                }
+                let identity = candidate
+                    .get("_id")
+                    .map(value_to_key)
+                    .unwrap_or_else(|| encode_bson(candidate));
+                if !seen.insert(identity) {
+                    continue;
+                }
+                let mut result = candidate.clone();
+                if let Some(field) = &depth_field {
+                    set_field_path(&mut result, field, BsonValue::Int64(depth));
+                }
+                collected.push(result);
+                if max_depth.is_some_and(|limit| depth >= limit) {
+                    continue;
+                }
+                for next in collect_field(candidate, &connect_from) {
+                    match next {
+                        BsonValue::Array(items) => {
+                            for item in items {
+                                queue.push((item.clone(), depth + 1));
+                            }
+                        }
+                        BsonValue::Null => {}
+                        other => queue.push((other.clone(), depth + 1)),
+                    }
+                }
+            }
+        }
+        let mut expanded = document;
+        set_field_path(&mut expanded, &as_field, BsonValue::Array(collected.into_iter().map(BsonValue::Document).collect()));
+        output.push(expanded);
+    }
+    Ok(output)
+}
+
+/// `$replaceWith`: the input document is replaced by the evaluated document.
+fn replace_with_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let mut output = Vec::with_capacity(documents.len());
+    for document in documents {
+        match evaluate_expression_optional_vars(&document, body, variables)? {
+            Some(BsonValue::Document(replacement)) => output.push(replacement),
+            Some(other) => {
+                return Err(CommandError::new(
+                    40228,
+                    format!(
+                        "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: {}. Type of resulting value: '{}'. Input document: {{}}",
+                        render_shell_value(&other),
+                        bson_type_name(&other)
+                    ),
+                ));
+            }
+            None => {
+                return Err(CommandError::new(
+                    40228,
+                    "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: MISSING. Type of resulting value: 'missing'. Input document: {}",
+                ));
+            }
+        }
+    }
+    Ok(output)
+}
+
+/// `$out` target namespace resolution, shared by the error shapes and by
+/// `$merge`.
+fn stage_target_namespace(body: &BsonValue, namespace: &str, stage: &str) -> Result<String, CommandError> {
+    let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+    match body {
+        BsonValue::String(collection) => {
+            if collection.is_empty() {
+                return Err(CommandError::new(73, format!("Invalid $out target namespace, {database}")));
+            }
+            Ok(format!("{database}.{collection}"))
+        }
+        BsonValue::Document(specification) => {
+            let target_database = match specification.get("db") {
+                Some(BsonValue::String(name)) => name.clone(),
+                _ => {
+                    return Err(CommandError::new(
+                        40414,
+                        format!("BSON field '{stage}.db' is missing but a required field"),
+                    ));
+                }
+            };
+            let collection = match specification.get("coll") {
+                Some(BsonValue::String(name)) => name.clone(),
+                _ => {
+                    return Err(CommandError::new(
+                        40414,
+                        format!("BSON field '{stage}.coll' is missing but a required field"),
+                    ));
+                }
+            };
+            for (field, _) in &specification.fields {
+                if field != "db" && field != "coll" {
+                    return Err(CommandError::new(
+                        40415,
+                        format!("BSON field '{stage}.{field}' is an unknown field."),
+                    ));
+                }
+            }
+            if collection.is_empty() {
+                return Err(CommandError::new(73, format!("Invalid $out target namespace, {target_database}")));
+            }
+            Ok(format!("{target_database}.{collection}"))
+        }
+        other => Err(CommandError::new(
+            16990,
+            format!("$out only supports a string or object argument, but found {}", bson_type_name(other)),
+        )),
+    }
+}
+
+/// `$out`: replaces the target collection with the pipeline output while
+/// keeping the target's indexes, then emits no documents.
+fn out_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    store: &Store,
+    namespace: &str,
+    session: Option<&str>,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let target = stage_target_namespace(body, namespace, "$out")?;
+    let target_keys: Vec<Vec<u8>> = namespace_documents(store, &target, session).into_iter().map(|(key, _)| key).collect();
+    if !target_keys.is_empty() {
+        stage_delete(store, session, &target, &target_keys)?;
+    }
+    let entries: Vec<(Vec<u8>, Vec<u8>)> = documents
+        .into_iter()
+        .filter_map(|document| {
+            let identifier = document.get("_id")?.clone();
+            Some((value_to_key(&identifier), encode_bson(&document)))
+        })
+        .collect();
+    stage_insert(store, session, &target, &entries)?;
+    Ok(Vec::new())
+}
+
+/// One `$merge` mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MergeMode {
+    Replace,
+    Merge,
+    KeepExisting,
+    Fail,
+    Pipeline,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MergeNotMatched {
+    Insert,
+    Discard,
+    Fail,
+}
+
+fn merge_mode(value: Option<&BsonValue>) -> Result<MergeMode, CommandError> {
+    match value {
+        None => Ok(MergeMode::Merge),
+        Some(BsonValue::String(name)) => match name.as_str() {
+            "replace" => Ok(MergeMode::Replace),
+            "merge" => Ok(MergeMode::Merge),
+            "keepExisting" => Ok(MergeMode::KeepExisting),
+            "fail" => Ok(MergeMode::Fail),
+            other => Err(CommandError::new(
+                2,
+                format!("Enumeration value '{other}' for field 'whenMatched' is not a valid value."),
+            )),
+        },
+        Some(BsonValue::Array(stages)) if stages.is_empty() => Ok(MergeMode::Pipeline),
+        Some(BsonValue::Array(_)) => Ok(MergeMode::Pipeline),
+        Some(other) => Err(CommandError::new(
+            2,
+            format!("Enumeration value '{}' for field 'whenMatched' is not a valid value.", bson_type_name(other)),
+        )),
+    }
+}
+
+fn merge_not_matched(value: Option<&BsonValue>) -> Result<MergeNotMatched, CommandError> {
+    match value {
+        None => Ok(MergeNotMatched::Insert),
+        Some(BsonValue::String(name)) => match name.as_str() {
+            "insert" => Ok(MergeNotMatched::Insert),
+            "discard" => Ok(MergeNotMatched::Discard),
+            "fail" => Ok(MergeNotMatched::Fail),
+            other => Err(CommandError::new(
+                2,
+                format!("Enumeration value '{other}' for field '$merge.whenNotMatched' is not a valid value."),
+            )),
+        },
+        Some(other) => Err(CommandError::new(
+            2,
+            format!("Enumeration value '{}' for field '$merge.whenNotMatched' is not a valid value.", bson_type_name(other)),
+        )),
+    }
+}
+
+/// Applies a `whenMatched` update pipeline to an existing target document.
+fn merge_update_pipeline(
+    mut target: BsonDocument,
+    stages: &[BsonValue],
+    variables: &ExpressionVariables,
+) -> Result<BsonDocument, CommandError> {
+    let original_id = target.get("_id").cloned();
+    for stage in stages {
+        let BsonValue::Document(stage_document) = stage
+        else {
+            return Err(CommandError::new(2, "aggregate stage must be a document"));
+        };
+        let Some((name, body)) = stage_document.fields.first() else {
+            return Err(CommandError::new(2, "aggregate stage is empty"));
+        };
+        if stage_document.fields.len() != 1 {
+            return Err(CommandError::new(2, "aggregate stage must contain exactly one field"));
+        }
+        match name.as_str() {
+            "$set" | "$addFields" => {
+                let BsonValue::Document(specification) = body
+                else {
+                    return Err(CommandError::new(2, format!("{name} requires a document")));
+                };
+                for (field, expression) in &specification.fields {
+                    let value = evaluate_expression_vars(&target, expression, variables)?;
+                    let segments: Vec<&str> = field.split('.').collect();
+                    set_aggregation_segments(&mut target, &segments, value)?;
+                }
+            }
+            "$unset" => {
+                let fields = match body {
+                    BsonValue::String(field) => vec![field.clone()],
+                    BsonValue::Array(items) => items
+                        .iter()
+                        .filter_map(|item| match item {
+                            BsonValue::String(field) => Some(field.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => return Err(CommandError::new(2, "$unset requires a string or an array of strings")),
+                };
+                for field in fields {
+                    remove_field_path(&mut target, &field);
+                }
+            }
+            "$replaceWith" => {
+                match evaluate_expression_optional_vars(&target, body, variables)? {
+                    Some(BsonValue::Document(replacement)) => target = replacement,
+                    Some(other) => {
+                        return Err(CommandError::new(
+                            40228,
+                            format!(
+                                "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: {}. Type of resulting value: '{}'. Input document: {{}}",
+                                render_shell_value(&other),
+                                bson_type_name(&other)
+                            ),
+                        ));
+                    }
+                    None => {
+                        return Err(CommandError::new(
+                            40228,
+                            "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: MISSING. Type of resulting value: 'missing'. Input document: {}",
+                        ));
+                    }
+                }
+            }
+            "$project" => {
+                let BsonValue::Document(specification) = body
+                else {
+                    return Err(CommandError::new(2, "$project requires a document"));
+                };
+                target = project_stage(std::slice::from_ref(&target), specification)?.remove(0);
+            }
+            "$match" => {
+                return Err(CommandError::new(
+                    72,
+                    "PlanExecutor error during aggregation :: caused by :: $match is not allowed to be used within an update",
+                ));
+            }
+            other => {
+                return Err(CommandError::new(
+                    59,
+                    format!("unsupported update pipeline stage: {other} (supported: $set, $addFields, $unset, $replaceWith, $project)"),
+                ));
+            }
+        }
+    }
+    if let Some(identifier) = original_id {
+        match target.get("_id") {
+            Some(updated) if value_to_key(updated) == value_to_key(&identifier) => {}
+            Some(updated) => {
+                return Err(merge_immutable_id_error(updated));
+            }
+            None => target.push("_id".to_string(), identifier),
+        }
+    }
+    Ok(target)
+}
+
+fn merge_immutable_id_error(identifier: &BsonValue) -> CommandError {
+    CommandError::new(
+        66,
+        format!(
+            "PlanExecutor error during aggregation :: caused by :: $merge failed to update the matching document, did you attempt to modify the _id or the shard key? :: caused by :: After applying the update, the (immutable) field '_id' was found to have been altered to _id: {}",
+            render_shell_value(identifier)
+        ),
+    )
+}
+
+fn merge_duplicate_error(namespace: &str, index_name: &str, key_pattern: &BsonDocument, key_value: &BsonDocument, when_matched_fail: bool) -> CommandError {
+    let mut key_text = String::new();
+    for (field, value) in &key_value.fields {
+        if !key_text.is_empty() {
+            key_text.push_str(", ");
+        }
+        key_text.push_str(field);
+        key_text.push_str(": ");
+        key_text.push_str(&render_shell_value(value));
+    }
+    let prefix = if when_matched_fail {
+        "PlanExecutor error during aggregation :: caused by :: $merge with whenMatched: fail found an existing document with the same values for the 'on' fields :: caused by :: "
+    } else {
+        "PlanExecutor error during aggregation :: caused by :: $merge failed due to a DuplicateKey error :: caused by :: "
+    };
+    CommandError::new(
+        11000,
+        format!("{prefix}E11000 duplicate key error collection: {namespace} index: {index_name} dup key: {{ {key_text} }}"),
+    )
+    .with_detail("keyPattern", BsonValue::Document(key_pattern.clone()))
+    .with_detail("keyValue", BsonValue::Document(key_value.clone()))
+}
+
+fn merge_key_value(document: &BsonDocument, key_pattern: &BsonDocument) -> BsonDocument {
+    let mut key_value = BsonDocument::new();
+    for (field, _) in &key_pattern.fields {
+        key_value.push(field.clone(), lookup_field(document, field).cloned().unwrap_or(BsonValue::Null));
+    }
+    key_value
+}
+
+/// `$merge`: upserts the pipeline output into `into` using `on` as the join
+/// key, with the documented `whenMatched` / `whenNotMatched` modes.
+fn merge_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    store: &Store,
+    namespace: &str,
+    session: Option<&str>,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(2, "$merge requires a document"));
+    };
+    let target = merge_target_namespace(specification, namespace)?;
+    let on_fields = merge_on_fields(specification)?;
+    let mode = merge_mode(specification.get("whenMatched"))?;
+    let not_matched = merge_not_matched(specification.get("whenNotMatched"))?;
+    if matches!(mode, MergeMode::KeepExisting | MergeMode::Fail) && not_matched != MergeNotMatched::Insert
+    {
+        let matched = if matches!(mode, MergeMode::KeepExisting) { "keepExisting" } else { "fail" };
+        let missing = match not_matched {
+            MergeNotMatched::Insert => "insert",
+            MergeNotMatched::Discard => "discard",
+            MergeNotMatched::Fail => "fail",
+        };
+        return Err(CommandError::new(
+            51181,
+            format!("Combination of $merge modes 'whenMatched: {matched}' and 'whenNotMatched: {missing}' is not supported"),
+        ));
+    }
+    let when_matched_pipeline = match specification.get("whenMatched") {
+        Some(BsonValue::Array(stages)) => stages.clone(),
+        _ => Vec::new(),
+    };
+    let let_variables = match specification.get("let") {
+        Some(BsonValue::Document(bindings)) => bindings.clone(),
+        _ => BsonDocument::new(),
+    };
+
+    // A missing target is created before the index check, exactly like `mongod`.
+    if !store.namespace_exists(&target) {
+        store.import(&target, &[]).map_err(|error| CommandError::new(2, format!("$merge failed: {error}")))?;
+    }
+    let Some((index_name, _key_pattern)) = merge_unique_index(store, &target, &on_fields) else {
+        return Err(CommandError::new(51183, "Cannot find index to verify that join fields will be unique"));
+    };
+
+    let mut target_documents: Vec<BsonDocument> =
+        collect_matching(store, &target, &BsonDocument::new(), session)?;
+    let mut replacements: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    let mut inserts: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+
+    // `mongod` validates every document's `on` values before applying any
+    // write, so a later document can reject the whole aggregation.
+    let mut on_values_by_document: Vec<Vec<BsonValue>> = Vec::with_capacity(documents.len());
+    for document in &documents {
+        let mut on_values = Vec::new();
+        for field in &on_fields {
+            let value = lookup_field(document, field).cloned().unwrap_or(BsonValue::Null);
+            if matches!(value, BsonValue::Null | BsonValue::Undefined | BsonValue::Array(_)) {
+                return Err(CommandError::new(
+                    51132,
+                    format!(
+                        "PlanExecutor error during aggregation :: caused by :: $merge write error: 'on' field '{field}' cannot be missing, null, undefined or an array"
+                    ),
+                ));
+            }
+            on_values.push(value);
+        }
+        on_values_by_document.push(on_values);
+    }
+
+    for (document, on_values) in documents.into_iter().zip(on_values_by_document) {
+        let matched_position = target_documents.iter().position(|candidate| {
+            on_fields.iter().zip(&on_values).all(|(field, value)| {
+                lookup_field(candidate, field)
+                    .map(|candidate_value| compare_values(candidate_value, value) == Ordering::Equal)
+                    .unwrap_or(false)
+            })
+        });
+
+        if let Some(position) = matched_position {
+            let existing = target_documents[position].clone();
+            let mut bound = variables.clone();
+            for (name, expression) in &let_variables.fields {
+                bound.insert(name.clone(), evaluate_expression_vars(&existing, expression, variables)?);
+            }
+            let updated = match mode {
+                MergeMode::KeepExisting => continue,
+                MergeMode::Fail => {
+                    let mut id_pattern = BsonDocument::new();
+                    id_pattern.push("_id".to_string(), BsonValue::Int32(1));
+                    let id_value = merge_key_value(&existing, &id_pattern);
+                    return Err(merge_duplicate_error(
+                        &target,
+                        "_id_",
+                        &id_pattern,
+                        &id_value,
+                        index_name == "_id_",
+                    ));
+                }
+                MergeMode::Replace => {
+                    let mut replacement = document.clone();
+                    if let Some(identifier) = existing.get("_id") {
+                        match document.get("_id") {
+                            Some(new_identifier) if value_to_key(new_identifier) != value_to_key(identifier) => {
+                                return Err(merge_immutable_id_error(new_identifier));
+                            }
+                            Some(_) => {}
+                            None => replacement.push("_id".to_string(), identifier.clone()),
+                        }
+                    }
+                    replacement
+                }
+                MergeMode::Merge => merge_document(&existing, &document)?,
+                MergeMode::Pipeline => merge_update_pipeline(existing, &when_matched_pipeline, &bound)?,
+            };
+            target_documents[position] = updated.clone();
+            let identifier = updated.get("_id").cloned().unwrap_or(BsonValue::Null);
+            replacements.push((value_to_key(&identifier), encode_bson(&updated)));
+        } else {
+            match not_matched {
+                MergeNotMatched::Discard => continue,
+                MergeNotMatched::Fail => {
+                    return Err(CommandError::new(
+                        11000,
+                        format!(
+                            "PlanExecutor error during aggregation :: caused by :: $merge with whenNotMatched: fail found no matching document for the 'on' fields"
+                        ),
+                    ));
+                }
+                MergeNotMatched::Insert => {}
+            }
+            let mut inserted = document.clone();
+            let identifier = match inserted.get("_id").cloned() {
+                Some(identifier) => identifier,
+                None => {
+                    let identifier = BsonValue::ObjectId(generate_object_id());
+                    inserted.push("_id".to_string(), identifier.clone());
+                    identifier
+                }
+            };
+            let identifier_key = value_to_key(&identifier);
+            if let Some((conflict_name, conflict_pattern, conflict_value)) =
+                merge_conflict(&target_documents, &inserted, &identifier_key)
+            {
+                return Err(merge_duplicate_error(&target, &conflict_name, &conflict_pattern, &conflict_value, false));
+            }
+            target_documents.push(inserted.clone());
+            inserts.push((identifier_key, encode_bson(&inserted)));
+        }
+    }
+
+    if !replacements.is_empty() {
+        stage_replace(store, session, &target, &replacements)?;
+    }
+    if !inserts.is_empty() {
+        stage_insert(store, session, &target, &inserts)?;
+    }
+    Ok(Vec::new())
+}
+
+fn merge_target_namespace(specification: &BsonDocument, namespace: &str) -> Result<String, CommandError> {
+    match specification.get("into") {
+        Some(BsonValue::String(collection)) if !collection.is_empty() => {
+            let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+            Ok(format!("{database}.{collection}"))
+        }
+        Some(BsonValue::Document(specification)) => {
+            let database = match specification.get("db") {
+                Some(BsonValue::String(name)) if !name.is_empty() => name.clone(),
+                _ => {
+                    return Err(CommandError::new(51178, "BSON field '$merge.into.db' is missing but a required field"));
+                }
+            };
+            let collection = match specification.get("coll") {
+                Some(BsonValue::String(name)) if !name.is_empty() => name.clone(),
+                _ => {
+                    return Err(CommandError::new(51178, "BSON field '$merge.into.coll' is missing but a required field"));
+                }
+            };
+            Ok(format!("{database}.{collection}"))
+        }
+        Some(other) => Err(CommandError::new(
+            51178,
+            format!("$merge 'into' field  must be either a string or an object, but found {}", bson_type_name(other)),
+        )),
+        None => Err(CommandError::new(51178, "$merge requires an 'into' field")),
+    }
+}
+
+fn merge_on_fields(specification: &BsonDocument) -> Result<Vec<String>, CommandError> {
+    match specification.get("on") {
+        None => Ok(vec!["_id".to_string()]),
+        Some(BsonValue::String(field)) => Ok(vec![field.clone()]),
+        Some(BsonValue::Array(items)) => {
+            if items.is_empty() {
+                return Err(CommandError::new(51187, "If explicitly specifying $merge 'on', must include at least one field"));
+            }
+            let mut fields = Vec::with_capacity(items.len());
+            for item in items {
+                match item {
+                    BsonValue::String(field) => fields.push(field.clone()),
+                    other => {
+                        return Err(CommandError::new(
+                            51186,
+                            format!(
+                                "$merge 'on' field  must be either a string or an array of strings, but found {}",
+                                bson_type_name(other)
+                            ),
+                        ));
+                    }
+                }
+            }
+            Ok(fields)
+        }
+        Some(other) => Err(CommandError::new(
+            51186,
+            format!("$merge 'on' field  must be either a string or an array of strings, but found {}", bson_type_name(other)),
+        )),
+    }
+}
+
+/// The unique index backing the `on` fields, as `(name, key pattern)`.
+fn merge_unique_index(store: &Store, namespace: &str, on_fields: &[String]) -> Option<(String, BsonDocument)> {
+    if on_fields.len() == 1 && on_fields[0] == "_id" {
+        let mut pattern = BsonDocument::new();
+        pattern.push("_id".to_string(), BsonValue::Int32(1));
+        return Some(("_id_".to_string(), pattern));
+    }
+    for spec in store.index_specs(namespace) {
+        if !spec.unique || spec.key.fields.len() != on_fields.len() {
+            continue;
+        }
+        if spec.key.fields.iter().zip(on_fields).all(|((field, _), wanted)| field == wanted) {
+            return Some((spec.name.clone(), spec.key.clone()));
+        }
+    }
+    None
+}
+
+fn merge_document(existing: &BsonDocument, incoming: &BsonDocument) -> Result<BsonDocument, CommandError> {
+    if let (Some(left), Some(right)) = (existing.get("_id"), incoming.get("_id")) {
+        if value_to_key(left) != value_to_key(right) {
+            return Err(merge_immutable_id_error(right));
+        }
+    }
+    let mut merged = existing.clone();
+    for (field, value) in &incoming.fields {
+        if let Some(entry) = merged.fields.iter_mut().find(|(key, _)| key == field) {
+            entry.1 = value.clone();
+        } else {
+            merged.push(field.clone(), value.clone());
+        }
+    }
+    Ok(merged)
+}
+
+/// First duplicate-key conflict an insert would create, as
+/// `(index name, key pattern, key value)`.
+fn merge_conflict(
+    documents: &[BsonDocument],
+    inserted: &BsonDocument,
+    identifier: &[u8],
+) -> Option<(String, BsonDocument, BsonDocument)> {
+    for candidate in documents {
+        let candidate_id = candidate.get("_id").map(value_to_key).unwrap_or_default();
+        if candidate_id == identifier {
+            let mut pattern = BsonDocument::new();
+            pattern.push("_id".to_string(), BsonValue::Int32(1));
+            let value = merge_key_value(inserted, &pattern);
+            return Some(("_id_".to_string(), pattern, value));
+        }
+    }
+    None
 }
 
 /// `$facet`: every branch consumes the same input and the stage emits a single
@@ -6111,7 +6945,7 @@ fn add_fields_stage(documents: &[BsonDocument], specification: &BsonDocument) ->
             }
             let value = evaluate_expression(document, expression)?;
             let segments: Vec<&str> = field.split('.').collect();
-            set_segments(&mut result, &segments, value)?;
+            set_aggregation_segments(&mut result, &segments, value)?;
         }
         output.push(result);
     }
@@ -6377,6 +7211,16 @@ fn evaluate_expression_vars(
                     }
                     Ok(BsonValue::String(joined))
                 }
+                "$size" => {
+                    let value = evaluate_expression_vars(document, argument, variables)?;
+                    match value {
+                        BsonValue::Array(items) => Ok(count_value(items.len() as i64)),
+                        other => Err(CommandError::new(
+                            17124,
+                            format!("The argument to $size must be an array, but was of type: {}", bson_type_name(&other)),
+                        )),
+                    }
+                }
                 "$ifNull" => {
                     let BsonValue::Array(arguments) = argument else {
                         return Err(CommandError::new(2, "$ifNull requires an array of expressions"));
@@ -6395,10 +7239,22 @@ fn evaluate_expression_vars(
                 other => Err(CommandError::new(
                     59,
                     format!(
-                        "unknown $project expression: {other} (supported: $add, $concat, $ifNull, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)"
+                        "unknown $project expression: {other} (supported: $add, $concat, $ifNull, $size, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)"
                     ),
                 )),
             }
+        }
+        BsonValue::Document(fields) => {
+            // A document whose single field is not an operator is a literal
+            // object whose values are themselves expressions; a missing field
+            // is omitted rather than rendered as null.
+            let mut result = BsonDocument::new();
+            for (field, value) in &fields.fields {
+                if let Some(evaluated) = evaluate_expression_optional_vars(document, value, variables)? {
+                    set_field_path(&mut result, field, evaluated);
+                }
+            }
+            Ok(BsonValue::Document(result))
         }
         other => Ok(other.clone()),
     }

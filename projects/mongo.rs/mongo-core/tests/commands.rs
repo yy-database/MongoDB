@@ -253,8 +253,8 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
         BsonValue::Array(vec![
             BsonValue::Document(document(&[("$match", BsonValue::Document(BsonDocument::new()))])),
             BsonValue::Document(document(&[(
-                "$out",
-                BsonValue::String("archive".to_string()),
+                "$sample",
+                BsonValue::Document(document(&[("size", BsonValue::Int32(1))])),
             )])),
         ]),
     );
@@ -263,7 +263,7 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
     assert_eq!(error.code, 59);
     assert_eq!(
         error.message,
-        "unknown aggregation stage: $out (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $project)"
+        "unknown aggregation stage: $sample (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)"
     );
 }
 

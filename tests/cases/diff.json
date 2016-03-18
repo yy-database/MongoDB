@@ -29460,6 +29460,4501 @@
           }
         }
       ]
+    },
+    {
+      "id": "graph_maxdepth0",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_maxdepth0",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "gl",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 0,
+                "depthField": "d"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "chain": 1
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "nested.chain",
+                "maxDepth": 0
+              }
+            }
+          ],
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "chain": [
+                  {
+                    "_id": {
+                      "$numberInt": "2"
+                    },
+                    "name": "b",
+                    "next": "c",
+                    "d": {
+                      "$numberLong": "0"
+                    }
+                  }
+                ]
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gl"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "name": "a",
+                "next": "b",
+                "nested": {
+                  "chain": [
+                    {
+                      "_id": {
+                        "$numberInt": "1"
+                      },
+                      "name": "a",
+                      "next": "b"
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gl"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "graph_sizes",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_sizes",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "gl2",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl2",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl2",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "nope",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "3"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gl2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gl2"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gl2"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "graph_restrict",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_restrict",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "gr",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b",
+              "dept": "x"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c",
+              "dept": "y"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null,
+              "dept": "x"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gr",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gr",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "dept": "y"
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "gr",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gr",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "dept": "x"
+                },
+                "maxDepth": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gr"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "0"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gr"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "graph_cycle",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_cycle",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "gc",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "a"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gc",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gc",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.gc"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "graph_start_array",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_start_array",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "ga",
+          "documents": [
+            {
+              "_id": 1,
+              "keys": [
+                "a",
+                "b"
+              ],
+              "tag": "x"
+            },
+            {
+              "_id": 2,
+              "name": "a",
+              "tag": "x",
+              "link": "z"
+            },
+            {
+              "_id": 3,
+              "name": "b",
+              "tag": "y",
+              "link": "z"
+            },
+            {
+              "_id": 4,
+              "name": "z",
+              "tag": "x",
+              "link": null
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ga",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ga",
+                "startWith": "$keys",
+                "connectFromField": "link",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "ga",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ga",
+                "startWith": "$keys",
+                "connectFromField": "link",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "tag": "x"
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ],
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "3"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.ga"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "n": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.ga"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "graph_errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus graph_errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "ge",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": -2
+              }
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 1.5
+              }
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "$where": "true"
+                }
+              }
+            }
+          ],
+          "as": "r3"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "$graphLookup requires 'from', 'as', 'startWith', 'connectFromField', and 'connectToField' to be specified."
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "40105"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location40105"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "maxDepth requires a nonnegative argument, found: -2"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "40101"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "Location40101"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "maxDepth could not be represented as a long long: 1"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "40102"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "Location40102"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "Failed to parse 'restrictSearchWithMatch' option to $graphLookup :: caused by :: $where is not allowed in this context"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "BadValue"
+        }
+      ]
+    },
+    {
+      "id": "replace_with",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus replace_with",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "rw",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "x": "$a",
+                "y": "$b"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "_id": "$_id",
+                "nested": {
+                  "v": "$a"
+                }
+              }
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": "$sub"
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "a": "$a",
+                "ghost": "$missing"
+              }
+            }
+          ],
+          "as": "r3"
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {}
+            }
+          ],
+          "as": "r4"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "x": {
+                  "$numberInt": "1"
+                },
+                "y": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "x": {
+                  "$numberInt": "4"
+                },
+                "y": {
+                  "$numberInt": "5"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.rw"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "nested": {
+                  "v": {
+                    "$numberInt": "1"
+                  }
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "nested": {
+                  "v": {
+                    "$numberInt": "4"
+                  }
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.rw"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "c": {
+                  "$numberInt": "3"
+                }
+              },
+              {
+                "c": {
+                  "$numberInt": "6"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.rw"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r3/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "a": {
+                  "$numberInt": "4"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.rw"
+          }
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r4/cursor",
+          "equals": {
+            "firstBatch": [
+              {},
+              {}
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.rw"
+          }
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "replace_errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus replace_errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "re",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": "plain"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": 5
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": null
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": []
+            }
+          ],
+          "as": "r3"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: \"plain\". Type of resulting value: 'string'. Input document: {}"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "40228"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location40228"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: 5. Type of resulting value: 'int'. Input document: {}"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "40228"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "Location40228"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: null. Type of resulting value: 'null'. Input document: {}"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "40228"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "Location40228"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: []. Type of resulting value: 'array'. Input document: {}"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "40228"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "Location40228"
+        }
+      ]
+    },
+    {
+      "id": "set_alias",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus set_alias",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "sa",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {
+                "c": {
+                  "$add": [
+                    "$a",
+                    "$b"
+                  ]
+                },
+                "z": 1
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {
+                "a.b": 1
+              }
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {}
+            }
+          ],
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "3"
+                  }
+                },
+                "c": {
+                  "$numberInt": "3"
+                },
+                "z": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "4"
+                },
+                "b": {
+                  "$numberInt": "5"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "6"
+                  }
+                },
+                "c": {
+                  "$numberInt": "9"
+                },
+                "z": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.sa"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "b": {
+                    "$numberInt": "1"
+                  }
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "3"
+                  }
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "b": {
+                    "$numberInt": "1"
+                  }
+                },
+                "b": {
+                  "$numberInt": "5"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "6"
+                  }
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.sa"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "3"
+                  }
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "4"
+                },
+                "b": {
+                  "$numberInt": "5"
+                },
+                "sub": {
+                  "c": {
+                    "$numberInt": "6"
+                  }
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.sa"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_default",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_default",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n1",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n1_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n1_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n1",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n1_t",
+                "on": "a"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n1_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n1"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "tag": "old",
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "30"
+                },
+                "b": {
+                  "$numberInt": "3"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n1_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_replace_discard",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_replace_discard",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n2",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n2_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n2_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n2",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n2_t",
+                "on": "a",
+                "whenMatched": "replace",
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n2_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n2"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n2_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_keep_existing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_keep_existing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n3",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n3_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n3_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n3",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n3_t",
+                "on": "a",
+                "whenMatched": "keepExisting",
+                "whenNotMatched": "insert"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n3_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n3"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "tag": "old"
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "30"
+                },
+                "b": {
+                  "$numberInt": "3"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n3_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_pipeline",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_pipeline",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n4",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n4_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n4_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$set": {
+                      "tag": "piped"
+                    }
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$unset": [
+                      "tag"
+                    ]
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r3"
+        },
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$replaceWith": {
+                      "a": "$a",
+                      "b": "$b"
+                    }
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r4"
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r5"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "tag": "piped"
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r3/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4_t"
+          }
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r4/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4"
+          }
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r5/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n4_t"
+          }
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_compound",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_compound",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n5",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n5_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n5_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1,
+                "b": 1
+              },
+              "name": "ab",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n5",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n5_t",
+                "on": [
+                  "a",
+                  "b"
+                ],
+                "whenMatched": "merge",
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n5_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n5"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "tag": "old",
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n5_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_new_target",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_new_target",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n6",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n6",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n6_t",
+                "on": "_id"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n6_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n6"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "30"
+                },
+                "b": {
+                  "$numberInt": "3"
+                },
+                "src": true
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n6_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_object_target",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_object_target",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n7",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n7_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n7_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n7",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": {
+                  "db": "diff",
+                  "coll": "n7_t"
+                },
+                "on": "a"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "n7_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n7"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                },
+                "b": {
+                  "$numberInt": "1"
+                },
+                "tag": "old",
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                },
+                "b": {
+                  "$numberInt": "2"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "30"
+                },
+                "b": {
+                  "$numberInt": "3"
+                },
+                "src": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "9"
+                },
+                "a": {
+                  "$numberInt": "99"
+                },
+                "b": {
+                  "$numberInt": "9"
+                },
+                "tag": "only"
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.n7_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "me",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "me_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "me_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_none",
+                "on": "a"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "me_none",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": 5
+              }
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": []
+              }
+            }
+          ],
+          "as": "r3"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": 5
+              }
+            }
+          ],
+          "as": "r4"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "keepExisting",
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r5"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "fail",
+                "whenNotMatched": "discard"
+              }
+            }
+          ],
+          "as": "r6"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "bogus"
+              }
+            }
+          ],
+          "as": "r7"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenNotMatched": "bogus"
+              }
+            }
+          ],
+          "as": "r8"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$match": {
+                      "a": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "as": "r9"
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 2
+              }
+            },
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a"
+              }
+            }
+          ],
+          "as": "r10"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Cannot find index to verify that join fields will be unique"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "51183"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location51183"
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.me_none"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "$merge 'on' field  must be either a string or an array of strings, but found int"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "51186"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "Location51186"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "If explicitly specifying $merge 'on', must include at least one field"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "51187"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "Location51187"
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r4/errmsg",
+          "equals": "$merge 'into' field  must be either a string or an object, but found int"
+        },
+        {
+          "at": "/r4/code",
+          "equals": {
+            "$numberInt": "51178"
+          }
+        },
+        {
+          "at": "/r4/codeName",
+          "equals": "Location51178"
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r5/errmsg",
+          "equals": "Combination of $merge modes 'whenMatched: keepExisting' and 'whenNotMatched: discard' is not supported"
+        },
+        {
+          "at": "/r5/code",
+          "equals": {
+            "$numberInt": "51181"
+          }
+        },
+        {
+          "at": "/r5/codeName",
+          "equals": "Location51181"
+        },
+        {
+          "at": "/r6/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r6/errmsg",
+          "equals": "Combination of $merge modes 'whenMatched: fail' and 'whenNotMatched: discard' is not supported"
+        },
+        {
+          "at": "/r6/code",
+          "equals": {
+            "$numberInt": "51181"
+          }
+        },
+        {
+          "at": "/r6/codeName",
+          "equals": "Location51181"
+        },
+        {
+          "at": "/r7/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r7/errmsg",
+          "equals": "Enumeration value 'bogus' for field 'whenMatched' is not a valid value."
+        },
+        {
+          "at": "/r7/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r7/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r8/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r8/errmsg",
+          "equals": "Enumeration value 'bogus' for field '$merge.whenNotMatched' is not a valid value."
+        },
+        {
+          "at": "/r8/code",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r8/codeName",
+          "equals": "BadValue"
+        },
+        {
+          "at": "/r9/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r9/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $merge write error: 'on' field 'a' cannot be missing, null, undefined or an array"
+        },
+        {
+          "at": "/r9/code",
+          "equals": {
+            "$numberInt": "51132"
+          }
+        },
+        {
+          "at": "/r9/codeName",
+          "equals": "Location51132"
+        },
+        {
+          "at": "/r10/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r10/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $merge write error: 'on' field 'a' cannot be missing, null, undefined or an array"
+        },
+        {
+          "at": "/r10/code",
+          "equals": {
+            "$numberInt": "51132"
+          }
+        },
+        {
+          "at": "/r10/codeName",
+          "equals": "Location51132"
+        }
+      ]
+    },
+    {
+      "id": "merge_pipeline_match_error",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_pipeline_match_error",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "n8",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n8_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n8_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "n8",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n8_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$match": {
+                      "a": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $match is not allowed to be used within an update"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "72"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "InvalidOptions"
+        }
+      ]
+    },
+    {
+      "id": "merge_duplicate_fail",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_duplicate_fail",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "md",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "md_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "md_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "md",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "md_t",
+                "on": "a",
+                "whenMatched": "fail"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "md_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $merge failed due to a DuplicateKey error :: caused by :: E11000 duplicate key error collection: diff.md_t index: _id_ dup key: { _id: 1 }"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "11000"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "DuplicateKey"
+        },
+        {
+          "at": "/r0/keyPattern",
+          "equals": {
+            "_id": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r0/keyValue",
+          "equals": {
+            "_id": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.md_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "merge_duplicate_insert",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus merge_duplicate_insert",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "mi",
+          "documents": [
+            {
+              "_id": 2,
+              "a": 50
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "mi_t",
+          "documents": [
+            {
+              "_id": 2,
+              "a": 60
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "mi_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "mi",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "mi_t",
+                "on": "a"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "mi_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "PlanExecutor error during aggregation :: caused by :: $merge failed due to a DuplicateKey error :: caused by :: E11000 duplicate key error collection: diff.mi_t index: _id_ dup key: { _id: 2 }"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "11000"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "DuplicateKey"
+        },
+        {
+          "at": "/r0/keyPattern",
+          "equals": {
+            "_id": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r0/keyValue",
+          "equals": {
+            "_id": {
+              "$numberInt": "2"
+            }
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "60"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.mi_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "out_replace",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus out_replace",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "oo",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "oo_t",
+          "documents": [
+            {
+              "_id": 9,
+              "a": 9
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "oo_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oo",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$out": "oo_t"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "oo_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        },
+        {
+          "op": "listIndexes",
+          "collection": "oo_t",
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oo"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oo_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oo_t",
+            "firstBatch": [
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              },
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "a": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "a_1"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "out_same_collection",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus out_same_collection",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "os",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "os",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": -1
+              }
+            },
+            {
+              "$out": "os"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "os",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.os"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.os"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "out_create",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus out_create",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "oc",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oc",
+          "pipeline": [
+            {
+              "$out": "oc_t"
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "oc_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        },
+        {
+          "op": "listIndexes",
+          "collection": "oc_t",
+          "as": "r2"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oc"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oc_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/cursor",
+          "equals": {
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.oc_t",
+            "firstBatch": [
+              {
+                "v": {
+                  "$numberInt": "2"
+                },
+                "key": {
+                  "_id": {
+                    "$numberInt": "1"
+                  }
+                },
+                "name": "_id_"
+              }
+            ]
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "out_object_target",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus out_object_target",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "ob",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ob",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": "ob_t"
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "ob_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.ob"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "2"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.ob_t"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "out_errors",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus out_errors",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "oe",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": 5
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": ""
+            }
+          ],
+          "as": "r1"
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": []
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "coll": "oe_x"
+              }
+            }
+          ],
+          "as": "r3"
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": ""
+              }
+            }
+          ],
+          "as": "r4"
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": "oe_x",
+                "extra": 1
+              }
+            }
+          ],
+          "as": "r5"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "$out only supports a string or object argument, but found int"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "16990"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "Location16990"
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r1/errmsg",
+          "equals": "Invalid $out target namespace, diff"
+        },
+        {
+          "at": "/r1/code",
+          "equals": {
+            "$numberInt": "73"
+          }
+        },
+        {
+          "at": "/r1/codeName",
+          "equals": "InvalidNamespace"
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r2/errmsg",
+          "equals": "$out only supports a string or object argument, but found array"
+        },
+        {
+          "at": "/r2/code",
+          "equals": {
+            "$numberInt": "16990"
+          }
+        },
+        {
+          "at": "/r2/codeName",
+          "equals": "Location16990"
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r3/errmsg",
+          "equals": "BSON field '$out.db' is missing but a required field"
+        },
+        {
+          "at": "/r3/code",
+          "equals": {
+            "$numberInt": "40414"
+          }
+        },
+        {
+          "at": "/r3/codeName",
+          "equals": "IDLFailedToParse"
+        },
+        {
+          "at": "/r4/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r4/errmsg",
+          "equals": "Invalid $out target namespace, diff"
+        },
+        {
+          "at": "/r4/code",
+          "equals": {
+            "$numberInt": "73"
+          }
+        },
+        {
+          "at": "/r4/codeName",
+          "equals": "InvalidNamespace"
+        },
+        {
+          "at": "/r5/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r5/errmsg",
+          "equals": "BSON field '$out.extra' is an unknown field."
+        },
+        {
+          "at": "/r5/code",
+          "equals": {
+            "$numberInt": "40415"
+          }
+        },
+        {
+          "at": "/r5/codeName",
+          "equals": "IDLUnknownField"
+        }
+      ]
+    },
+    {
+      "id": "sort_by_count_missing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus sort_by_count_missing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "sb",
+          "documents": [
+            {
+              "_id": 1,
+              "g": "a"
+            },
+            {
+              "_id": 2,
+              "g": "a"
+            },
+            {
+              "_id": 3,
+              "g": "a"
+            },
+            {
+              "_id": 4,
+              "g": "b"
+            },
+            {
+              "_id": 5,
+              "g": "b"
+            },
+            {
+              "_id": 6
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sb",
+          "pipeline": [
+            {
+              "$sortByCount": "$g"
+            }
+          ],
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": "a",
+                "count": {
+                  "$numberInt": "3"
+                }
+              },
+              {
+                "_id": "b",
+                "count": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "_id": null,
+                "count": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.sb"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
     }
   ]
 }

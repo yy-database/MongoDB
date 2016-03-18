@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 253,
+  "count": 279,
   "mongod": "8.0.9",
-  "corpusDigest": "a722c24e1b49148a7c12b32ff320927389c3cf30f23342dc0294cccc8b7046a9",
-  "replyDigest": "624fd9df9cb279eb5440de7a8d4e726bbb31c52246887a887e076d3b6d4e1f62",
+  "corpusDigest": "c90af325a9e39778e708a5949b123769bef03291fb166849491a0be0a532638d",
+  "replyDigest": "e45ccaad772c02ea63dc2fec8f0f38c1942ff0325d1621c9f34c6f51eaa5b323",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -13201,6 +13201,1685 @@
             "$numberLong": "0"
           },
           "ns": "diff.diff_hint_missing"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_maxdepth0": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "chain": [
+                {
+                  "_id": {
+                    "$numberInt": "2"
+                  },
+                  "name": "b",
+                  "next": "c",
+                  "d": {
+                    "$numberLong": "0"
+                  }
+                }
+              ]
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gl"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "name": "a",
+              "next": "b",
+              "nested": {
+                "chain": [
+                  {
+                    "_id": {
+                      "$numberInt": "1"
+                    },
+                    "name": "a",
+                    "next": "b"
+                  }
+                ]
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gl"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_sizes": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "3"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gl2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gl2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gl2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_restrict": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gr"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "0"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gr"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_cycle": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.gc"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_start_array": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "3"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.ga"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "n": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.ga"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "graph_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$graphLookup requires 'from', 'as', 'startWith', 'connectFromField', and 'connectToField' to be specified.",
+        "code": {
+          "$numberInt": "40105"
+        },
+        "codeName": "Location40105"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "maxDepth requires a nonnegative argument, found: -2",
+        "code": {
+          "$numberInt": "40101"
+        },
+        "codeName": "Location40101"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "maxDepth could not be represented as a long long: 1",
+        "code": {
+          "$numberInt": "40102"
+        },
+        "codeName": "Location40102"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Failed to parse 'restrictSearchWithMatch' option to $graphLookup :: caused by :: $where is not allowed in this context",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      }
+    ],
+    "replace_with": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "x": {
+                "$numberInt": "1"
+              },
+              "y": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "x": {
+                "$numberInt": "4"
+              },
+              "y": {
+                "$numberInt": "5"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "nested": {
+                "v": {
+                  "$numberInt": "1"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "nested": {
+                "v": {
+                  "$numberInt": "4"
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "c": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "c": {
+                "$numberInt": "6"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "a": {
+                "$numberInt": "4"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {},
+            {}
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "replace_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: \"plain\". Type of resulting value: 'string'. Input document: {}",
+        "code": {
+          "$numberInt": "40228"
+        },
+        "codeName": "Location40228"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: 5. Type of resulting value: 'int'. Input document: {}",
+        "code": {
+          "$numberInt": "40228"
+        },
+        "codeName": "Location40228"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: null. Type of resulting value: 'null'. Input document: {}",
+        "code": {
+          "$numberInt": "40228"
+        },
+        "codeName": "Location40228"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: 'replacement document'  must evaluate to an object, but resulting value was: []. Type of resulting value: 'array'. Input document: {}",
+        "code": {
+          "$numberInt": "40228"
+        },
+        "codeName": "Location40228"
+      }
+    ],
+    "set_alias": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "3"
+                }
+              },
+              "c": {
+                "$numberInt": "3"
+              },
+              "z": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "4"
+              },
+              "b": {
+                "$numberInt": "5"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "6"
+                }
+              },
+              "c": {
+                "$numberInt": "9"
+              },
+              "z": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sa"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "b": {
+                  "$numberInt": "1"
+                }
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "3"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "b": {
+                  "$numberInt": "1"
+                }
+              },
+              "b": {
+                "$numberInt": "5"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "6"
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sa"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "3"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "4"
+              },
+              "b": {
+                "$numberInt": "5"
+              },
+              "sub": {
+                "c": {
+                  "$numberInt": "6"
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sa"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_default": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "tag": "old",
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": {
+                "$numberInt": "3"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n1_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_replace_discard": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n2_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_keep_existing": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "tag": "old"
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": {
+                "$numberInt": "3"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n3_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_pipeline": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "tag": "piped"
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n4_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_compound": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n5"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "tag": "old",
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n5_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_new_target": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n6"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": {
+                "$numberInt": "3"
+              },
+              "src": true
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n6_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_object_target": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n7"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": {
+                "$numberInt": "1"
+              },
+              "tag": "old",
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": {
+                "$numberInt": "2"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": {
+                "$numberInt": "3"
+              },
+              "src": true
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "a": {
+                "$numberInt": "99"
+              },
+              "b": {
+                "$numberInt": "9"
+              },
+              "tag": "only"
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.n7_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Cannot find index to verify that join fields will be unique",
+        "code": {
+          "$numberInt": "51183"
+        },
+        "codeName": "Location51183"
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.me_none"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$merge 'on' field  must be either a string or an array of strings, but found int",
+        "code": {
+          "$numberInt": "51186"
+        },
+        "codeName": "Location51186"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "If explicitly specifying $merge 'on', must include at least one field",
+        "code": {
+          "$numberInt": "51187"
+        },
+        "codeName": "Location51187"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$merge 'into' field  must be either a string or an object, but found int",
+        "code": {
+          "$numberInt": "51178"
+        },
+        "codeName": "Location51178"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Combination of $merge modes 'whenMatched: keepExisting' and 'whenNotMatched: discard' is not supported",
+        "code": {
+          "$numberInt": "51181"
+        },
+        "codeName": "Location51181"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Combination of $merge modes 'whenMatched: fail' and 'whenNotMatched: discard' is not supported",
+        "code": {
+          "$numberInt": "51181"
+        },
+        "codeName": "Location51181"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Enumeration value 'bogus' for field 'whenMatched' is not a valid value.",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Enumeration value 'bogus' for field '$merge.whenNotMatched' is not a valid value.",
+        "code": {
+          "$numberInt": "2"
+        },
+        "codeName": "BadValue"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $merge write error: 'on' field 'a' cannot be missing, null, undefined or an array",
+        "code": {
+          "$numberInt": "51132"
+        },
+        "codeName": "Location51132"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $merge write error: 'on' field 'a' cannot be missing, null, undefined or an array",
+        "code": {
+          "$numberInt": "51132"
+        },
+        "codeName": "Location51132"
+      }
+    ],
+    "merge_pipeline_match_error": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $match is not allowed to be used within an update",
+        "code": {
+          "$numberInt": "72"
+        },
+        "codeName": "InvalidOptions"
+      }
+    ],
+    "merge_duplicate_fail": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $merge failed due to a DuplicateKey error :: caused by :: E11000 duplicate key error collection: diff.md_t index: _id_ dup key: { _id: 1 }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "_id": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "_id": {
+            "$numberInt": "1"
+          }
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.md_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "merge_duplicate_insert": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: $merge failed due to a DuplicateKey error :: caused by :: E11000 duplicate key error collection: diff.mi_t index: _id_ dup key: { _id: 2 }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "_id": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "_id": {
+            "$numberInt": "2"
+          }
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "60"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.mi_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "out_replace": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oo"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oo_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oo_t",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "a_1"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "out_same_collection": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.os"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.os"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "out_create": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oc"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oc_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.oc_t",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "out_object_target": [
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.ob"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.ob_t"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "out_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$out only supports a string or object argument, but found int",
+        "code": {
+          "$numberInt": "16990"
+        },
+        "codeName": "Location16990"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Invalid $out target namespace, diff",
+        "code": {
+          "$numberInt": "73"
+        },
+        "codeName": "InvalidNamespace"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$out only supports a string or object argument, but found array",
+        "code": {
+          "$numberInt": "16990"
+        },
+        "codeName": "Location16990"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field '$out.db' is missing but a required field",
+        "code": {
+          "$numberInt": "40414"
+        },
+        "codeName": "IDLFailedToParse"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Invalid $out target namespace, diff",
+        "code": {
+          "$numberInt": "73"
+        },
+        "codeName": "InvalidNamespace"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field '$out.extra' is an unknown field.",
+        "code": {
+          "$numberInt": "40415"
+        },
+        "codeName": "IDLUnknownField"
+      }
+    ],
+    "sort_by_count_missing": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": "a",
+              "count": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": "b",
+              "count": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": null,
+              "count": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sb"
         },
         "ok": {
           "$numberDouble": "1.0"

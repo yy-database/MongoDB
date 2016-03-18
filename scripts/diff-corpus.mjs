@@ -9,7 +9,7 @@
 //
 // Usage:
 //   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
-//                                [--count 253] [--only <entry-id>]
+//                                [--count 279] [--only <entry-id>]
 //                                [--write] [--emit-cases] [--verify] [--check]
 //
 // `--check` is the regression gate: it verifies the fixed seed, count and corpus
@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '253'))
+const COUNT = Number(option('count', '279'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -1557,6 +1557,513 @@ function buildHint(seed) {
     return entries
 }
 
+// Remaining aggregation stages: `$graphLookup`, `$replaceWith`/`$set`,
+// `$merge` and `$out`. `mongod 8.0.9` does not define the order of
+// `$graphLookup` arrays, so those entries assert `$size` or single-element
+// chains instead.
+function buildRemainingStages(seed) {
+    const entries = []
+    const errors = (steps) => steps
+    const chain = [
+        { _id: 1, name: 'a', next: 'b' },
+        { _id: 2, name: 'b', next: 'c' },
+        { _id: 3, name: 'c', next: null }
+    ]
+    entries.push({
+        id: 'graph_maxdepth0',
+        setup: [{ op: 'insert', collection: 'gl', documents: chain }],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'gl',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gl',
+                            startWith: '$next',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain',
+                            maxDepth: 0,
+                            depthField: 'd'
+                        }
+                    },
+                    { $project: { _id: 1, chain: 1 } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'gl',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gl',
+                            startWith: '$name',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'nested.chain',
+                            maxDepth: 0
+                        }
+                    }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'graph_sizes',
+        setup: [{ op: 'insert', collection: 'gl2', documents: chain }],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'gl2',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gl2',
+                            startWith: '$name',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain'
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'gl2',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gl2',
+                            startWith: '$name',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain',
+                            maxDepth: 1
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'gl2',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'nope',
+                            startWith: '$name',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain'
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'graph_restrict',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'gr',
+                documents: [
+                    { _id: 1, name: 'a', next: 'b', dept: 'x' },
+                    { _id: 2, name: 'b', next: 'c', dept: 'y' },
+                    { _id: 3, name: 'c', next: null, dept: 'x' }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'gr',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gr',
+                            startWith: '$next',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain',
+                            restrictSearchWithMatch: { dept: 'y' }
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'gr',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gr',
+                            startWith: '$next',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain',
+                            restrictSearchWithMatch: { dept: 'x' },
+                            maxDepth: 1
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'graph_cycle',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'gc',
+                documents: [
+                    { _id: 1, name: 'a', next: 'b' },
+                    { _id: 2, name: 'b', next: 'a' }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'gc',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'gc',
+                            startWith: '$name',
+                            connectFromField: 'next',
+                            connectToField: 'name',
+                            as: 'chain'
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'graph_start_array',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'ga',
+                documents: [
+                    { _id: 1, keys: ['a', 'b'], tag: 'x' },
+                    { _id: 2, name: 'a', tag: 'x', link: 'z' },
+                    { _id: 3, name: 'b', tag: 'y', link: 'z' },
+                    { _id: 4, name: 'z', tag: 'x', link: null }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'ga',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'ga',
+                            startWith: '$keys',
+                            connectFromField: 'link',
+                            connectToField: 'name',
+                            as: 'chain'
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'ga',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    {
+                        $graphLookup: {
+                            from: 'ga',
+                            startWith: '$keys',
+                            connectFromField: 'link',
+                            connectToField: 'name',
+                            as: 'chain',
+                            restrictSearchWithMatch: { tag: 'x' }
+                        }
+                    },
+                    { $project: { _id: 1, n: { $size: '$chain' } } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'graph_errors',
+        setup: [{ op: 'insert', collection: 'ge', documents: chain }],
+        steps: errors([
+            { op: 'aggregate', collection: 'ge', pipeline: [{ $graphLookup: { from: 'ge', startWith: '$name', connectFromField: 'next', connectToField: 'name' } }] },
+            { op: 'aggregate', collection: 'ge', pipeline: [{ $match: { _id: 1 } }, { $graphLookup: { from: 'ge', startWith: '$name', connectFromField: 'next', connectToField: 'name', as: 'chain', maxDepth: -2 } }] },
+            { op: 'aggregate', collection: 'ge', pipeline: [{ $match: { _id: 1 } }, { $graphLookup: { from: 'ge', startWith: '$name', connectFromField: 'next', connectToField: 'name', as: 'chain', maxDepth: 1.5 } }] },
+            { op: 'aggregate', collection: 'ge', pipeline: [{ $match: { _id: 1 } }, { $graphLookup: { from: 'ge', startWith: '$name', connectFromField: 'next', connectToField: 'name', as: 'chain', restrictSearchWithMatch: { $where: 'true' } } }] }
+        ])
+    })
+
+    const replaceSource = [
+        { _id: 1, a: 1, b: 2, sub: { c: 3 } },
+        { _id: 2, a: 4, b: 5, sub: { c: 6 } }
+    ]
+    entries.push({
+        id: 'replace_with',
+        setup: [{ op: 'insert', collection: 'rw', documents: replaceSource }],
+        steps: [
+            { op: 'aggregate', collection: 'rw', pipeline: [{ $sort: { _id: 1 } }, { $replaceWith: { x: '$a', y: '$b' } }] },
+            { op: 'aggregate', collection: 'rw', pipeline: [{ $sort: { _id: 1 } }, { $replaceWith: { _id: '$_id', nested: { v: '$a' } } }] },
+            { op: 'aggregate', collection: 'rw', pipeline: [{ $sort: { _id: 1 } }, { $replaceWith: '$sub' }] },
+            { op: 'aggregate', collection: 'rw', pipeline: [{ $sort: { _id: 1 } }, { $replaceWith: { a: '$a', ghost: '$missing' } }] },
+            { op: 'aggregate', collection: 'rw', pipeline: [{ $sort: { _id: 1 } }, { $replaceWith: {} }] }
+        ]
+    })
+    entries.push({
+        id: 'replace_errors',
+        setup: [{ op: 'insert', collection: 're', documents: replaceSource }],
+        steps: errors([
+            { op: 'aggregate', collection: 're', pipeline: [{ $replaceWith: 'plain' }] },
+            { op: 'aggregate', collection: 're', pipeline: [{ $replaceWith: 5 }] },
+            { op: 'aggregate', collection: 're', pipeline: [{ $replaceWith: null }] },
+            { op: 'aggregate', collection: 're', pipeline: [{ $replaceWith: [] }] }
+        ])
+    })
+    entries.push({
+        id: 'set_alias',
+        setup: [{ op: 'insert', collection: 'sa', documents: replaceSource }],
+        steps: [
+            { op: 'aggregate', collection: 'sa', pipeline: [{ $sort: { _id: 1 } }, { $set: { c: { $add: ['$a', '$b'] }, z: 1 } }] },
+            { op: 'aggregate', collection: 'sa', pipeline: [{ $sort: { _id: 1 } }, { $set: { 'a.b': 1 } }] },
+            { op: 'aggregate', collection: 'sa', pipeline: [{ $sort: { _id: 1 } }, { $set: {} }] }
+        ]
+    })
+
+    const mergeSource = [
+        { _id: 1, a: 10, b: 1, src: true },
+        { _id: 2, a: 20, b: 2, src: true },
+        { _id: 3, a: 30, b: 3, src: true }
+    ]
+    const mergeTarget = [
+        { _id: 1, a: 10, b: 1, tag: 'old' },
+        { _id: 9, a: 99, b: 9, tag: 'only' }
+    ]
+    const mergeSetup = (source, target, indexes = [{ key: { a: 1 }, name: 'a_1', unique: true }]) => [
+        { op: 'insert', collection: `${source}`, documents: mergeSource },
+        { op: 'insert', collection: `${target}`, documents: mergeTarget },
+        ...(indexes.length ? [{ op: 'createIndexes', collection: target, indexes }] : [])
+    ]
+    const mergeThenFind = (id, source, target, specification, indexes) => ({
+        id,
+        setup: mergeSetup(source, target, indexes),
+        steps: [
+            { op: 'aggregate', collection: source, pipeline: [{ $merge: specification }] },
+            { op: 'find', collection: target, filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push(mergeThenFind('merge_default', 'n1', 'n1_t', { into: 'n1_t', on: 'a' }))
+    entries.push(
+        mergeThenFind('merge_replace_discard', 'n2', 'n2_t', {
+            into: 'n2_t',
+            on: 'a',
+            whenMatched: 'replace',
+            whenNotMatched: 'discard'
+        })
+    )
+    entries.push(
+        mergeThenFind('merge_keep_existing', 'n3', 'n3_t', {
+            into: 'n3_t',
+            on: 'a',
+            whenMatched: 'keepExisting',
+            whenNotMatched: 'insert'
+        })
+    )
+    entries.push({
+        id: 'merge_pipeline',
+        setup: mergeSetup('n4', 'n4_t'),
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'n4',
+                pipeline: [{ $merge: { into: 'n4_t', on: 'a', whenMatched: [{ $set: { tag: 'piped' } }], whenNotMatched: 'discard' } }]
+            },
+            { op: 'find', collection: 'n4_t', filter: {}, sort: { _id: 1 } },
+            {
+                op: 'aggregate',
+                collection: 'n4',
+                pipeline: [{ $merge: { into: 'n4_t', on: 'a', whenMatched: [{ $unset: ['tag'] }], whenNotMatched: 'discard' } }]
+            },
+            { op: 'find', collection: 'n4_t', filter: {}, sort: { _id: 1 } },
+            {
+                op: 'aggregate',
+                collection: 'n4',
+                pipeline: [
+                    { $merge: { into: 'n4_t', on: 'a', whenMatched: [{ $replaceWith: { a: '$a', b: '$b' } }], whenNotMatched: 'discard' } }
+                ]
+            },
+            { op: 'find', collection: 'n4_t', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push(
+        mergeThenFind('merge_compound', 'n5', 'n5_t', { into: 'n5_t', on: ['a', 'b'], whenMatched: 'merge', whenNotMatched: 'discard' }, [
+            { key: { a: 1, b: 1 }, name: 'ab', unique: true }
+        ])
+    )
+    entries.push({
+        id: 'merge_new_target',
+        setup: [{ op: 'insert', collection: 'n6', documents: mergeSource }],
+        steps: [
+            { op: 'aggregate', collection: 'n6', pipeline: [{ $merge: { into: 'n6_t', on: '_id' } }] },
+            { op: 'find', collection: 'n6_t', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'merge_object_target',
+        setup: mergeSetup('n7', 'n7_t'),
+        steps: [
+            { op: 'aggregate', collection: 'n7', pipeline: [{ $merge: { into: { db: 'diff', coll: 'n7_t' }, on: 'a' } }] },
+            { op: 'find', collection: 'n7_t', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'merge_errors',
+        setup: [
+            { op: 'insert', collection: 'me', documents: [{ _id: 1, a: 10 }, { _id: 2 }] },
+            { op: 'insert', collection: 'me_t', documents: [{ _id: 1, a: 10 }] },
+            { op: 'createIndexes', collection: 'me_t', indexes: [{ key: { a: 1 }, name: 'a_1', unique: true }] }
+        ],
+        steps: errors([
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_none', on: 'a' } }] },
+            { op: 'find', collection: 'me_none', filter: {}, sort: { _id: 1 } },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 5 } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: [] } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 5 } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 'a', whenMatched: 'keepExisting', whenNotMatched: 'discard' } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 'a', whenMatched: 'fail', whenNotMatched: 'discard' } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 'a', whenMatched: 'bogus' } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 'a', whenNotMatched: 'bogus' } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $merge: { into: 'me_t', on: 'a', whenMatched: [{ $match: { a: 1 } }] } }] },
+            { op: 'aggregate', collection: 'me', pipeline: [{ $match: { _id: 2 } }, { $merge: { into: 'me_t', on: 'a' } }] }
+        ])
+    })
+    entries.push({
+        id: 'merge_pipeline_match_error',
+        setup: mergeSetup('n8', 'n8_t'),
+        steps: errors([
+            { op: 'aggregate', collection: 'n8', pipeline: [{ $merge: { into: 'n8_t', on: 'a', whenMatched: [{ $match: { a: 1 } }] } }] }
+        ])
+    })
+    entries.push({
+        id: 'merge_duplicate_fail',
+        setup: [
+            { op: 'insert', collection: 'md', documents: [{ _id: 1, a: 10 }] },
+            { op: 'insert', collection: 'md_t', documents: [{ _id: 1, a: 10 }] },
+            { op: 'createIndexes', collection: 'md_t', indexes: [{ key: { a: 1 }, name: 'a_1', unique: true }] }
+        ],
+        steps: errors([
+            { op: 'aggregate', collection: 'md', pipeline: [{ $merge: { into: 'md_t', on: 'a', whenMatched: 'fail' } }] },
+            { op: 'find', collection: 'md_t', filter: {}, sort: { _id: 1 } }
+        ])
+    })
+    entries.push({
+        id: 'merge_duplicate_insert',
+        setup: [
+            { op: 'insert', collection: 'mi', documents: [{ _id: 2, a: 50 }] },
+            { op: 'insert', collection: 'mi_t', documents: [{ _id: 2, a: 60 }] },
+            { op: 'createIndexes', collection: 'mi_t', indexes: [{ key: { a: 1 }, name: 'a_1', unique: true }] }
+        ],
+        steps: errors([
+            { op: 'aggregate', collection: 'mi', pipeline: [{ $merge: { into: 'mi_t', on: 'a' } }] },
+            { op: 'find', collection: 'mi_t', filter: {}, sort: { _id: 1 } }
+        ])
+    })
+
+    entries.push({
+        id: 'out_replace',
+        setup: [
+            { op: 'insert', collection: 'oo', documents: [{ _id: 1, a: 1 }, { _id: 2, a: 2 }] },
+            { op: 'insert', collection: 'oo_t', documents: [{ _id: 9, a: 9 }] },
+            { op: 'createIndexes', collection: 'oo_t', indexes: [{ key: { a: 1 }, name: 'a_1' }] }
+        ],
+        steps: [
+            { op: 'aggregate', collection: 'oo', pipeline: [{ $sort: { _id: 1 } }, { $out: 'oo_t' }] },
+            { op: 'find', collection: 'oo_t', filter: {}, sort: { _id: 1 } },
+            { op: 'listIndexes', collection: 'oo_t' }
+        ]
+    })
+    entries.push({
+        id: 'out_same_collection',
+        setup: [{ op: 'insert', collection: 'os', documents: [{ _id: 1, a: 1 }, { _id: 2, a: 2 }] }],
+        steps: [
+            { op: 'aggregate', collection: 'os', pipeline: [{ $sort: { _id: -1 } }, { $out: 'os' }] },
+            { op: 'find', collection: 'os', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'out_create',
+        setup: [{ op: 'insert', collection: 'oc', documents: [{ _id: 1, a: 1 }, { _id: 2, a: 2 }] }],
+        steps: [
+            { op: 'aggregate', collection: 'oc', pipeline: [{ $out: 'oc_t' }] },
+            { op: 'find', collection: 'oc_t', filter: {}, sort: { _id: 1 } },
+            { op: 'listIndexes', collection: 'oc_t' }
+        ]
+    })
+    entries.push({
+        id: 'out_object_target',
+        setup: [{ op: 'insert', collection: 'ob', documents: [{ _id: 1, a: 1 }, { _id: 2, a: 2 }] }],
+        steps: [
+            { op: 'aggregate', collection: 'ob', pipeline: [{ $out: { db: 'diff', coll: 'ob_t' } }] },
+            { op: 'find', collection: 'ob_t', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'out_errors',
+        setup: [{ op: 'insert', collection: 'oe', documents: [{ _id: 1, a: 1 }] }],
+        steps: errors([
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: 5 }] },
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: '' }] },
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: [] }] },
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: { coll: 'oe_x' } }] },
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: { db: 'diff', coll: '' } }] },
+            { op: 'aggregate', collection: 'oe', pipeline: [{ $out: { db: 'diff', coll: 'oe_x', extra: 1 } }] }
+        ])
+    })
+
+    entries.push({
+        id: 'sort_by_count_missing',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'sb',
+                documents: [
+                    { _id: 1, g: 'a' },
+                    { _id: 2, g: 'a' },
+                    { _id: 3, g: 'a' },
+                    { _id: 4, g: 'b' },
+                    { _id: 5, g: 'b' },
+                    { _id: 6 }
+                ]
+            }
+        ],
+        steps: [{ op: 'aggregate', collection: 'sb', pipeline: [{ $sortByCount: '$g' }] }]
+    })
+
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -1571,7 +2078,8 @@ const CLUSTERS = [
     ['validators', buildValidators],
     ['listCollections', buildListCollections],
     ['count', buildCountExplain],
-    ['hint', buildHint]
+    ['hint', buildHint],
+    ['stages', buildRemainingStages]
 ]
 
 function generate(seed) {

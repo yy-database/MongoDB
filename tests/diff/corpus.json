@@ -1,7 +1,7 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 253,
+  "count": 279,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
@@ -17,9 +17,10 @@
     "validators": 16,
     "listCollections": 8,
     "count": 10,
-    "hint": 25
+    "hint": 25,
+    "undefined": 26
   },
-  "digest": "a722c24e1b49148a7c12b32ff320927389c3cf30f23342dc0294cccc8b7046a9",
+  "digest": "c90af325a9e39778e708a5949b123769bef03291fb166849491a0be0a532638d",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -20665,6 +20666,2159 @@
         }
       ],
       "seed": 20364053
+    },
+    {
+      "id": "graph_maxdepth0",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "gl",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "gl",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 0,
+                "depthField": "d"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "chain": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "nested.chain",
+                "maxDepth": 0
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "graph_sizes",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "gl2",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl2",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gl2",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gl2",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "nope",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "graph_restrict",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "gr",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b",
+              "dept": "x"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c",
+              "dept": "y"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null,
+              "dept": "x"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "gr",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gr",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "dept": "y"
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "gr",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gr",
+                "startWith": "$next",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "dept": "x"
+                },
+                "maxDepth": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "graph_cycle",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "gc",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "a"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "gc",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "gc",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "graph_start_array",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "ga",
+          "documents": [
+            {
+              "_id": 1,
+              "keys": [
+                "a",
+                "b"
+              ],
+              "tag": "x"
+            },
+            {
+              "_id": 2,
+              "name": "a",
+              "tag": "x",
+              "link": "z"
+            },
+            {
+              "_id": 3,
+              "name": "b",
+              "tag": "y",
+              "link": "z"
+            },
+            {
+              "_id": 4,
+              "name": "z",
+              "tag": "x",
+              "link": null
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "ga",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ga",
+                "startWith": "$keys",
+                "connectFromField": "link",
+                "connectToField": "name",
+                "as": "chain"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ga",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ga",
+                "startWith": "$keys",
+                "connectFromField": "link",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "tag": "x"
+                }
+              }
+            },
+            {
+              "$project": {
+                "_id": 1,
+                "n": {
+                  "$size": "$chain"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "graph_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "ge",
+          "documents": [
+            {
+              "_id": 1,
+              "name": "a",
+              "next": "b"
+            },
+            {
+              "_id": 2,
+              "name": "b",
+              "next": "c"
+            },
+            {
+              "_id": 3,
+              "name": "c",
+              "next": null
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": -2
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "maxDepth": 1.5
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ge",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$graphLookup": {
+                "from": "ge",
+                "startWith": "$name",
+                "connectFromField": "next",
+                "connectToField": "name",
+                "as": "chain",
+                "restrictSearchWithMatch": {
+                  "$where": "true"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "replace_with",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "rw",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "x": "$a",
+                "y": "$b"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "_id": "$_id",
+                "nested": {
+                  "v": "$a"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": "$sub"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {
+                "a": "$a",
+                "ghost": "$missing"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$replaceWith": {}
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "replace_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "re",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": "plain"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": 5
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": null
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "re",
+          "pipeline": [
+            {
+              "$replaceWith": []
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "set_alias",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "sa",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2,
+              "sub": {
+                "c": 3
+              }
+            },
+            {
+              "_id": 2,
+              "a": 4,
+              "b": 5,
+              "sub": {
+                "c": 6
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {
+                "c": {
+                  "$add": [
+                    "$a",
+                    "$b"
+                  ]
+                },
+                "z": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {
+                "a.b": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sa",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$set": {}
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_default",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n1",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n1_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n1_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n1",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n1_t",
+                "on": "a"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n1_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_replace_discard",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n2",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n2_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n2_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n2",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n2_t",
+                "on": "a",
+                "whenMatched": "replace",
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n2_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_keep_existing",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n3",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n3_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n3_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n3",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n3_t",
+                "on": "a",
+                "whenMatched": "keepExisting",
+                "whenNotMatched": "insert"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n3_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_pipeline",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n4",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n4_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n4_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$set": {
+                      "tag": "piped"
+                    }
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        },
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$unset": [
+                      "tag"
+                    ]
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        },
+        {
+          "op": "aggregate",
+          "collection": "n4",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n4_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$replaceWith": {
+                      "a": "$a",
+                      "b": "$b"
+                    }
+                  }
+                ],
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n4_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_compound",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n5",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n5_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n5_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1,
+                "b": 1
+              },
+              "name": "ab",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n5",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n5_t",
+                "on": [
+                  "a",
+                  "b"
+                ],
+                "whenMatched": "merge",
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n5_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_new_target",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n6",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n6",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n6_t",
+                "on": "_id"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n6_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_object_target",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n7",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n7_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n7_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n7",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": {
+                  "db": "diff",
+                  "coll": "n7_t"
+                },
+                "on": "a"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "n7_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "me",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "me_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "me_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_none",
+                "on": "a"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "me_none",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": 5
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": []
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": 5
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "keepExisting",
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "fail",
+                "whenNotMatched": "discard"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": "bogus"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenNotMatched": "bogus"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$match": {
+                      "a": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "me",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 2
+              }
+            },
+            {
+              "$merge": {
+                "into": "me_t",
+                "on": "a"
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_pipeline_match_error",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "n8",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "src": true
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": 2,
+              "src": true
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": 3,
+              "src": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "n8_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": 1,
+              "tag": "old"
+            },
+            {
+              "_id": 9,
+              "a": 99,
+              "b": 9,
+              "tag": "only"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "n8_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "n8",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "n8_t",
+                "on": "a",
+                "whenMatched": [
+                  {
+                    "$match": {
+                      "a": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_duplicate_fail",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "md",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "md_t",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "md_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "md",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "md_t",
+                "on": "a",
+                "whenMatched": "fail"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "md_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "merge_duplicate_insert",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "mi",
+          "documents": [
+            {
+              "_id": 2,
+              "a": 50
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "mi_t",
+          "documents": [
+            {
+              "_id": 2,
+              "a": 60
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "mi_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "mi",
+          "pipeline": [
+            {
+              "$merge": {
+                "into": "mi_t",
+                "on": "a"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "mi_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "out_replace",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "oo",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "oo_t",
+          "documents": [
+            {
+              "_id": 9,
+              "a": 9
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "oo_t",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_1"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "oo",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$out": "oo_t"
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "oo_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        },
+        {
+          "op": "listIndexes",
+          "collection": "oo_t"
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "out_same_collection",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "os",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "os",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": -1
+              }
+            },
+            {
+              "$out": "os"
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "os",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "out_create",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "oc",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "oc",
+          "pipeline": [
+            {
+              "$out": "oc_t"
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "oc_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        },
+        {
+          "op": "listIndexes",
+          "collection": "oc_t"
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "out_object_target",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "ob",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            },
+            {
+              "_id": 2,
+              "a": 2
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "ob",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": "ob_t"
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "ob_t",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "out_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "oe",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": 5
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": ""
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": []
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "coll": "oe_x"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": ""
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "oe",
+          "pipeline": [
+            {
+              "$out": {
+                "db": "diff",
+                "coll": "oe_x",
+                "extra": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "sort_by_count_missing",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "sb",
+          "documents": [
+            {
+              "_id": 1,
+              "g": "a"
+            },
+            {
+              "_id": 2,
+              "g": "a"
+            },
+            {
+              "_id": 3,
+              "g": "a"
+            },
+            {
+              "_id": 4,
+              "g": "b"
+            },
+            {
+              "_id": 5,
+              "g": "b"
+            },
+            {
+              "_id": 6
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "sb",
+          "pipeline": [
+            {
+              "$sortByCount": "$g"
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
     }
   ]
 }
