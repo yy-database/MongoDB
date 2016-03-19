@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 279,
+  "count": 285,
   "mongod": "8.0.9",
-  "corpusDigest": "c90af325a9e39778e708a5949b123769bef03291fb166849491a0be0a532638d",
-  "replyDigest": "e45ccaad772c02ea63dc2fec8f0f38c1942ff0325d1621c9f34c6f51eaa5b323",
+  "corpusDigest": "c6a53c848624723863397d47d1c3be7cdf2ad8f729eeaf9724da637fa8d4f5b5",
+  "replyDigest": "8ba894abce5524c78d19dff169bf5929db22eab27d836deda060a7231c294bc1",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -14880,6 +14880,437 @@
             "$numberLong": "0"
           },
           "ns": "diff.sb"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "unique_update_conflict": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.u1 index: a_unique dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.u1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.u1 index: a_unique dup key: { a: 10 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.u1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "unique_find_and_modify_conflict": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Plan executor error during findAndModify :: caused by :: E11000 duplicate key error collection: diff.u2 index: a_unique dup key: { a: 10 }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "a": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "a": {
+            "$numberInt": "10"
+          }
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.u2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "partial_unique_exists": [
+      {
+        "n": {
+          "$numberInt": "2"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "2"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.p1 index: a_partial dup key: { a: 5 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "5"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "5"
+              },
+              "active": true
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "5"
+              },
+              "active": false
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "a": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "a": {
+                "$numberInt": "5"
+              },
+              "active": false
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.p1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "partial_unique_compound": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.p2 index: ab_partial dup key: { a: 1, b: 2 }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "2"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              },
+              "b": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.p2"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "unique_null_and_missing": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.u3 index: a_unique dup key: { a: null }",
+            "keyPattern": {
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "a": null
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": null
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.u3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "unique_build_missing_null": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.u4 ( <uuid> ) :: caused by :: E11000 duplicate key error collection: diff.u4 index: a_unique dup key: { a: null }",
+        "code": {
+          "$numberInt": "11000"
+        },
+        "codeName": "DuplicateKey",
+        "keyPattern": {
+          "a": {
+            "$numberInt": "1"
+          }
+        },
+        "keyValue": {
+          "a": null
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.u4",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            }
+          ]
         },
         "ok": {
           "$numberDouble": "1.0"

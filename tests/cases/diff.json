@@ -33955,6 +33955,843 @@
           }
         }
       ]
+    },
+    {
+      "id": "unique_update_conflict",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus unique_update_conflict",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "u1",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 20
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "u1",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "update",
+          "collection": "u1",
+          "updates": [
+            {
+              "q": {
+                "_id": 2
+              },
+              "u": {
+                "$set": {
+                  "a": 10
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "u1",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        },
+        {
+          "op": "update",
+          "collection": "u1",
+          "updates": [
+            {
+              "q": {
+                "a": 30
+              },
+              "u": {
+                "$set": {
+                  "a": 10
+                }
+              },
+              "upsert": true
+            }
+          ],
+          "as": "r2"
+        },
+        {
+          "op": "find",
+          "collection": "u1",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r3"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.u1 index: a_unique dup key: { a: 10 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.u1"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r2/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r2/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.u1 index: a_unique dup key: { a: 10 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r2/nModified",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r2/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r3/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.u1"
+          }
+        },
+        {
+          "at": "/r3/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "unique_find_and_modify_conflict",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus unique_find_and_modify_conflict",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "u2",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10
+            },
+            {
+              "_id": 2,
+              "a": 20
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "u2",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "findAndModify",
+          "collection": "u2",
+          "query": {
+            "_id": 2
+          },
+          "update": {
+            "$set": {
+              "a": 10
+            }
+          },
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "u2",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "0.0"
+          }
+        },
+        {
+          "at": "/r0/errmsg",
+          "equals": "Plan executor error during findAndModify :: caused by :: E11000 duplicate key error collection: diff.u2 index: a_unique dup key: { a: 10 }"
+        },
+        {
+          "at": "/r0/code",
+          "equals": {
+            "$numberInt": "11000"
+          }
+        },
+        {
+          "at": "/r0/codeName",
+          "equals": "DuplicateKey"
+        },
+        {
+          "at": "/r0/keyPattern",
+          "equals": {
+            "a": {
+              "$numberInt": "1"
+            }
+          }
+        },
+        {
+          "at": "/r0/keyValue",
+          "equals": {
+            "a": {
+              "$numberInt": "10"
+            }
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "10"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "20"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.u2"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "partial_unique_exists",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus partial_unique_exists",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "p1",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 5,
+              "active": true
+            },
+            {
+              "_id": 2,
+              "a": 5
+            },
+            {
+              "_id": 3,
+              "a": 5,
+              "active": false
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "p1",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "active": true
+              }
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "p1",
+          "documents": [
+            {
+              "_id": 4,
+              "a": 5
+            },
+            {
+              "_id": 5,
+              "a": 5,
+              "active": false
+            },
+            {
+              "_id": 6,
+              "a": 5,
+              "active": true
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "p1",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "2"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "2"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.p1 index: a_partial dup key: { a: 5 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "5"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "5"
+                },
+                "active": true
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "5"
+                },
+                "active": false
+              },
+              {
+                "_id": {
+                  "$numberInt": "4"
+                },
+                "a": {
+                  "$numberInt": "5"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "5"
+                },
+                "a": {
+                  "$numberInt": "5"
+                },
+                "active": false
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.p1"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "partial_unique_compound",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus partial_unique_compound",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "p2",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 1,
+              "b": 2
+            },
+            {
+              "_id": 2,
+              "a": 1
+            },
+            {
+              "_id": 3,
+              "a": 1
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "p2",
+          "indexes": [
+            {
+              "key": {
+                "a": 1,
+                "b": 1
+              },
+              "name": "ab_partial",
+              "unique": true,
+              "partialFilterExpression": {
+                "b": {
+                  "$exists": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "p2",
+          "documents": [
+            {
+              "_id": 4,
+              "a": 1,
+              "b": 2
+            },
+            {
+              "_id": 5,
+              "a": 1,
+              "b": 3
+            },
+            {
+              "_id": 6,
+              "a": 1
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "p2",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.p2 index: ab_partial dup key: { a: 1, b: 2 }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "2"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": {
+                  "$numberInt": "1"
+                },
+                "b": {
+                  "$numberInt": "2"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "a": {
+                  "$numberInt": "1"
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.p2"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "unique_null_and_missing",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus unique_null_and_missing",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "u3",
+          "documents": [
+            {
+              "_id": 1,
+              "a": null
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "u3",
+          "indexes": [
+            {
+              "key": {
+                "a": 1
+              },
+              "name": "a_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "u3",
+          "documents": [
+            {
+              "_id": 2
+            },
+            {
+              "_id": 3,
+              "a": null
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "u3",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.u3 index: a_unique dup key: { a: null }",
+              "keyPattern": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "a": null
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "a": null
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.u3"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
     }
   ]
 }

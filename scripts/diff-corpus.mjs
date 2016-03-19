@@ -9,7 +9,7 @@
 //
 // Usage:
 //   node scripts/diff-corpus.mjs [--host 127.0.0.1] [--port 28017] [--seed 20261106]
-//                                [--count 279] [--only <entry-id>]
+//                                [--count 285] [--only <entry-id>]
 //                                [--write] [--emit-cases] [--verify] [--check]
 //
 // `--check` is the regression gate: it verifies the fixed seed, count and corpus
@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '279'))
+const COUNT = Number(option('count', '285'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -2064,6 +2064,122 @@ function buildRemainingStages(seed) {
     return entries
 }
 
+// Unique-index consistency: conflict shapes outside `insert`, plus partial
+// filters on non-insert paths. TTL deletion needs a Date BSON type that the
+// shared protocol crate does not decode yet, so it stays out of the corpus.
+function buildConsistency(seed) {
+    const entries = []
+    const uniqueA = [{ key: { a: 1 }, name: 'a_unique', unique: true }]
+    entries.push({
+        id: 'unique_update_conflict',
+        setup: [
+            { op: 'insert', collection: 'u1', documents: [{ _id: 1, a: 10 }, { _id: 2, a: 20 }] },
+            { op: 'createIndexes', collection: 'u1', indexes: uniqueA }
+        ],
+        steps: [
+            { op: 'update', collection: 'u1', updates: [{ q: { _id: 2 }, u: { $set: { a: 10 } } }] },
+            { op: 'find', collection: 'u1', filter: {}, sort: { _id: 1 } },
+            { op: 'update', collection: 'u1', updates: [{ q: { a: 30 }, u: { $set: { a: 10 } }, upsert: true }] },
+            { op: 'find', collection: 'u1', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'unique_find_and_modify_conflict',
+        setup: [
+            { op: 'insert', collection: 'u2', documents: [{ _id: 1, a: 10 }, { _id: 2, a: 20 }] },
+            { op: 'createIndexes', collection: 'u2', indexes: uniqueA }
+        ],
+        steps: [
+            { op: 'findAndModify', collection: 'u2', query: { _id: 2 }, update: { $set: { a: 10 } } },
+            { op: 'find', collection: 'u2', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'partial_unique_exists',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'p1',
+                documents: [
+                    { _id: 1, a: 5, active: true },
+                    { _id: 2, a: 5 },
+                    { _id: 3, a: 5, active: false }
+                ]
+            },
+            {
+                op: 'createIndexes',
+                collection: 'p1',
+                indexes: [{ key: { a: 1 }, name: 'a_partial', unique: true, partialFilterExpression: { active: true } }]
+            }
+        ],
+        steps: [
+            {
+                op: 'insert',
+                collection: 'p1',
+                documents: [
+                    { _id: 4, a: 5 },
+                    { _id: 5, a: 5, active: false },
+                    { _id: 6, a: 5, active: true }
+                ]
+            },
+            { op: 'find', collection: 'p1', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'partial_unique_compound',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'p2',
+                documents: [
+                    { _id: 1, a: 1, b: 2 },
+                    { _id: 2, a: 1 },
+                    { _id: 3, a: 1 }
+                ]
+            },
+            {
+                op: 'createIndexes',
+                collection: 'p2',
+                indexes: [{ key: { a: 1, b: 1 }, name: 'ab_partial', unique: true, partialFilterExpression: { b: { $exists: true } } }]
+            }
+        ],
+        steps: [
+            {
+                op: 'insert',
+                collection: 'p2',
+                documents: [
+                    { _id: 4, a: 1, b: 2 },
+                    { _id: 5, a: 1, b: 3 },
+                    { _id: 6, a: 1 }
+                ]
+            },
+            { op: 'find', collection: 'p2', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'unique_null_and_missing',
+        setup: [
+            { op: 'insert', collection: 'u3', documents: [{ _id: 1, a: null }] },
+            { op: 'createIndexes', collection: 'u3', indexes: uniqueA }
+        ],
+        steps: [
+            { op: 'insert', collection: 'u3', documents: [{ _id: 2 }, { _id: 3, a: null }] },
+            { op: 'find', collection: 'u3', filter: {}, sort: { _id: 1 } }
+        ]
+    })
+    entries.push({
+        id: 'unique_build_missing_null',
+        setup: [
+            { op: 'insert', collection: 'u4', documents: [{ _id: 1 }, { _id: 2, a: null }] }
+        ],
+        steps: [
+            { op: 'createIndexes', collection: 'u4', indexes: uniqueA },
+            { op: 'listIndexes', collection: 'u4' }
+        ]
+    })
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -2079,7 +2195,8 @@ const CLUSTERS = [
     ['listCollections', buildListCollections],
     ['count', buildCountExplain],
     ['hint', buildHint],
-    ['stages', buildRemainingStages]
+    ['stages', buildRemainingStages],
+    ['consistency', buildConsistency]
 ]
 
 function generate(seed) {

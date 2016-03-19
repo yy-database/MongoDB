@@ -4010,6 +4010,30 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         if let Some(error) = parallel_array_error(&updated, &index_specs) {
             return Err(CommandError::new(error.code, error.message));
         }
+        let unique_indexes: Vec<IndexSpec> = index_specs.iter().filter(|index| index.unique).cloned().collect();
+        if !unique_indexes.is_empty() {
+            let key = value_to_key(identifier_value.as_ref().unwrap_or(&BsonValue::Null));
+            let mut indexed: BTreeMap<Vec<u8>, Vec<BTreeSet<Vec<u8>>>> = BTreeMap::new();
+            for (other_key, payload) in namespace_documents(store, &namespace, session.key()) {
+                if let Ok(candidate) = parse_bson(&payload) {
+                    indexed.insert(other_key, unique_indexes.iter().map(|spec| tuples_of(&candidate, spec)).collect());
+                }
+            }
+            if let Some((specification, values)) = find_unique_conflict(&unique_indexes, &updated, &key, &indexed) {
+                let failure = duplicate_index_error(0, &namespace, specification, &values);
+                let mut error = CommandError::new(
+                    11000,
+                    format!("Plan executor error during findAndModify :: caused by :: {}", failure.message),
+                );
+                if let Some(pattern) = failure.key_pattern {
+                    error = error.with_detail("keyPattern", BsonValue::Document(pattern));
+                }
+                if let Some(value) = failure.key_value {
+                    error = error.with_detail("keyValue", BsonValue::Document(value));
+                }
+                return Err(error);
+            }
+        }
         let key = value_to_key(identifier_value.as_ref().unwrap_or(&BsonValue::Null));
         stage_replace(store, session.key(), &namespace, &[(key, encode_bson(&updated))])?;
         let mut last_error = BsonDocument::new();
