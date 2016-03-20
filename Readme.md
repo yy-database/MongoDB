@@ -203,14 +203,14 @@ node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；�
 
 手挑探针到顶后改用固定种子生成的差分语料：`scripts/diff-corpus.mjs` 按簇生成命令，两条路各跑一遍——本仓 napi 原语与真机 `mongod 8.0.9`——再比对归一化后的回复。期望值只来自真机：一致的条目用真机回复写成门禁 case，稳定不一致的写成“已知差异” case 并在 `source` 引用真机回复，不拿本实现当参照。
 
-seed `20261106`、`mongod 8.0.9`，共 **104 条 / 7 簇**：`find` 24、`aggregate` 24、`update` 18、`insert` 10、`indexes` 12、`delete` 8、`cursor` 8。每条独立命名空间 `diff_<cluster>_<n>`，真机侧跑前重置（`delete` 全部 + `dropIndexes *`），本仓侧每条用全新临时存储与游标表，因此长驻 `mongod` 上重跑结果不变。
+seed `20261106`、`mongod 8.0.9`，共 **291 条 / 16 簇**：`find` 24、`aggregate` 36、`update` 43、`insert` 10、`indexes` 21、`delete` 8、`cursor` 8、`findAndModify` 18、`distinct` 11、`bulkWrite` 15、`validators` 16、`listCollections` 8、`count` 10、`hint` 25、`undefined` 32、`bsonTypes` 6。每条独立命名空间 `diff_<cluster>_<n>`，真机侧跑前重置（`delete` 全部 + `dropIndexes *`），本仓侧每条用全新临时存储与游标表，因此长驻 `mongod` 上重跑结果不变。`bsonTypes` 簇覆盖 `Date` / `Timestamp` / `MinKey` / `MaxKey` 的交换、混合类型 `sort` 位次与重复键 `errmsg` 渲染。
 
 | 文件 | 内容 | digest |
 |------|------|--------|
-| `tests/diff/corpus.json` | 生成语料（104 条，含 setup / steps / 无序声明） | `faae47f0…` |
-| `tests/diff/baseline.json` | 真机归一化回复，按条目 id 索引 | `77e68170…`（replyDigest） |
-| `tests/cases/diff.json` | 一致且可进门禁的 **85** 条 case，期望值取自真机 | — |
-| `tests/cases/diff-known.json` | **11** 条稳定差异，`knownDifference: true` 并引用真机回复 | — |
+| `tests/diff/corpus.json` | 生成语料（291 条，含 setup / steps / 无序声明） | `a758a218…` |
+| `tests/diff/baseline.json` | 真机归一化回复，按条目 id 索引 | `c129c3e6…`（replyDigest） |
+| `tests/cases/diff.json` | 一致且可进门禁的 **250** 条 case，期望值取自真机 | — |
+| `tests/cases/diff-known.json` | **0** 条稳定差异，本批已全部对齐 | — |
 
 ```bash
 node scripts/diff-corpus.mjs --verify            # 重生成语料 + 校验两个 digest + 条目完整性
@@ -218,7 +218,7 @@ node scripts/diff-corpus.mjs --only diff.find.sort_skip_limit  # 单条复跑并
 node scripts/diff-corpus.mjs --write --emit-cases  # 全量跑，重写 baseline 与 case
 ```
 
-归一化只抹服务端随机量：非零游标 id、`cursorsKilled` 一类数组元素、建索引 build/collection UUID、自动生成 ObjectId、`cursor id N not found` 文案；`$addToSet` 顺序未定义的结果按无序比较，因此该条不进门禁。最近一次全量结果：**93 条一致**（其中 85 条可进门禁）、**11 条稳定差异**、**0 条不稳定**。
+归一化只抹服务端随机量：非零游标 id、`cursorsKilled` 一类数组元素、建索引 build/collection UUID、自动生成 ObjectId、`cursor id N not found` 文案；`$addToSet` 顺序未定义的结果按无序比较，因此该条不进门禁。最近一次全量结果：**291 条一致**（其中 250 条可进门禁）、**0 条稳定差异**、**0 条不稳定**。
 
 差分语料确认并已修正的差异：
 
@@ -288,10 +288,12 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
   - 数组多键：字段值数组按元素逐个入键（同一文档内重复元素折叠，所以 `{a: [3, 3]}` 可进唯一索引，跨文档同元素仍回 `11000`）；空数组入键为 BSON `undefined`（`dup key: { a: undefined }`，`keyValue.a` 为 0x06）；嵌套数组只展开一层，`{a: [[1, 2]]}` 以数组 `[ 1, 2 ]` 整体为键、`{a: [[]]}` 以 `[]` 为键；复合键按字段做笛卡尔积，缺失字段按 `null` 参与键；同一复合索引两个及以上字段为数组时回 `writeErrors` 码 `171`，消息按真机反序列出前两个数组字段（`{a: 1, b: 1}` 报 `[b] [a]`，`{b: 1, a: 1}` 报 `[a] [b]`），空数组同样计入，`update` 路径同为 `n: 0` / `nModified: 0`。建索引面对存量并行数组不报 `171`（真机实测成功），本仓一致。
   - `dropIndexes` 的 `*` 回 `msg: "non-_id indexes dropped for collection"`，`_id_` 在任何情况下都不可删；key pattern 支持单字段与复合键，字段顺序不同视为不同索引，`1` 与 `1.0` 视为同值，未命中回 `can't find index with key: { ... }`，类型不是字符串或文档时回 `14` 并带真机 `expected types '[string']` 文案。
   - 索引元数据存在 catalog 的 `indexes` 字段里，无索引时**不写**该字段，保持既有 catalog 字节长度断言不变。
+  - `expireAfterSeconds` 只在单字段索引上生效，复合键按真机回 `67`。到期删除走后台监控的**周期扫描**，不是到点即删：本仓把该语义做成 `ttl_monitor(store, now_ms)` 原语，由 host 循环按自己的时钟调用，默认窗口 `ttlMonitorSleepSecs = 60` 秒，可用 `set_ttl_monitor_sleep_seconds` 压缩窗口但不会取消窗口。因此文档的可见删除延迟是 **`[0, ttlMonitorSleepSecs]`**——到期后一个窗口内仍然读得到，只有某个扫描 tick 才删除。断言：`index.ttl.expired_document_survives_until_next_scan_tick`、`index.ttl.window_is_configurable_but_still_a_window`，Rust 侧 `ttl_monitor_removes_expired_documents_only_on_scan_ticks`。真机依据：`setParameter ttlMonitorSleepSecs: 1` 下 `expireAfterSeconds: 0` 的文档在 62ms 后消失（恰逢一轮扫描），未来日期与非 `Date` 字段不删。
+  - `expireAfterSeconds` 只认 `Date` 值（数组则任一元素为 `Date` 即参与）；字段缺失或类型不是日期时不参与到期，与真机一致。
 - 错误回复：`createIndexes` / `dropIndexes` / 重复键 / 空批次 / 游标失效相关的错误码已按真机补 `codeName`（`2 BadValue`、`9 FailedToParse`、`14 TypeMismatch`、`16 InvalidLength`、`26 NamespaceNotFound`、`27 IndexNotFound`、`43 CursorNotFound`、`67 CannotCreateIndex`、`72 InvalidOptions`、`73 InvalidNamespace`、`85 IndexOptionsConflict`、`86 IndexKeySpecsConflict`、`11000 DuplicateKey`、`40414 IDLFailedToParse`），字段顺序为 `ok` / `errmsg` / `code` / `codeName`。建唯一索引遇到存量重复数据时，`errmsg` 与真机同模板：`Index build failed: <build-uuid>: Collection <ns> ( <collection-uuid> ) :: caused by :: E11000 duplicate key error collection: <ns> index: <name> dup key: { ... }`，并在顶层带 `keyPattern` / `keyValue`。真机的两个 UUID 是随机值，本仓按命名空间确定性派生（同一集合重开与重试都稳定），模板逐字一致。
 - 索引剩余差异（坐标，不降级成“返回错误即通过”）：
   - `listIndexes` 不暴露多键标识：真机 `mongod 8.0.9` 实测（原始回复字节）对任何索引都不输出 `multikey`，`$indexStats` / `collStats` 同样没有，因此本仓 wire 回复也不输出，探针 `index.multikey.list_shape` 逐字比较完整回复。多键语义只能由行为证明：唯一索引对数组元素逐条判重、重复元素折叠、跨文档重复回 `11000`。
-  - 空数组索引键依赖 BSON `undefined`（0x06）：该变体由上游 `database-protocol-mongo` 提供（本项目不再自带 BSON 实现），extended JSON 侧用 `{"$undefined": true}`，与上游 82 条字节 fixture 的约定一致；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
+  - 空数组索引键依赖 BSON `undefined`（0x06）：该变体由上游 `database-protocol-mongo` 提供（本项目不再自带 BSON 实现），extended JSON 侧用 `{"$undefined": true}`，与上游 **98 条**字节 fixture 的约定一致；0x06 在 BSON 中已废弃，纯 JSON 侧无法区分它和 `null`，跨语言桥必须走该扩展标签。
   - 陈旧索引：`update` 冲突时真机先把 `multi` 已匹配的文档实际持久化，但计数仍报 `n: 0` / `nModified: 0`，本仓行为一致，但这条属真机反直觉语义，单列在此备查。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。

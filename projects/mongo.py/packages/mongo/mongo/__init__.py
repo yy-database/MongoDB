@@ -39,6 +39,8 @@ from .mongo_pyo3 import (  # noqa: F401
     list_indexes,
     ping,
     repair_shard,
+    set_ttl_monitor_sleep_seconds,
+    ttl_monitor,
     update,
 )
 
@@ -77,5 +79,7 @@ __all__ = [
     "list_indexes",
     "ping",
     "repair_shard",
+    "set_ttl_monitor_sleep_seconds",
+    "ttl_monitor",
     "update",
 ]

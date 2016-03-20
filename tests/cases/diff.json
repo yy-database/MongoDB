@@ -34792,6 +34792,618 @@
           }
         }
       ]
+    },
+    {
+      "id": "diff.bson.date_timestamp_keys_round_trip",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bson.date_timestamp_keys_round_trip",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_types",
+          "documents": [
+            {
+              "_id": 1,
+              "d": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            },
+            {
+              "_id": 2,
+              "t": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            },
+            {
+              "_id": 3,
+              "lo": {
+                "$minKey": 1
+              },
+              "hi": {
+                "$maxKey": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "diff_bson_types",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r0"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "d": {
+                  "$date": {
+                    "$numberLong": "1700000000000"
+                  }
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "2"
+                },
+                "t": {
+                  "$timestamp": {
+                    "t": 7,
+                    "i": 3
+                  }
+                }
+              },
+              {
+                "_id": {
+                  "$numberInt": "3"
+                },
+                "lo": {
+                  "$minKey": 1
+                },
+                "hi": {
+                  "$maxKey": 1
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bson_types"
+          }
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bson.duplicate_date_key_message",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bson.duplicate_date_key_message",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_date",
+          "documents": [
+            {
+              "_id": 1,
+              "v": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_bson_dup_date",
+          "indexes": [
+            {
+              "key": {
+                "v": 1
+              },
+              "name": "v_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_date",
+          "documents": [
+            {
+              "_id": 2,
+              "v": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "diff_bson_dup_date",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_date index: v_unique dup key: { v: new Date(1700000000000) }",
+              "keyPattern": {
+                "v": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "v": {
+                  "$date": {
+                    "$numberLong": "1700000000000"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "v": {
+                  "$date": {
+                    "$numberLong": "1700000000000"
+                  }
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bson_dup_date"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bson.duplicate_timestamp_key_message",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bson.duplicate_timestamp_key_message",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_timestamp",
+          "documents": [
+            {
+              "_id": 1,
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_bson_dup_timestamp",
+          "indexes": [
+            {
+              "key": {
+                "v": 1
+              },
+              "name": "v_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_timestamp",
+          "documents": [
+            {
+              "_id": 2,
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "diff_bson_dup_timestamp",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_timestamp index: v_unique dup key: { v: Timestamp(7, 3) }",
+              "keyPattern": {
+                "v": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "v": {
+                  "$timestamp": {
+                    "t": 7,
+                    "i": 3
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "v": {
+                  "$timestamp": {
+                    "t": 7,
+                    "i": 3
+                  }
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bson_dup_timestamp"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bson.duplicate_minkey_key_message",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bson.duplicate_minkey_key_message",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_minkey",
+          "documents": [
+            {
+              "_id": 1,
+              "v": {
+                "$minKey": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_bson_dup_minkey",
+          "indexes": [
+            {
+              "key": {
+                "v": 1
+              },
+              "name": "v_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_minkey",
+          "documents": [
+            {
+              "_id": 2,
+              "v": {
+                "$minKey": 1
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "diff_bson_dup_minkey",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_minkey index: v_unique dup key: { v: MinKey }",
+              "keyPattern": {
+                "v": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "v": {
+                  "$minKey": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "v": {
+                  "$minKey": 1
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bson_dup_minkey"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diff.bson.duplicate_maxkey_key_message",
+      "surface": "diff",
+      "db": "diff",
+      "source": "mongod 8.0.9 seed 20261106 corpus diff.bson.duplicate_maxkey_key_message",
+      "program": [
+        {
+          "op": "open",
+          "store": "s"
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_maxkey",
+          "documents": [
+            {
+              "_id": 1,
+              "v": {
+                "$maxKey": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_bson_dup_maxkey",
+          "indexes": [
+            {
+              "key": {
+                "v": 1
+              },
+              "name": "v_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_bson_dup_maxkey",
+          "documents": [
+            {
+              "_id": 2,
+              "v": {
+                "$maxKey": 1
+              }
+            }
+          ],
+          "as": "r0"
+        },
+        {
+          "op": "find",
+          "collection": "diff_bson_dup_maxkey",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          },
+          "as": "r1"
+        }
+      ],
+      "checks": [
+        {
+          "at": "/r0/n",
+          "equals": {
+            "$numberInt": "0"
+          }
+        },
+        {
+          "at": "/r0/writeErrors",
+          "equals": [
+            {
+              "index": {
+                "$numberInt": "0"
+              },
+              "code": {
+                "$numberInt": "11000"
+              },
+              "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_maxkey index: v_unique dup key: { v: MaxKey }",
+              "keyPattern": {
+                "v": {
+                  "$numberInt": "1"
+                }
+              },
+              "keyValue": {
+                "v": {
+                  "$maxKey": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "at": "/r0/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        },
+        {
+          "at": "/r1/cursor",
+          "equals": {
+            "firstBatch": [
+              {
+                "_id": {
+                  "$numberInt": "1"
+                },
+                "v": {
+                  "$maxKey": 1
+                }
+              }
+            ],
+            "id": {
+              "$numberLong": "0"
+            },
+            "ns": "diff.diff_bson_dup_maxkey"
+          }
+        },
+        {
+          "at": "/r1/ok",
+          "equals": {
+            "$numberDouble": "1.0"
+          }
+        }
+      ]
     }
   ]
 }

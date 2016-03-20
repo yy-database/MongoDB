@@ -253,6 +253,26 @@ fn drop_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String>
     Ok(command_reply(commands::drop_indexes(&decode_command(command)?, &store.inner)))
 }
 
+/// Changes `ttlMonitorSleepSecs` (whole seconds, at least one).
+#[pyfunction]
+fn set_ttl_monitor_sleep_seconds(store: PyRef<'_, MongoStore>, seconds: u32) {
+    store.inner.set_ttl_monitor_sleep_seconds(seconds);
+}
+
+/// One TTL monitor pass; `now_ms` defaults to the wall clock.
+#[pyfunction]
+#[pyo3(signature = (store, now_ms=None))]
+fn ttl_monitor(store: PyRef<'_, MongoStore>, now_ms: Option<i64>) -> String {
+    let now = now_ms.unwrap_or_else(|| {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_millis() as i64).unwrap_or(0)
+    });
+    match commands::ttl_monitor(&store.inner, now) {
+        Ok(report) => reply(&commands::ttl_report_document(&report)),
+        Err(error) => reply(&commands::error_document(&error)),
+    }
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[pyfunction]
 fn import_bson(store: PyRef<'_, MongoStore>, namespace: &str, bytes: &[u8]) -> PyResult<usize> {
@@ -305,6 +325,8 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(create_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(list_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(drop_indexes, module)?)?;
+    module.add_function(wrap_pyfunction!(set_ttl_monitor_sleep_seconds, module)?)?;
+    module.add_function(wrap_pyfunction!(ttl_monitor, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson_file, module)?)?;
     module.add_function(wrap_pyfunction!(repair_shard, module)?)?;

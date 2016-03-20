@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 285,
+  "count": 291,
   "mongod": "8.0.9",
-  "corpusDigest": "c6a53c848624723863397d47d1c3be7cdf2ad8f729eeaf9724da637fa8d4f5b5",
-  "replyDigest": "8ba894abce5524c78d19dff169bf5929db22eab27d836deda060a7231c294bc1",
+  "corpusDigest": "a758a218bd7c7f4cf69677f17882c06737f0b0a2908aa1604d6db8bc8122d03e",
+  "replyDigest": "c129c3e68a01574d62f2bba21408ff3117a5931f85b3934179a047a6e73dba61",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -15311,6 +15311,389 @@
               "name": "_id_"
             }
           ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.date_timestamp_keys_round_trip": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "d": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "t": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "lo": {
+                "$minKey": 1
+              },
+              "hi": {
+                "$maxKey": 1
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_types"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.mixed_type_sort_order": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$minKey": 1
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": null
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "v": {
+                "$numberInt": "-5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "v": "abc"
+            },
+            {
+              "_id": {
+                "$numberInt": "5"
+              },
+              "v": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "6"
+              },
+              "v": {
+                "$oid": "<oid>"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "7"
+              },
+              "v": true
+            },
+            {
+              "_id": {
+                "$numberInt": "8"
+              },
+              "v": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              },
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "10"
+              },
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 5
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "11"
+              },
+              "v": {
+                "$timestamp": {
+                  "t": 8,
+                  "i": 0
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "12"
+              },
+              "v": {
+                "$maxKey": 1
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_sort"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.duplicate_date_key_message": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_date index: v_unique dup key: { v: new Date(1700000000000) }",
+            "keyPattern": {
+              "v": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "v": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$date": {
+                  "$numberLong": "1700000000000"
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_dup_date"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.duplicate_timestamp_key_message": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_timestamp index: v_unique dup key: { v: Timestamp(7, 3) }",
+            "keyPattern": {
+              "v": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$timestamp": {
+                  "t": 7,
+                  "i": 3
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_dup_timestamp"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.duplicate_minkey_key_message": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_minkey index: v_unique dup key: { v: MinKey }",
+            "keyPattern": {
+              "v": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "v": {
+                "$minKey": 1
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$minKey": 1
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_dup_minkey"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.bson.duplicate_maxkey_key_message": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_bson_dup_maxkey index: v_unique dup key: { v: MaxKey }",
+            "keyPattern": {
+              "v": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "v": {
+                "$maxKey": 1
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$maxKey": 1
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_bson_dup_maxkey"
         },
         "ok": {
           "$numberDouble": "1.0"

@@ -925,9 +925,26 @@ fn scalar_text(value: &BsonValue) -> String {
                 format!("{number:?}")
             }
         }
+        BsonValue::Decimal128(number) => number.as_str(),
         BsonValue::String(text) => format!("{text:?}"),
         BsonValue::Bool(flag) => flag.to_string(),
         BsonValue::Null => "null".to_string(),
+        BsonValue::Undefined => "undefined".to_string(),
+        BsonValue::MinKey => "MinKey".to_string(),
+        BsonValue::MaxKey => "MaxKey".to_string(),
+        BsonValue::ObjectId(bytes) => format!("ObjectId('{}')", hex_text(bytes)),
+        BsonValue::Binary(binary) => format!("BinData({}, {})", binary.subtype, hex_text(&binary.bytes)),
+        BsonValue::DateTime(milliseconds) => format!("new Date({milliseconds})"),
+        BsonValue::Timestamp { t, i } => format!("Timestamp({t}, {i})"),
+        BsonValue::Symbol(text) => format!("{text:?}"),
+        BsonValue::Regex { pattern, options } => format!("/{pattern}/{options}"),
+        BsonValue::Code(code) => code.clone(),
+        BsonValue::CodeWithScope { code, scope } => {
+            format!("CodeWScope( {code}, {} )", render_shell_value(&BsonValue::Document(scope.clone())))
+        }
+        BsonValue::DbPointer { namespace, id } => {
+            format!("DBPointer( \"{namespace}\", ObjectId('{}') )", hex_text(id))
+        }
         other => format!("{other:?}"),
     }
 }
@@ -3137,6 +3154,9 @@ fn multiply_value(current: &BsonValue, amount: &BsonValue) -> Option<BsonValue> 
 }
 
 /// Renders one value the way `mongod` prints it inside update error messages.
+///
+/// Every shape below was read back from a `mongod 8.0.9` duplicate-key `errmsg`;
+/// dates print as `new Date(<milliseconds>)`, not as `ISODate("...")`.
 fn render_shell_value(value: &BsonValue) -> String {
     match value {
         BsonValue::Document(document) => {
@@ -3162,12 +3182,32 @@ fn render_shell_value(value: &BsonValue) -> String {
         BsonValue::Int32(number) => number.to_string(),
         BsonValue::Int64(number) => number.to_string(),
         BsonValue::Double(number) => number.to_string(),
+        BsonValue::Decimal128(number) => number.as_str(),
         BsonValue::Bool(flag) => if *flag { "true" } else { "false" }.to_string(),
         BsonValue::Null => "null".to_string(),
         BsonValue::Undefined => "undefined".to_string(),
-        BsonValue::ObjectId(bytes) => format!("ObjectId('{}')", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()),
-        other => format!("{other:?}"),
+        BsonValue::ObjectId(bytes) => format!("ObjectId('{}')", hex_text(bytes)),
+        BsonValue::Binary(binary) => format!("BinData({}, {})", binary.subtype, hex_text(&binary.bytes)),
+        BsonValue::DateTime(milliseconds) => format!("new Date({milliseconds})"),
+        BsonValue::Timestamp { t, i } => format!("Timestamp({t}, {i})"),
+        BsonValue::MinKey => "MinKey".to_string(),
+        BsonValue::MaxKey => "MaxKey".to_string(),
+        BsonValue::Symbol(text) => format!("\"{text}\""),
+        BsonValue::Regex { pattern, options } => format!("/{pattern}/{options}"),
+        BsonValue::Code(code) => code.clone(),
+        BsonValue::CodeWithScope { code, scope } => {
+            format!("CodeWScope( {code}, {} )", render_shell_value(&BsonValue::Document(scope.clone())))
+        }
+        // DBPointer is obsolete and `mongod 8.0.9` no longer emits it in error
+        // messages, so this shape follows the classic shell form.
+        BsonValue::DbPointer { namespace, id } => {
+            format!("DBPointer( \"{namespace}\", ObjectId('{}') )", hex_text(id))
+        }
     }
+}
+
+fn hex_text(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Whether a requested key pattern names the same index key as `specification`.
@@ -3196,6 +3236,16 @@ fn bson_type_name(value: &BsonValue) -> &'static str {
         BsonValue::Undefined => "undefined",
         BsonValue::ObjectId(_) => "objectId",
         BsonValue::Binary(_) => "binData",
+        BsonValue::DateTime(_) => "date",
+        BsonValue::Timestamp { .. } => "timestamp",
+        BsonValue::Decimal128(_) => "decimal",
+        BsonValue::Regex { .. } => "regex",
+        BsonValue::Code(_) => "javascript",
+        BsonValue::CodeWithScope { .. } => "javascriptWithScope",
+        BsonValue::Symbol(_) => "symbol",
+        BsonValue::DbPointer { .. } => "dbPointer",
+        BsonValue::MinKey => "minKey",
+        BsonValue::MaxKey => "maxKey",
     }
 }
 
@@ -4520,6 +4570,16 @@ fn type_label(value: &BsonValue) -> &'static str {
         BsonValue::Undefined => "undefined",
         BsonValue::ObjectId(_) => "objectId",
         BsonValue::Binary(_) => "binData",
+        BsonValue::DateTime(_) => "date",
+        BsonValue::Timestamp { .. } => "timestamp",
+        BsonValue::Decimal128(_) => "decimal",
+        BsonValue::Regex { .. } => "regex",
+        BsonValue::Code(_) => "javascript",
+        BsonValue::CodeWithScope { .. } => "javascriptWithScope",
+        BsonValue::Symbol(_) => "symbol",
+        BsonValue::DbPointer { .. } => "dbPointer",
+        BsonValue::MinKey => "minKey",
+        BsonValue::MaxKey => "maxKey",
     }
 }
 
@@ -5075,6 +5135,109 @@ pub fn drop_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     }
     reply.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(reply)
+}
+
+/// Outcome of one TTL monitor pass.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TtlReport {
+    /// Whether the sleep window had elapsed, so a pass actually ran.
+    pub scanned: bool,
+    /// Documents removed by this pass.
+    pub deleted: usize,
+    /// Per-namespace removal counts, in catalog order.
+    pub collections: Vec<(String, usize)>,
+}
+
+/// One pass of the TTL monitor.
+///
+/// `mongod 8.0.9` removes `expireAfterSeconds` documents from a background
+/// thread that wakes every `ttlMonitorSleepSecs` (default 60). A document whose
+/// deadline falls between two wake-ups is removed by the next wake-up, so the
+/// visible delay is `[0, ttlMonitorSleepSecs]` rather than millisecond exact.
+/// This primitive keeps that shape: it returns without scanning unless the
+/// window since the previous pass has elapsed, so a document never disappears
+/// merely because its own deadline passed.
+///
+/// Hosts call it from their own loop and pass `now_ms`; that caller-supplied
+/// clock is also the only clock the scan reads, so tests can compress the
+/// window without changing the semantics.
+///
+/// Only a single-field index expires documents. An indexed value that is not a
+/// [`BsonValue::DateTime`] never expires, and array values expire when any one
+/// element is a date past the deadline.
+pub fn ttl_monitor(store: &Store, now_ms: i64) -> Result<TtlReport, CommandError> {
+    let mut report = TtlReport::default();
+    if store.claim_ttl_pass(now_ms) == false {
+        return Ok(report);
+    }
+    report.scanned = true;
+
+    for namespace in store.namespaces() {
+        let mut deleted = 0_usize;
+        for specification in store.index_specs(&namespace) {
+            let Some(seconds) = specification.expire_after_seconds else { continue };
+            // `mongod` creates a compound TTL index but never expires documents
+            // from it. A hidden index still expires: `hidden` only keeps the
+            // index out of the planner.
+            if specification.key.fields.len() != 1 {
+                continue;
+            }
+            let Some((field, _)) = specification.key.fields.first()
+            else {
+                continue;
+            };
+            let threshold = now_ms.saturating_sub(i64::from(seconds) * 1_000);
+            let mut candidates: Vec<Vec<u8>> = Vec::new();
+            for (key, payload) in store.scan(&namespace) {
+                let Ok(document) = parse_bson(&payload)
+                else {
+                    continue;
+                };
+                if let Some(filter) = &specification.partial_filter_expression {
+                    if document_matches(&document, filter).unwrap_or(false) == false {
+                        continue;
+                    }
+                }
+                let expired = field_values(&document, field).iter().any(|value| match value {
+                    BsonValue::DateTime(milliseconds) => *milliseconds <= threshold,
+                    _ => false,
+                });
+                if expired {
+                    candidates.push(key);
+                }
+            }
+            if candidates.is_empty() {
+                continue;
+            }
+            deleted += store
+                .delete(&namespace, &candidates)
+                .map_err(|error| CommandError::new(2, format!("TTL monitor failed: {error}")))?;
+        }
+        if deleted > 0 {
+            report.deleted += deleted;
+            report.collections.push((namespace, deleted));
+        }
+    }
+    Ok(report)
+}
+
+/// Host-facing document for one monitor pass, shared by both bindings.
+pub fn ttl_report_document(report: &TtlReport) -> BsonDocument {
+    let mut document = BsonDocument::new();
+    document.push("scanned".to_string(), BsonValue::Bool(report.scanned));
+    document.push("deleted".to_string(), BsonValue::Int32(report.deleted as i32));
+    let collections = report
+        .collections
+        .iter()
+        .map(|(namespace, count)| {
+            let mut entry = BsonDocument::new();
+            entry.push("ns".to_string(), BsonValue::String(namespace.clone()));
+            entry.push("deleted".to_string(), BsonValue::Int32(*count as i32));
+            BsonValue::Document(entry)
+        })
+        .collect();
+    document.push("collections".to_string(), BsonValue::Array(collections));
+    document
 }
 
 /// Generates a 12-byte ObjectId without any global counter.
@@ -7845,52 +8008,34 @@ fn number_of(value: &BsonValue) -> Option<f64> {
 }
 
 /// BSON sort order between the value types this store can hold.
+///
+/// Mirrors the canonical total order encoded in [`BsonValue::compare`], which
+/// itself was read from `mongod 8.0.9` `sort` results. Numeric types share one
+/// bracket and `Symbol` shares the `String` bracket.
 fn value_rank(value: &BsonValue) -> u8 {
     match value {
-        BsonValue::Undefined => 0,
-        BsonValue::Null => 1,
-        BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => 2,
-        BsonValue::String(_) => 3,
-        BsonValue::Document(_) => 4,
-        BsonValue::Array(_) => 5,
-        BsonValue::Binary(_) => 6,
-        BsonValue::ObjectId(_) => 7,
-        BsonValue::Bool(_) => 8,
+        BsonValue::MinKey => 0,
+        BsonValue::Undefined => 1,
+        BsonValue::Null => 2,
+        BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) | BsonValue::Decimal128(_) => 3,
+        BsonValue::String(_) | BsonValue::Symbol(_) => 4,
+        BsonValue::Document(_) => 5,
+        BsonValue::Array(_) => 6,
+        BsonValue::Binary(_) => 7,
+        BsonValue::ObjectId(_) => 8,
+        BsonValue::Bool(_) => 9,
+        BsonValue::DateTime(_) => 10,
+        BsonValue::Timestamp { .. } => 11,
+        BsonValue::Regex { .. } => 12,
+        BsonValue::DbPointer { .. } => 13,
+        BsonValue::Code(_) => 14,
+        BsonValue::CodeWithScope { .. } => 15,
+        BsonValue::MaxKey => 16,
     }
 }
 
 fn compare_values(left: &BsonValue, right: &BsonValue) -> Ordering {
-    let rank = value_rank;
-    if rank(left) != rank(right) {
-        return rank(left).cmp(&rank(right));
-    }
-    match (left, right) {
-        (BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_), _) => {
-            if let (Some(left), Some(right)) = (integer_of(left), integer_of(right)) {
-                return left.cmp(&right);
-            }
-            let left = number_of(left).unwrap_or(0.0);
-            let right = number_of(right).unwrap_or(0.0);
-            left.partial_cmp(&right).unwrap_or(Ordering::Equal)
-        }
-        (BsonValue::String(left), BsonValue::String(right)) => left.cmp(right),
-        (BsonValue::Bool(left), BsonValue::Bool(right)) => left.cmp(right),
-        (BsonValue::ObjectId(left), BsonValue::ObjectId(right)) => left.cmp(right),
-        (BsonValue::Binary(left), BsonValue::Binary(right)) => {
-            (left.bytes.len(), left.subtype, &left.bytes).cmp(&(right.bytes.len(), right.subtype, &right.bytes))
-        }
-        (BsonValue::Document(left), BsonValue::Document(right)) => encode_bson(left).cmp(&encode_bson(right)),
-        (BsonValue::Array(left), BsonValue::Array(right)) => {
-            for (left, right) in left.iter().zip(right.iter()) {
-                let ordering = compare_values(left, right);
-                if ordering != Ordering::Equal {
-                    return ordering;
-                }
-            }
-            left.len().cmp(&right.len())
-        }
-        _ => Ordering::Equal,
-    }
+    left.compare(right)
 }
 
 fn parse_count(value: Option<&BsonValue>) -> usize {

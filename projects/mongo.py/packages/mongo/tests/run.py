@@ -584,6 +584,13 @@ def run_case(case):
                 command["index"] = step["index"]
             reply = mongo.drop_indexes(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "setTtlMonitorSleepSecs":
+            # `ttlMonitorSleepSecs` is a server setting, not a command.
+            mongo.set_ttl_monitor_sleep_seconds(store_of(step.get("store")), step["seconds"])
+            return None
+        if op == "ttlMonitor":
+            # `now_ms` is the caller-supplied clock that compresses the window.
+            return json.loads(mongo.ttl_monitor(store_of(step.get("store")), step.get("nowMs")))
         if op == "listDatabases":
             return json.loads(mongo.list_databases(store_of(step.get("store"))))
         if op == "hello":

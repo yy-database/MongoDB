@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '285'))
+const COUNT = Number(option('count', '291'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -97,6 +97,21 @@ function element(value) {
             return [0x01, bytes]
         }
         if (typeof value.$oid === 'string') return [0x07, Buffer.from(value.$oid, 'hex')]
+        if (value.$date !== undefined) {
+            const milliseconds = typeof value.$date === 'object' ? BigInt(value.$date.$numberLong) : BigInt(value.$date)
+            const bytes = Buffer.alloc(8)
+            bytes.writeBigInt64LE(milliseconds)
+            return [0x09, bytes]
+        }
+        if (value.$timestamp !== undefined) {
+            // On the wire the increment comes first, the seconds second.
+            const bytes = Buffer.alloc(8)
+            bytes.writeUInt32LE(Number(value.$timestamp.i), 0)
+            bytes.writeUInt32LE(Number(value.$timestamp.t), 4)
+            return [0x11, bytes]
+        }
+        if (value.$minKey !== undefined) return [0xff, Buffer.alloc(0)]
+        if (value.$maxKey !== undefined) return [0x7f, Buffer.alloc(0)]
         return [0x03, document(value)]
     }
     throw new Error(`BSON writer cannot encode ${typeof value}`)
@@ -2180,6 +2195,75 @@ function buildConsistency(seed) {
     return entries
 }
 
+function buildBsonTypes(seed) {
+    const entries = []
+    const date = { $date: { $numberLong: '1700000000000' } }
+    const timestamp = { $timestamp: { t: 7, i: 3 } }
+
+    entries.push({
+        id: 'diff.bson.date_timestamp_keys_round_trip',
+        cluster: 'bsonTypes',
+        collection: 'diff_bson_types',
+        setup: [{
+            op: 'insert',
+            collection: 'diff_bson_types',
+            documents: [
+                { _id: 1, d: date },
+                { _id: 2, t: timestamp },
+                { _id: 3, lo: { $minKey: 1 }, hi: { $maxKey: 1 } }
+            ]
+        }],
+        steps: [{ op: 'find', collection: 'diff_bson_types', filter: {}, sort: { _id: 1 } }]
+    })
+
+    entries.push({
+        id: 'diff.bson.mixed_type_sort_order',
+        cluster: 'bsonTypes',
+        collection: 'diff_bson_sort',
+        setup: [{
+            op: 'insert',
+            collection: 'diff_bson_sort',
+            documents: [
+                { _id: 1, v: { $minKey: 1 } },
+                { _id: 2, v: null },
+                { _id: 3, v: -5 },
+                { _id: 4, v: 'abc' },
+                { _id: 5, v: { a: 1 } },
+                { _id: 6, v: { $oid: '000000000000000000000002' } },
+                { _id: 7, v: true },
+                { _id: 8, v: date },
+                { _id: 9, v: { $timestamp: { t: 7, i: 3 } } },
+                { _id: 10, v: { $timestamp: { t: 7, i: 5 } } },
+                { _id: 11, v: { $timestamp: { t: 8, i: 0 } } },
+                { _id: 12, v: { $maxKey: 1 } }
+            ]
+        }],
+        // `Timestamp` compares by `(t, i)`, `Date` by milliseconds, and
+        // `MinKey` / `MaxKey` bracket every other type.
+        steps: [{ op: 'find', collection: 'diff_bson_sort', filter: {}, sort: { v: 1 } }]
+    })
+
+    // The duplicate-key `errmsg` renders each value the way `mongod` prints it,
+    // so these entries pin the shell rendering at the same time.
+    for (const [suffix, value] of [['date', date], ['timestamp', timestamp], ['minkey', { $minKey: 1 }], ['maxkey', { $maxKey: 1 }]]) {
+        const collection = `diff_bson_dup_${suffix}`
+        entries.push({
+            id: `diff.bson.duplicate_${suffix}_key_message`,
+            cluster: 'bsonTypes',
+            collection,
+            setup: [
+                { op: 'insert', collection, documents: [{ _id: 1, v: value }] },
+                { op: 'createIndexes', collection, indexes: [{ key: { v: 1 }, name: 'v_unique', unique: true }] }
+            ],
+            steps: [
+                { op: 'insert', collection, documents: [{ _id: 2, v: value }] },
+                { op: 'find', collection, filter: {}, sort: { _id: 1 } }
+            ]
+        })
+    }
+    return entries
+}
+
 const CLUSTERS = [
     ['find', buildFind],
     ['aggregate', buildAggregate],
@@ -2196,7 +2280,8 @@ const CLUSTERS = [
     ['count', buildCountExplain],
     ['hint', buildHint],
     ['stages', buildRemainingStages],
-    ['consistency', buildConsistency]
+    ['consistency', buildConsistency],
+    ['bsonTypes', buildBsonTypes]
 ]
 
 function generate(seed) {

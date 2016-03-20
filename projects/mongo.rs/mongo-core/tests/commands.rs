@@ -392,16 +392,40 @@ fn extended_json_round_trips_every_type() {
         "int": {"$numberInt": "42"},
         "long": {"$numberLong": "9007199254740993"},
         "double": {"$numberDouble": "1.5"},
+        "decimal": {"$numberDecimal": "1.5"},
         "flag": true,
         "empty": null,
+        "undefined": {"$undefined": true},
         "oid": {"$oid": "000000000000000000000001"},
         "bin": {"$binary": {"base64": "AQID", "subType": "00"}},
+        "date": {"$date": {"$numberLong": "1700000000000"}},
+        "timestamp": {"$timestamp": {"t": 7, "i": 3}},
+        "min": {"$minKey": 1},
+        "max": {"$maxKey": 1},
+        "symbol": {"$symbol": "sym"},
+        "regex": {"$regularExpression": {"pattern": "abc", "options": "im"}},
+        "code": {"$code": "function(){}"},
+        "codeScope": {"$code": "function(){}", "$scope": {"a": {"$numberInt": "1"}}},
+        "dbPointer": {"$dbPointer": {"$ref": "db.col", "$id": {"$oid": "000000000000000000000002"}}},
         "nested": {"a": [{"$numberInt": "1"}]}
     });
     let document = json::from_json(&serde_json::Value::Object(source.as_object().unwrap().clone())).expect("parse");
     let round_trip = json::to_json(&document);
     assert_eq!(round_trip, source);
     assert!(matches!(document, BsonValue::Document(_)));
+}
+
+/// The two relaxed `$date` spellings must land on the same millisecond value
+/// as the canonical `$numberLong` form.
+#[test]
+fn relaxed_date_input_matches_the_canonical_form() {
+    assert_eq!(json::from_json(&json!({"$date": {"$numberLong": "0"}})).expect("canonical"), BsonValue::DateTime(0));
+    assert_eq!(json::from_json(&json!({"$date": "1970-01-01T00:00:00Z"})).expect("iso"), BsonValue::DateTime(0));
+    assert_eq!(
+        json::from_json(&json!({"$date": "2017-01-01T00:00:00.123+08:00"})).expect("offset"),
+        BsonValue::DateTime(1_483_200_000_123)
+    );
+    assert_eq!(json::from_json(&json!({"$date": 1})).expect("milliseconds"), BsonValue::DateTime(1));
 }
 
 #[test]
@@ -517,5 +541,113 @@ fn create_indexes_rejects_conflicting_definitions() {
     let equivalent = commands::create_indexes(&index_command("items", 1, "a_second", false), &store)
         .expect_err("equivalent key conflict");
     assert_eq!(equivalent.code, 85);
+}
+
+fn ttl_index_command(collection: &str, field: &str, seconds: i32) -> BsonDocument {
+    let mut key = BsonDocument::new();
+    key.push(field, BsonValue::Int32(1));
+    let mut specification = BsonDocument::new();
+    specification.push("key", BsonValue::Document(key));
+    specification.push("name", BsonValue::String(format!("{field}_1")));
+    specification.push("expireAfterSeconds", BsonValue::Int32(seconds));
+    let mut create = command("createIndexes", collection, "app");
+    create.push("indexes", BsonValue::Array(vec![BsonValue::Document(specification)]));
+    create
+}
+
+/// `expireAfterSeconds` removal is periodic in `mongod`: the monitor wakes up
+/// every `ttlMonitorSleepSecs` (60 by default) and only then removes whatever
+/// expired. This test pins that window: a document whose deadline passes right
+/// after a pass survives until the next pass, and the pass that runs one full
+/// window later removes it.
+#[test]
+fn ttl_monitor_removes_expired_documents_only_on_scan_ticks() {
+    let store = store();
+    commands::create_indexes(&ttl_index_command("ttl", "expireAt", 60), &store).expect("createIndexes");
+    assert_eq!(store.ttl_monitor_state().sleep_seconds, 60);
+
+    let now = 1_700_000_000_000_i64;
+    insert_documents(
+        &store,
+        "ttl",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("expireAt", BsonValue::DateTime(now - 61_000))]),
+            document(&[("_id", BsonValue::Int32(2)), ("expireAt", BsonValue::DateTime(now + 60_000))]),
+            document(&[("_id", BsonValue::Int32(3)), ("expireAt", BsonValue::String("not a date".to_string()))]),
+        ],
+    );
+
+    // The first pass has no previous wake-up, so it runs right away and removes
+    // the document that was already past its 60-second deadline.
+    let first = commands::ttl_monitor(&store, now).expect("first pass");
+    assert!(first.scanned);
+    assert_eq!(first.deleted, 1);
+    assert_eq!(first.collections, vec![("app.ttl".to_string(), 1)]);
+
+    let mut cursors = CursorStore::new();
+    assert_eq!(find_all(&store, "ttl", &mut cursors).len(), 2);
+
+    // `now - 59_999` plus the 60-second TTL expires one millisecond after the
+    // first pass, so the deadline has passed long before the next wake-up.
+    insert_documents(
+        &store,
+        "ttl",
+        vec![document(&[("_id", BsonValue::Int32(4)), ("expireAt", BsonValue::DateTime(now - 59_999))]),
+    ]);
+
+    let mut cursors = CursorStore::new();
+    let early = commands::ttl_monitor(&store, now + 2_000).expect("early pass");
+    assert_eq!(early.scanned, false, "the 60-second window has not elapsed yet");
+    assert_eq!(early.deleted, 0);
+    assert_eq!(find_all(&store, "ttl", &mut cursors).len(), 3, "an expired document survives until the next scan tick");
+
+    let late = commands::ttl_monitor(&store, now + 61_000).expect("late pass");
+    assert!(late.scanned);
+    assert_eq!(late.deleted, 1);
+    let mut cursors = CursorStore::new();
+    assert_eq!(find_all(&store, "ttl", &mut cursors).len(), 2);
+
+    // The window is configurable, but a configured window still is a window.
+    store.set_ttl_monitor_sleep_seconds(0);
+    assert_eq!(store.ttl_monitor_state().sleep_seconds, 1);
+}
+
+/// A `findAndModify` that fails the unique check must fail before anything is
+/// staged: the matched document keeps every original field.
+#[test]
+fn find_and_modify_duplicate_key_failure_leaves_the_document_untouched() {
+    let store = store();
+    insert_documents(
+        &store,
+        "items",
+        vec![
+            document(&[
+                ("_id", BsonValue::Int32(1)),
+                ("a", BsonValue::Int32(7)),
+                ("note", BsonValue::String("original".to_string())),
+            ]),
+            document(&[("_id", BsonValue::Int32(2)), ("a", BsonValue::Int32(8))]),
+        ],
+    );
+    commands::create_indexes(&index_command("items", 1, "a_1", true), &store).expect("createIndexes");
+
+    let mut find_and_modify = command("findAndModify", "items", "app");
+    find_and_modify.push("query", BsonValue::Document(document(&[("_id", BsonValue::Int32(1))])));
+    let mut set = BsonDocument::new();
+    set.push("a", BsonValue::Int32(8));
+    set.push("note", BsonValue::String("rewritten".to_string()));
+    find_and_modify.push("update", BsonValue::Document(document(&[("$set", BsonValue::Document(set))])));
+    find_and_modify.push("new", BsonValue::Bool(true));
+
+    let error = commands::find_and_modify(&find_and_modify, &store).expect_err("duplicate key");
+    assert_eq!(error.code, 11000);
+    assert!(error.message.starts_with("Plan executor error during findAndModify :: caused by ::"));
+
+    let mut cursors = CursorStore::new();
+    let documents = find_all(&store, "items", &mut cursors);
+    assert_eq!(documents.len(), 2);
+    let matched = documents.iter().find(|document| document.get("_id") == Some(&BsonValue::Int32(1))).expect("_id 1");
+    assert_eq!(matched.get("a"), Some(&BsonValue::Int32(7)), "the conflicting field must not be staged");
+    assert_eq!(matched.get("note"), Some(&BsonValue::String("original".to_string())), "no field may be staged");
 }
 

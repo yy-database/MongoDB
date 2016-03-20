@@ -969,6 +969,65 @@
                 { "at": "/r2/cursor/firstBatch/1/multikey", "absent": true },
                 { "at": "/r2/cursor/firstBatch/1/#", "equals": 3 }
             ]
+        },
+        {
+            "id": "index.ttl.expired_document_survives_until_next_scan_tick",
+            "surface": "index",
+            "source": "mongod 8.0.9 removes expireAfterSeconds documents from the periodic ttlMonitor thread (ttlMonitorSleepSecs, 60 by default). A document that reaches its deadline between two wake-ups stays until the next wake-up, so removal lands inside [0, ttlMonitorSleepSecs]. Checks pin that window: expired inside the window is still visible, the pass one window later removes it.",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "ttl", "indexes": [{ "key": { "expireAt": 1 }, "name": "expireAt_1", "expireAfterSeconds": 60 }] },
+                { "op": "insert", "collection": "ttl", "documents": [
+                    { "_id": 1, "expireAt": { "$date": { "$numberLong": "1699999939000" } } },
+                    { "_id": 2, "expireAt": { "$date": { "$numberLong": "1700000060000" } } },
+                    { "_id": 3, "expireAt": "not a date" }
+                ] },
+                { "op": "ttlMonitor", "nowMs": 1700000000000, "as": "m1" },
+                { "op": "count", "collection": "ttl", "as": "c1" },
+                { "op": "insert", "collection": "ttl", "documents": [
+                    { "_id": 4, "expireAt": { "$date": { "$numberLong": "1699999940001" } } }
+                ] },
+                { "op": "ttlMonitor", "nowMs": 1700000002000, "as": "m2" },
+                { "op": "count", "collection": "ttl", "as": "c2" },
+                { "op": "ttlMonitor", "nowMs": 1700000061000, "as": "m3" },
+                { "op": "count", "collection": "ttl", "as": "c3" }
+            ],
+            "checks": [
+                { "at": "/m1/scanned", "equals": true },
+                { "at": "/m1/deleted", "equals": { "$numberInt": "1" } },
+                { "at": "/c1/n", "equals": { "$numberInt": "2" } },
+                { "at": "/m2/scanned", "equals": false },
+                { "at": "/m2/deleted", "equals": { "$numberInt": "0" } },
+                { "at": "/c2/n", "equals": { "$numberInt": "3" } },
+                { "at": "/m3/scanned", "equals": true },
+                { "at": "/m3/deleted", "equals": { "$numberInt": "1" } },
+                { "at": "/c3/n", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "index.ttl.window_is_configurable_but_still_a_window",
+            "surface": "index",
+            "source": "mongod 8.0.9 accepts setParameter ttlMonitorSleepSecs to shrink the monitor window. The window stays a window: the document is not removed at its deadline, only at the tick one configured interval later.",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "createIndexes", "collection": "ttl0", "indexes": [{ "key": { "expireAt": 1 }, "name": "expireAt_1", "expireAfterSeconds": 0 }] },
+                { "op": "setTtlMonitorSleepSecs", "seconds": 1 },
+                { "op": "ttlMonitor", "nowMs": 1000, "as": "m1" },
+                { "op": "insert", "collection": "ttl0", "documents": [{ "_id": 9, "expireAt": { "$date": { "$numberLong": "0" } } }] },
+                { "op": "ttlMonitor", "nowMs": 1500, "as": "m2" },
+                { "op": "count", "collection": "ttl0", "as": "c1" },
+                { "op": "ttlMonitor", "nowMs": 2000, "as": "m3" },
+                { "op": "count", "collection": "ttl0", "as": "c2" }
+            ],
+            "checks": [
+                { "at": "/m1/scanned", "equals": true },
+                { "at": "/m1/deleted", "equals": { "$numberInt": "0" } },
+                { "at": "/m2/scanned", "equals": false },
+                { "at": "/c1/n", "equals": { "$numberInt": "1" } },
+                { "at": "/m3/scanned", "equals": true },
+                { "at": "/m3/deleted", "equals": { "$numberInt": "1" } },
+                { "at": "/c2/n", "equals": { "$numberInt": "0" } }
+            ]
         }
     ]
 }

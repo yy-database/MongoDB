@@ -82,6 +82,29 @@ pub struct CollectionOptions {
     pub validation_action: Option<String>,
 }
 
+/// Default `ttlMonitorSleepSecs`, matching `mongod 8.0.9`.
+pub const DEFAULT_TTL_MONITOR_SLEEP_SECONDS: u32 = 60;
+
+/// TTL monitor state shared by every command call.
+///
+/// `expireAfterSeconds` deletion is periodic in `mongod`: the monitor wakes up
+/// every `sleep_seconds` and removes whatever expired since the previous
+/// wake-up. Any expired document therefore stays visible for at most one
+/// window before it disappears, never at its exact deadline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TtlMonitorState {
+    /// Wake-up interval, `ttlMonitorSleepSecs`.
+    pub sleep_seconds: u32,
+    /// Clock reading of the last pass, `None` until the first pass.
+    pub last_scan_ms: Option<i64>,
+}
+
+impl Default for TtlMonitorState {
+    fn default() -> Self {
+        Self { sleep_seconds: DEFAULT_TTL_MONITOR_SLEEP_SECONDS, last_scan_ms: None }
+    }
+}
+
 /// Namespace label used to remember which Mongo namespaces exist.
 ///
 /// Mongo collection names cannot contain `$` or a NUL byte and a database name
@@ -588,6 +611,7 @@ pub struct Store {
     shard: Mutex<FileShard>,
     catalog: Mutex<CatalogState>,
     sessions: Mutex<SessionRegistry>,
+    ttl: Mutex<TtlMonitorState>,
 }
 
 impl Store {
@@ -634,7 +658,49 @@ impl Store {
             catalog.flush()?;
         }
 
-        Ok(Self { shard: Mutex::new(shard), catalog: Mutex::new(catalog), sessions: Mutex::new(SessionRegistry::default()) })
+        Ok(Self {
+            shard: Mutex::new(shard),
+            catalog: Mutex::new(catalog),
+            sessions: Mutex::new(SessionRegistry::default()),
+            ttl: Mutex::new(TtlMonitorState::default()),
+        })
+    }
+
+    fn ttl_lock(&self) -> MutexGuard<'_, TtlMonitorState> {
+        match self.ttl.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    /// Current TTL monitor state.
+    pub fn ttl_monitor_state(&self) -> TtlMonitorState {
+        *self.ttl_lock()
+    }
+
+    /// Changes `ttlMonitorSleepSecs`. `mongod` treats the value as whole seconds
+    /// and always sleeps at least one, so `0` is clamped to `1`.
+    pub fn set_ttl_monitor_sleep_seconds(&self, seconds: u32) {
+        self.ttl_lock().sleep_seconds = seconds.max(1);
+    }
+
+    /// Claims one monitor pass when the sleep window has elapsed.
+    ///
+    /// The caller supplies the clock, so a host drives the monitor with its own
+    /// time source and tests compress the window. The window itself is never
+    /// bypassed: a document whose deadline just passed stays until some later
+    /// call claims a pass, which is the periodic `mongod` semantics.
+    pub fn claim_ttl_pass(&self, now_ms: i64) -> bool {
+        let mut state = self.ttl_lock();
+        let window = i64::from(state.sleep_seconds.max(1)) * 1_000;
+        let due = match state.last_scan_ms {
+            None => true,
+            Some(last) => now_ms >= last.saturating_add(window),
+        };
+        if due {
+            state.last_scan_ms = Some(now_ms);
+        }
+        due
     }
 
     fn lock(&self) -> MutexGuard<'_, FileShard> {

@@ -254,6 +254,31 @@ pub fn drop_indexes(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::drop_indexes(&decode_command(&command)?, store_of(store))))
 }
 
+/// Changes `ttlMonitorSleepSecs` (whole seconds, at least one).
+#[napi]
+pub fn set_ttl_monitor_sleep_seconds(store: &MongoStore, seconds: u32) {
+    store_of(store).set_ttl_monitor_sleep_seconds(seconds);
+}
+
+/// One TTL monitor pass; `nowMs` defaults to the wall clock.
+///
+/// `mongod` runs the pass from a background thread every `ttlMonitorSleepSecs`,
+/// so the host calls this from its own loop. Passing `nowMs` lets hosts and
+/// tests compress that window without changing the semantics.
+#[napi]
+pub fn ttl_monitor(store: &MongoStore, now_ms: Option<i64>) -> String {
+    let now = now_ms.unwrap_or_else(wall_clock_millis);
+    match commands::ttl_monitor(store_of(store), now) {
+        Ok(report) => reply(&commands::ttl_report_document(&report)),
+        Err(error) => reply(&commands::error_document(&error)),
+    }
+}
+
+fn wall_clock_millis() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_millis() as i64).unwrap_or(0)
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[napi]
 pub fn import_bson(store: &MongoStore, namespace: String, bytes: Buffer) -> Result<u32> {

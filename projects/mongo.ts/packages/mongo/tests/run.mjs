@@ -272,6 +272,16 @@ function runCase(testCase) {
                 if (step.index !== undefined) command.index = step.index
                 return JSON.parse(binding.dropIndexes(storeOf(step.store), commandText(testCase, step, command)))
             }
+            case 'setTtlMonitorSleepSecs': {
+                // `ttlMonitorSleepSecs` is a server setting, not a command, so the
+                // runner reaches the primitive a host would call.
+                binding.setTtlMonitorSleepSeconds(storeOf(step.store), step.seconds)
+                return null
+            }
+            case 'ttlMonitor':
+                // `nowMs` is the caller-supplied clock; it compresses the window
+                // without changing the periodic-scan semantics.
+                return JSON.parse(binding.ttlMonitor(storeOf(step.store), step.nowMs ?? null))
             case 'listDatabases':
                 return JSON.parse(binding.listDatabases(storeOf(step.store)))
             case 'hello':
