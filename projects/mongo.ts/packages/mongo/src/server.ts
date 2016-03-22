@@ -1,0 +1,300 @@
+// MongoDB wire-protocol listener.
+//
+// The server owns the socket loop, the cursor table and TTL ticks; each command
+// is lowered to one Rust primitive. Compression is transport-only: an
+// `OP_COMPRESSED` frame is unwrapped, the payload is decoded by `mongo-core`,
+// and the reply is wrapped in the same compressor the request used (which is
+// what `mongod 8.0.9` does, even when that compressor was not negotiated).
+import { mkdirSync } from 'node:fs'
+import net from 'node:net'
+import { join } from 'node:path'
+import { binding } from './binding.ts'
+import { compress } from './compression.ts'
+import {
+    DEFAULT_MAX_FRAME_SIZE,
+    decodeFrame,
+    encodeCompressedFrame,
+    encodeMsgFrame,
+    encodeReplyFrame,
+    OP_MSG,
+    OP_QUERY,
+    peekHeader,
+    WireError,
+    type InboundFrame
+} from './wire.ts'
+
+/** Compressors this server can both decode and encode. */
+export const SUPPORTED_COMPRESSORS = ['snappy', 'zlib', 'zstd']
+
+export interface ServerOptions {
+    /** Directory that holds `mongo.yykv`. */
+    dataDir: string
+    port?: number
+    host?: string
+    /** Defaults to every codec the implementation actually speaks. */
+    compressors?: string[]
+    /** Background TTL scan period, mirroring `ttlMonitorSleepSecs`. */
+    ttlMonitorSleepSecs?: number
+}
+
+export interface ServerAddress {
+    host: string
+    port: number
+}
+
+export interface ServerStats {
+    connections: number
+    compressedRequests: number
+    compressedReplies: number
+    /** Compression sets negotiated on the most recent handshake. */
+    negotiated: string[]
+}
+
+export interface MongoServer {
+    listening: Promise<ServerAddress>
+    address: ServerAddress | null
+    stats: ServerStats
+    close(): Promise<void>
+}
+
+interface Session {
+    store: any
+    cursors: any
+    negotiated: string[]
+}
+
+const OK = { $numberDouble: '1.0' }
+
+function document(raw: string): any {
+    return JSON.parse(raw)
+}
+
+function commandText(command: any): string {
+    return JSON.stringify(command)
+}
+
+/** Intersection of the client's `compression` array and what this server really does. */
+export function negotiatedCompressors(offered: unknown, supported: string[] = SUPPORTED_COMPRESSORS): string[] {
+    if (!Array.isArray(offered)) return []
+    return offered.filter((name) => typeof name === 'string' && supported.includes(name))
+}
+
+function helloReply(command: any, supported: string[], session: Session): any {
+    const negotiated = negotiatedCompressors(command.compression, supported)
+    session.negotiated = negotiated
+    const base = document(binding.hello())
+    if (negotiated.length === 0) return base
+    return { compression: negotiated, ...base }
+}
+
+function dispatch(session: Session, supported: string[], command: any): any {
+    const name = Object.keys(command)[0]
+    if (typeof name !== 'string') throw new WireError('command document is empty')
+
+    const lower = name.toLowerCase()
+    if (lower === 'hello' || lower === 'ismaster') return helloReply(command, supported, session)
+
+    const text = commandText(command)
+    switch (name) {
+        case 'ping':
+            return document(binding.ping())
+        case 'insert':
+            return document(binding.insert(session.store, text))
+        case 'find':
+            return document(binding.find(session.store, session.cursors, text))
+        case 'count':
+            return document(binding.count(session.store, text))
+        case 'explain':
+            return document(binding.explain(session.store, text))
+        case 'aggregate':
+            return document(binding.aggregate(session.store, text))
+        case 'delete':
+            return document(binding.delete(session.store, text))
+        case 'update':
+            return document(binding.update(session.store, text))
+        case 'getMore':
+            return document(binding.getMore(session.cursors, text))
+        case 'killCursors':
+            return document(binding.killCursors(session.cursors, text))
+        case 'findAndModify':
+            return document(binding.findAndModify(session.store, text))
+        case 'distinct':
+            return document(binding.distinct(session.store, text))
+        case 'bulkWrite':
+            return document(binding.bulkWrite(session.store, text))
+        case 'create':
+            return document(binding.create(session.store, text))
+        case 'collMod':
+            return document(binding.collMod(session.store, text))
+        case 'listCollections':
+            return document(binding.listCollections(session.store, text))
+        case 'commitTransaction':
+            return document(binding.commitTransaction(session.store, text))
+        case 'abortTransaction':
+            return document(binding.abortTransaction(session.store, text))
+        case 'listDatabases':
+            return document(binding.listDatabases(session.store))
+        case 'createIndexes':
+            return document(binding.createIndexes(session.store, text))
+        case 'listIndexes':
+            return document(binding.listIndexes(session.store, text))
+        case 'dropIndexes':
+            return document(binding.dropIndexes(session.store, text))
+        case 'endSessions':
+            // Sessions are not cached; `mongod` acknowledges the release.
+            return { ok: OK }
+        default:
+            return document(binding.errorReply(59, `no such command: '${name}'`))
+    }
+}
+
+export function createServer(options: ServerOptions): MongoServer {
+    const host = options.host ?? '127.0.0.1'
+    const port = options.port ?? 27017
+    const supported = options.compressors ?? SUPPORTED_COMPRESSORS
+    mkdirSync(options.dataDir, { recursive: true })
+
+    const store = new binding.MongoStore(join(options.dataDir, 'mongo.yykv'))
+    const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
+    let replyId = 0
+    let closed = false
+
+    const sockets = new Set<net.Socket>()
+    const netServer = net.createServer((socket) => {
+        stats.connections += 1
+        sockets.add(socket)
+        const session: Session = { store, cursors: new binding.MongoCursors(), negotiated: [] }
+
+        let buffer = Buffer.alloc(0)
+        const pump = () => {
+            while (!closed) {
+                if (buffer.length < 16) return
+                const total = buffer.readInt32LE(0)
+                if (total < 16 || total > DEFAULT_MAX_FRAME_SIZE) {
+                    sendProtocolError(socket, buffer, `frame length ${total} is outside the accepted range`)
+                    socket.destroy()
+                    return
+                }
+                if (buffer.length < total) return
+                const frame = buffer.subarray(0, total)
+                buffer = buffer.subarray(total)
+                handle(session, frame)
+            }
+        }
+
+        const reply = (requestId: number, inbound: InboundFrame, body: any) => {
+            const json = commandText(body)
+            if (inbound.opcode === OP_QUERY) {
+                socket.write(encodeReplyFrame(replyId++, requestId, binding.encodeDocument(json)))
+                return
+            }
+            const payload = binding.encodeOpMsg(json)
+            if (inbound.envelope === null) {
+                socket.write(encodeMsgFrame(replyId++, requestId, payload))
+                return
+            }
+            const compressed = compress(inbound.envelope.compressorId, payload)
+            stats.compressedReplies += 1
+            socket.write(
+                encodeCompressedFrame(
+                    replyId++,
+                    requestId,
+                    inbound.envelope.compressorId,
+                    payload.length,
+                    compressed
+                )
+            )
+        }
+
+        const handle = (session: Session, frame: Buffer) => {
+            let inbound: InboundFrame
+            try {
+                inbound = decodeFrame(frame)
+            } catch (error) {
+                stats.negotiated = session.negotiated
+                sendProtocolError(socket, frame, (error as Error).message)
+                socket.destroy()
+                return
+            }
+            if (inbound.envelope !== null) stats.compressedRequests += 1
+            stats.negotiated = session.negotiated
+            try {
+                const command =
+                    inbound.opcode === OP_QUERY
+                        ? document(binding.decodeOpQuery(inbound.payload))
+                        : document(binding.decodeOpMsg(inbound.payload))
+                const body = dispatch(session, supported, command)
+                stats.negotiated = session.negotiated
+                reply(inbound.header.requestId, inbound, body)
+            } catch (error) {
+                stats.negotiated = session.negotiated
+                const message = (error as Error).message ?? String(error)
+                try {
+                    reply(inbound.header.requestId, inbound, document(binding.errorReply(2, message)))
+                } catch {
+                    sendProtocolError(socket, frame, message)
+                }
+                socket.destroy()
+            }
+        }
+
+        socket.on('data', (chunk) => {
+            buffer = Buffer.concat([buffer, chunk])
+            pump()
+        })
+        socket.on('error', () => socket.destroy())
+        socket.on('close', () => sockets.delete(socket))
+    })
+
+    const listening = new Promise<ServerAddress>((resolvePromise, rejectPromise) => {
+        netServer.once('error', rejectPromise)
+        netServer.listen(port, host, () => {
+            const address = netServer.address()
+            if (address === null || typeof address === 'string') {
+                rejectPromise(new Error('server did not bind a TCP address'))
+                return
+            }
+            resolvePromise({ host: address.address, port: address.port })
+        })
+    })
+
+    const sleepMs = Math.max(1, options.ttlMonitorSleepSecs ?? 60) * 1000
+    const ttlTimer = setInterval(() => {
+        try {
+            binding.ttlMonitor(store, null)
+        } catch {
+            // A store error must not kill the scan loop; the next tick retries.
+        }
+    }, sleepMs)
+    ttlTimer.unref()
+
+    return {
+        listening,
+        get address(): ServerAddress | null {
+            const address = netServer.address()
+            if (address === null || typeof address === 'string') return null
+            return { host: address.address, port: address.port }
+        },
+        stats,
+        async close() {
+            if (closed) return
+            closed = true
+            clearInterval(ttlTimer)
+            await new Promise<void>((resolvePromise) => netServer.close(() => resolvePromise()))
+            for (const socket of sockets) socket.destroy()
+            sockets.clear()
+        }
+    }
+}
+
+/** Best-effort error reply for a frame whose header is still readable. */
+function sendProtocolError(socket: net.Socket, frame: Buffer, message: string): void {
+    const header = peekHeader(frame)
+    if (!header) return
+    try {
+        const body = binding.encodeOpMsg(JSON.stringify(document(binding.errorReply(2, message))))
+        socket.write(encodeMsgFrame(0, header.requestId, body))
+    } catch {
+        // The connection is torn down either way.
+    }
+}

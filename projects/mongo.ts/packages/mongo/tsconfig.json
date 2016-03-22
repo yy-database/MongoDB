@@ -12,7 +12,8 @@
         "declarationMap": false,
         "sourceMap": false,
         "skipLibCheck": true,
-        "verbatimModuleSyntax": false
+        "verbatimModuleSyntax": false,
+        "rewriteRelativeImportExtensions": true
     },
     "include": ["src"]
 }

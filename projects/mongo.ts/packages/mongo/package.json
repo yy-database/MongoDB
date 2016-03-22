@@ -6,9 +6,22 @@
     "description": "TypeScript acceptance surface and minimal shell for the Rust MongoDB primitives",
     "license": "MPL-2.0",
     "bin": {
-        "yydb-mongo": "bin/mongo.mjs"
+        "yydb-mongo": "bin/mongo.mjs",
+        "yydb-mongod": "bin/serve.mjs"
     },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "types": "dist/index.d.ts",
+    "files": [
+        "bin",
+        "dist"
+    ],
     "scripts": {
+        "build": "tsc -p tsconfig.json",
         "test": "node tests/run.mjs"
     },
     "optionalDependencies": {
