@@ -194,6 +194,16 @@ for (const [name, id, compressor] of [
     socket.destroy()
 }
 
+// `mongosh` calls `buildInfo` for `db.version()`.
+{
+    const { socket, next } = await connect(address.port)
+    socket.write(encodeMsgFrame(1, 0, frameBody({ buildInfo: 1, $db: 'admin' })))
+    const reply = JSON.parse(binding.decodeOpMsg((await next()).subarray(16)))
+    equal(reply.version, '8.0.9', 'buildInfo reports the emulated wire surface version')
+    equal(reply.maxBsonObjectSize, { $numberInt: '16777216' }, 'buildInfo carries the object size limit')
+    socket.destroy()
+}
+
 // --- official Node driver ---------------------------------------------------
 
 const { MongoClient } = await import('mongodb')

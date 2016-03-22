@@ -26,6 +26,8 @@ whose compressor id is unknown is answered with an error and the connection is
 closed instead of continuing.
 
 `node:zlib` supplies zlib and zstd. Snappy has no Node built-in, so the encoder
-emits literal-only streams (legal snappy, ratio 1.0) and the decoder handles
-every tag libsnappy produces.
+emits literal-only streams: legal snappy with a compression ratio of 1.0, i.e.
+wire compatibility without any size benefit. The decoder handles every tag
+libsnappy produces. Deliberate deviations from `mongod` are recorded in
+[KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 

@@ -143,6 +143,19 @@ function dispatch(session: Session, supported: string[], command: any): any {
         case 'endSessions':
             // Sessions are not cached; `mongod` acknowledges the release.
             return { ok: OK }
+        case 'buildInfo':
+            // The fields `mongosh` and drivers read; the version mirrors the
+            // wire surface this server answers (`mongod 8.0.9`, wire 25).
+            return {
+                version: '8.0.9',
+                versionArray: [8, 0, 9, 0],
+                bits: 64,
+                debug: false,
+                maxBsonObjectSize: 16_777_216,
+                modules: [],
+                storageEngines: ['yykv'],
+                ok: OK
+            }
         default:
             return document(binding.errorReply(59, `no such command: '${name}'`))
     }
