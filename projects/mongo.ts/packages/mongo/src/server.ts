@@ -7,6 +7,7 @@
 // what `mongod 8.0.9` does, even when that compressor was not negotiated).
 import { mkdirSync } from 'node:fs'
 import net from 'node:net'
+import os from 'node:os'
 import { join } from 'node:path'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
@@ -61,9 +62,30 @@ interface Session {
     store: any
     cursors: any
     negotiated: string[]
+    /** Users authenticated on this connection. */
+    users: string[]
+}
+
+interface ServerView {
+    port: number | null
+    openConnections: number
+    totalConnections: number
 }
 
 const OK = { $numberDouble: '1.0' }
+
+function hostPrefix(): string {
+    return os.hostname()
+}
+
+function hasCurrentOpStage(stage: any): boolean {
+    return typeof stage === 'object' && stage !== null && Object.hasOwn(stage, '$currentOp')
+}
+
+/** Canonical extended JSON for a millisecond timestamp. */
+function dateValue(milliseconds: number): any {
+    return { $date: { $numberLong: String(milliseconds) } }
+}
 
 function document(raw: string): any {
     return JSON.parse(raw)
@@ -87,12 +109,25 @@ function helloReply(command: any, supported: string[], session: Session): any {
     return { compression: negotiated, ...base }
 }
 
-function dispatch(session: Session, supported: string[], command: any): any {
+function dispatch(session: Session, supported: string[], command: any, view: ServerView): any {
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') throw new WireError('command document is empty')
 
     const lower = name.toLowerCase()
     if (lower === 'hello' || lower === 'ismaster') return helloReply(command, supported, session)
+
+    // `db.currentOp()` is an aggregate over `$currentOp`; there are no
+    // background operations in this server, so an empty list is the honest
+    // answer and keeps the shell helper from failing.
+    if (name === 'aggregate') {
+        const pipeline = command.pipeline
+        if (Array.isArray(pipeline) && pipeline.length > 0 && hasCurrentOpStage(pipeline[0])) {
+            return {
+                cursor: { firstBatch: [], id: { $numberLong: '0' }, ns: `${command.$db ?? 'admin'}.$cmd.aggregate` },
+                ok: OK
+            }
+        }
+    }
 
     const text = commandText(command)
     switch (name) {
@@ -156,6 +191,47 @@ function dispatch(session: Session, supported: string[], command: any): any {
                 storageEngines: ['yykv'],
                 ok: OK
             }
+        case 'connectionStatus':
+            return {
+                authInfo: { authenticatedUsers: session.users, authenticatedUserRoles: [] },
+                ok: OK
+            }
+        case 'killOp':
+            return { info: 'attempting to kill op', ok: OK }
+        case 'currentOp':
+            return { inprog: [], ok: OK }
+        case 'serverStatus':
+            return {
+                host: `${hostPrefix()}:${view.port ?? 0}`,
+                version: '8.0.9',
+                process: 'yydb-mongo',
+                pid: process.pid,
+                uptime: Math.floor(process.uptime()),
+                uptimeMillis: Math.round(process.uptime() * 1000),
+                uptimeEstimate: Math.floor(process.uptime()),
+                localTime: dateValue(Date.now()),
+                connections: {
+                    current: view.openConnections,
+                    available: 0,
+                    totalCreated: view.totalConnections
+                },
+                ok: OK
+            }
+        case 'hostInfo':
+            return {
+                system: {
+                    currentTime: dateValue(Date.now()),
+                    hostname: os.hostname(),
+                    cpuAddrSize: process.arch === 'x64' || process.arch === 'arm64' ? 64 : 32,
+                    memSizeMB: Math.round(os.totalmem() / 1_048_576),
+                    numCores: os.cpus().length,
+                    numPhysicalCores: os.cpus().length,
+                    cpuArch: os.arch()
+                },
+                os: { type: os.type(), name: os.platform(), version: os.release() },
+                extra: {},
+                ok: OK
+            }
         default:
             return document(binding.errorReply(59, `no such command: '${name}'`))
     }
@@ -176,7 +252,7 @@ export function createServer(options: ServerOptions): MongoServer {
     const netServer = net.createServer((socket) => {
         stats.connections += 1
         sockets.add(socket)
-        const session: Session = { store, cursors: new binding.MongoCursors(), negotiated: [] }
+        const session: Session = { store, cursors: new binding.MongoCursors(), negotiated: [], users: [] }
 
         let buffer = Buffer.alloc(0)
         const pump = () => {
@@ -236,7 +312,11 @@ export function createServer(options: ServerOptions): MongoServer {
                     inbound.opcode === OP_QUERY
                         ? document(binding.decodeOpQuery(inbound.payload))
                         : document(binding.decodeOpMsg(inbound.payload))
-                const body = dispatch(session, supported, command)
+                const body = dispatch(session, supported, command, {
+                    port: boundPort(netServer),
+                    openConnections: sockets.size,
+                    totalConnections: stats.connections
+                })
                 stats.negotiated = session.negotiated
                 reply(inbound.header.requestId, inbound, body)
             } catch (error) {
@@ -298,6 +378,12 @@ export function createServer(options: ServerOptions): MongoServer {
             sockets.clear()
         }
     }
+}
+
+function boundPort(server: net.Server): number | null {
+    const address = server.address()
+    if (address === null || typeof address === 'string') return null
+    return address.port
 }
 
 /** Best-effort error reply for a frame whose header is still readable. */
