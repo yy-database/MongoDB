@@ -31,3 +31,24 @@ wire compatibility without any size benefit. The decoder handles every tag
 libsnappy produces. Deliberate deviations from `mongod` are recorded in
 [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 
+## Authentication
+
+`createServer({ dataDir, port, auth: true })` (CLI: `--auth`) requires
+authentication before any non-handshake command, like `mongod --auth`. Without
+the flag credentials are still validated but nothing is refused, matching a
+`mongod` started without `security.authorization`.
+
+SCRAM-SHA-256 and SCRAM-SHA-1 are both registered for `createUser`; users are
+stored as `<db>.system.users` documents in the same `.yykv` store with the
+`credentials` sub-document `mongod` writes (base64 `salt`/`storedKey`/`serverKey`
+and `iterationCount`). `hello` answers `saslSupportedMechs` and accepts
+`speculativeAuthenticate`, so official drivers pick their mechanism during the
+handshake. Failure codes and messages (`Authentication failed.`, code 18;
+`MechanismUnavailable`, 334; `No SASL session state found`, 17) were captured
+from `mongod 8.0.9`. Role-based authorization is deliberately not enforced yet;
+see [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
+
+```ts
+const server = createServer({ dataDir: './data', port: 27017, auth: true })
+```
+

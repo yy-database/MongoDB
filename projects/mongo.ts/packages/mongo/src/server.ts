@@ -9,6 +9,20 @@ import { mkdirSync } from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import { join } from 'node:path'
+import {
+    allowedBeforeAuth,
+    anyUserExists,
+    authError,
+    authenticationRequired,
+    createAuthState,
+    createUserCommand,
+    dropUserCommand,
+    logoutCommand,
+    saslContinueCommand,
+    saslStartCommand,
+    saslSupportedMechsFor,
+    type AuthState
+} from './auth.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
 import {
@@ -36,6 +50,12 @@ export interface ServerOptions {
     compressors?: string[]
     /** Background TTL scan period, mirroring `ttlMonitorSleepSecs`. */
     ttlMonitorSleepSecs?: number
+    /**
+     * Require authentication before non-handshake commands, like `mongod --auth`.
+     * When off (the default) credentials are still validated, but no command is
+     * refused; that matches `mongod` without `security.authorization`.
+     */
+    auth?: boolean
 }
 
 export interface ServerAddress {
@@ -62,8 +82,8 @@ interface Session {
     store: any
     cursors: any
     negotiated: string[]
-    /** Users authenticated on this connection. */
-    users: string[]
+    /** Authentication state owned by this connection. */
+    auth: AuthState
 }
 
 interface ServerView {
@@ -101,20 +121,51 @@ export function negotiatedCompressors(offered: unknown, supported: string[] = SU
     return offered.filter((name) => typeof name === 'string' && supported.includes(name))
 }
 
+/** Inserts extra fields immediately before `ok`, the order `mongod` uses. */
+function beforeOk(base: any, extras: [string, any][]): any {
+    if (extras.length === 0) return base
+    const result: any = {}
+    for (const [key, value] of Object.entries(base)) {
+        if (key === 'ok') for (const [extraKey, extraValue] of extras) result[extraKey] = extraValue
+        result[key] = value
+    }
+    return result
+}
+
 function helloReply(command: any, supported: string[], session: Session): any {
     const negotiated = negotiatedCompressors(command.compression, supported)
     session.negotiated = negotiated
-    const base = document(binding.hello())
-    if (negotiated.length === 0) return base
-    return { compression: negotiated, ...base }
+    const extras: [string, any][] = []
+    if (negotiated.length > 0) extras.push(['compression', negotiated])
+    const mechanisms = saslSupportedMechsFor(session, command.saslSupportedMechs)
+    if (mechanisms.error) return mechanisms.error
+    if (mechanisms.mechanisms) extras.push(['saslSupportedMechs', mechanisms.mechanisms])
+    // Drivers fold the first SCRAM message into the handshake. Answering it here
+    // saves a round trip; a failed speculation is omitted, as `mongod` does.
+    const speculation = command.speculativeAuthenticate
+    if (speculation !== null && typeof speculation === 'object') {
+        const started = saslStartCommand(session, speculation)
+        const accepted = started.ok === 1 || started.ok?.$numberDouble === '1.0'
+        if (accepted) {
+            const { conversationId, done, payload } = started
+            extras.push(['speculativeAuthenticate', { conversationId, done, payload }])
+        }
+    }
+    return beforeOk(document(binding.hello()), extras)
 }
 
-function dispatch(session: Session, supported: string[], command: any, view: ServerView): any {
+function dispatch(session: Session, supported: string[], command: any, view: ServerView, authRequired: boolean): any {
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') throw new WireError('command document is empty')
 
-    const lower = name.toLowerCase()
-    if (lower === 'hello' || lower === 'ismaster') return helloReply(command, supported, session)
+    if (authRequired && session.auth.users.length === 0 && !allowedBeforeAuth(name)) {
+        // The localhost exception: the very first user may be created without
+        // credentials, exactly while no user document exists anywhere.
+        const localhostException = name === 'createUser' && !anyUserExists(session.store)
+        if (!localhostException) return authenticationRequired(name)
+    }
+
+    if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session)
 
     // `db.currentOp()` is an aggregate over `$currentOp`; there are no
     // background operations in this server, so an empty list is the honest
@@ -133,6 +184,20 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
     switch (name) {
         case 'ping':
             return document(binding.ping())
+        case 'saslStart':
+            return saslStartCommand(session, command)
+        case 'saslContinue':
+            return saslContinueCommand(session, command)
+        case 'authenticate':
+            // The legacy command is in the pre-auth surface, and `mongod 8.0.9`
+            // ends it with the same authentication failure.
+            return authError(18, 'AuthenticationFailed', 'Authentication failed.')
+        case 'createUser':
+            return createUserCommand(session, command)
+        case 'dropUser':
+            return dropUserCommand(session, command)
+        case 'logout':
+            return logoutCommand(session)
         case 'insert':
             return document(binding.insert(session.store, text))
         case 'find':
@@ -193,7 +258,7 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
             }
         case 'connectionStatus':
             return {
-                authInfo: { authenticatedUsers: session.users, authenticatedUserRoles: [] },
+                authInfo: { authenticatedUsers: session.auth.users, authenticatedUserRoles: session.auth.roles },
                 ok: OK
             }
         case 'killOp':
@@ -244,6 +309,7 @@ export function createServer(options: ServerOptions): MongoServer {
     mkdirSync(options.dataDir, { recursive: true })
 
     const store = new binding.MongoStore(join(options.dataDir, 'mongo.yykv'))
+    const authRequired = options.auth === true
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
     let replyId = 0
     let closed = false
@@ -252,7 +318,12 @@ export function createServer(options: ServerOptions): MongoServer {
     const netServer = net.createServer((socket) => {
         stats.connections += 1
         sockets.add(socket)
-        const session: Session = { store, cursors: new binding.MongoCursors(), negotiated: [], users: [] }
+        const session: Session = {
+            store,
+            cursors: new binding.MongoCursors(),
+            negotiated: [],
+            auth: createAuthState()
+        }
 
         let buffer = Buffer.alloc(0)
         const pump = () => {
@@ -312,11 +383,17 @@ export function createServer(options: ServerOptions): MongoServer {
                     inbound.opcode === OP_QUERY
                         ? document(binding.decodeOpQuery(inbound.payload))
                         : document(binding.decodeOpMsg(inbound.payload))
-                const body = dispatch(session, supported, command, {
-                    port: boundPort(netServer),
-                    openConnections: sockets.size,
-                    totalConnections: stats.connections
-                })
+                const body = dispatch(
+                    session,
+                    supported,
+                    command,
+                    {
+                        port: boundPort(netServer),
+                        openConnections: sockets.size,
+                        totalConnections: stats.connections
+                    },
+                    authRequired
+                )
                 stats.negotiated = session.negotiated
                 reply(inbound.header.requestId, inbound, body)
             } catch (error) {

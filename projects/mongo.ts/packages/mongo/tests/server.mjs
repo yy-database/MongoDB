@@ -5,6 +5,7 @@
 // official Node driver with compression enabled, which is the gate that matters
 // for drop-in use.
 import assert from 'node:assert/strict'
+import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
@@ -226,6 +227,236 @@ equal(await collection.countDocuments({}), 2, 'driver countDocuments under zlib'
 ok(server.stats.compressedRequests > 0, 'the driver actually sent compressed requests')
 ok(server.stats.compressedReplies > 0, 'the server actually sent compressed replies')
 await client.close()
+
+// --- SCRAM-SHA-256 / SCRAM-SHA-1 -------------------------------------------
+
+let requestId = 1
+async function command(connection, document) {
+    connection.socket.write(encodeMsgFrame(requestId++, 0, frameBody(document)))
+    const frame = await connection.next()
+    return JSON.parse(binding.decodeOpMsg(frame.subarray(16)))
+}
+
+const binary = (text) => ({ $binary: { base64: Buffer.from(text, 'utf8').toString('base64'), subType: '00' } })
+const payloadText = (payload) => Buffer.from(payload.$binary.base64, 'base64').toString('utf8')
+
+/** SCRAM client used by the acceptance tests, mirroring the Node driver. */
+async function scram(connection, user, password, mechanism = 'SCRAM-SHA-256', db = 'admin') {
+    const digest = mechanism === 'SCRAM-SHA-256' ? 'sha256' : 'sha1'
+    const keyLength = mechanism === 'SCRAM-SHA-256' ? 32 : 20
+    const processed = mechanism === 'SCRAM-SHA-256' ? password : createHash('md5').update(`${user}:mongo:${password}`, 'utf8').digest('hex')
+    const nonce = randomBytes(12).toString('base64').replace(/[^A-Za-z0-9]/g, '')
+    const clientFirstBare = `n=${user},r=${nonce}`
+    const start = await command(connection, {
+        saslStart: 1,
+        mechanism,
+        payload: binary(`n,,${clientFirstBare}`),
+        autoAuthorize: 1,
+        $db: db
+    })
+    if (start.ok === 0 || start.ok?.$numberDouble === '0.0') return { start }
+    const serverFirst = payloadText(start.payload)
+    const salt = Buffer.from(serverFirst.split(',')[1].slice(2), 'base64')
+    const iterations = Number(serverFirst.split(',')[2].slice(2))
+    const salted = pbkdf2Sync(processed, salt, iterations, keyLength, digest)
+    const hash = (data) => createHash(digest).update(data).digest()
+    const hmac = (key, data) => createHmac(digest, key).update(data).digest()
+    const clientKey = hmac(salted, 'Client Key')
+    const storedKey = hash(clientKey)
+    const withoutProof = `c=biws,r=${serverFirst.split(',')[0].slice(2)}`
+    const signature = hmac(storedKey, `${clientFirstBare},${serverFirst},${withoutProof}`)
+    const proof = Buffer.alloc(keyLength)
+    for (let index = 0; index < keyLength; index += 1) proof[index] = clientKey[index] ^ signature[index]
+    const final = await command(connection, {
+        saslContinue: 1,
+        conversationId: start.conversationId,
+        payload: binary(`${withoutProof},p=${proof.toString('base64')}`),
+        $db: db
+    })
+    const finished = await command(connection, {
+        saslContinue: 1,
+        conversationId: start.conversationId,
+        payload: binary(''),
+        $db: db
+    })
+    return { start, final, finished, serverFirst }
+}
+
+const authDir = mkdtempSync(join(tmpdir(), 'mongo-auth-'))
+const authServer = createServer({ dataDir: authDir, port: 0, auth: true })
+const authAddress = await authServer.listening
+const login = await connect(authAddress.port)
+
+{
+    const denied = await command(login, { find: 'items', filter: {}, $db: 'authdb' })
+    equal(denied.ok, { $numberDouble: '0.0' }, 'find is refused before authentication')
+    equal(denied.errmsg, 'Command find requires authentication', 'the refusal text matches mongod')
+    equal(denied.code, { $numberInt: '13' }, 'the refusal code matches mongod')
+    equal(denied.codeName, 'Unauthorized', 'the refusal codeName matches mongod')
+
+    const ping = await command(login, { ping: 1, $db: 'admin' })
+    equal(ping.ok, { $numberDouble: '1.0' }, 'ping is answered before authentication')
+
+    const hello = await command(login, { hello: 1, $db: 'admin' })
+    equal(Object.hasOwn(hello, 'saslSupportedMechs'), false, 'hello without the field stays without it')
+
+    const created = await command(login, { createUser: 'root', pwd: 'root-pass', roles: [{ role: 'root', db: 'admin' }], $db: 'admin' })
+    equal(created.ok, { $numberDouble: '1.0' }, 'the localhost exception creates the first user')
+
+    // Once a user exists the exception is gone, so the same connection is gated.
+    const refused = await command(login, { createUser: 'root', pwd: 'other-pass', roles: [], $db: 'admin' })
+    equal(refused.code, { $numberInt: '13' }, 'the localhost exception closes after the first user')
+    equal(refused.errmsg, 'Command createUser requires authentication', 'the closed exception text matches mongod')
+}
+
+{
+    const hello = await command(login, { hello: 1, saslSupportedMechs: 'admin.root', $db: 'admin' })
+    equal(hello.saslSupportedMechs, ['SCRAM-SHA-256', 'SCRAM-SHA-1'], 'an existing user reports both mechanisms')
+    const ghost = await command(login, { hello: 1, saslSupportedMechs: 'admin.ghost', $db: 'admin' })
+    equal(Object.hasOwn(ghost, 'saslSupportedMechs'), false, 'a missing user reports no mechanism field')
+    const malformed = await command(login, { hello: 1, saslSupportedMechs: 'root', $db: 'admin' })
+    equal(malformed.code, { $numberInt: '2' }, 'a name without a database is rejected')
+    equal(malformed.errmsg, "UserName must contain a '.' separated database.user pair", 'the malformed name text matches mongod')
+}
+
+{
+    const unknown = await command(login, { saslStart: 1, mechanism: 'SCRAM-SHA-512', payload: binary('n,,n=root,r=abc'), autoAuthorize: 1, $db: 'admin' })
+    equal(unknown.code, { $numberInt: '334' }, 'an unknown mechanism is unavailable')
+    equal(unknown.errmsg, 'Received authentication for mechanism SCRAM-SHA-512 which is not enabled', 'the mechanism text matches mongod')
+    const missing = await command(login, { saslStart: 1, payload: binary('n,,n=root,r=abc'), autoAuthorize: 1, $db: 'admin' })
+    equal(missing.code, { $numberInt: '40414' }, 'a missing mechanism is an IDL parse failure')
+    equal(missing.errmsg, "BSON field 'saslStart.mechanism' is missing but a required field", 'the missing-field text matches mongod')
+    const noPayload = await command(login, { saslStart: 1, mechanism: 'SCRAM-SHA-256', autoAuthorize: 1, $db: 'admin' })
+    equal(noPayload.code, { $numberInt: '40414' }, 'a missing payload is an IDL parse failure')
+    equal(noPayload.errmsg, "BSON field 'saslStart.payload' is missing but a required field", 'the missing-payload text matches mongod')
+    const ghost = await command(login, { saslStart: 1, mechanism: 'SCRAM-SHA-256', payload: binary('n,,n=ghost,r=abc'), autoAuthorize: 1, $db: 'admin' })
+    equal(ghost.code, { $numberInt: '18' }, 'a nonexistent user fails authentication')
+    equal(ghost.errmsg, 'Authentication failed.', 'the failure text is byte-identical to mongod')
+}
+
+{
+    const session = await scram(login, 'root', 'root-pass')
+    equal(session.final.ok, { $numberDouble: '1.0' }, 'the client proof is accepted')
+    equal(session.final.done, false, 'the proof reply is not the last step')
+    ok(payloadText(session.final.payload).startsWith('v='), 'the proof reply carries the server signature prefix')
+    equal(payloadText(session.final.payload).length > 2, true, 'the server signature is not empty')
+    equal(session.finished.done, true, 'the empty continuation finishes the exchange')
+    const status = await command(login, { connectionStatus: 1, $db: 'admin' })
+    equal(status.authInfo.authenticatedUsers, [{ user: 'root', db: 'admin' }], 'connectionStatus lists the authenticated user')
+    equal(status.authInfo.authenticatedUserRoles, [{ role: 'root', db: 'admin' }], 'connectionStatus lists the granted roles')
+    const visible = await command(login, { find: 'items', filter: {}, $db: 'authdb' })
+    equal(visible.ok, { $numberDouble: '1.0' }, 'find is answered after authentication')
+
+    const duplicate = await command(login, { createUser: 'root', pwd: 'other-pass', roles: [], $db: 'admin' })
+    equal(duplicate.code, { $numberInt: '51003' }, 'an authenticated duplicate uses createUser\u2019s code')
+    equal(duplicate.errmsg, 'User "root@admin" already exists', 'an authenticated duplicate uses createUser\u2019s text')
+
+    const noRoles = await command(login, { createUser: 'noroles', pwd: 'x', $db: 'admin' })
+    equal(noRoles.code, { $numberInt: '40414' }, 'a missing roles array is an IDL parse failure')
+    equal(noRoles.errmsg, "BSON field 'createUser.roles' is missing but a required field", 'the missing-roles text matches mongod')
+
+    const badMechanism = await command(login, { createUser: 'badmech', pwd: 'x', roles: [], mechanisms: ['BOGUS'], $db: 'admin' })
+    equal(badMechanism.code, { $numberInt: '2' }, 'an unregistered mechanism is a bad value')
+    equal(badMechanism.errmsg, "Unknown auth mechanism 'BOGUS'", 'the unknown-mechanism text matches mongod')
+}
+
+{
+    const bad = await scram(login, 'root', 'wrong-pass')
+    equal(bad.final.code, { $numberInt: '18' }, 'a wrong password fails authentication')
+    equal(bad.final.errmsg, 'Authentication failed.', 'a wrong password uses the real failure text')
+    const after = await command(login, { saslContinue: 1, conversationId: { $numberInt: '1' }, payload: binary(''), $db: 'admin' })
+    equal(after.code, { $numberInt: '17' }, 'a failed conversation leaves no session state')
+    equal(after.errmsg, 'No SASL session state found', 'the protocol error text matches mongod')
+}
+
+{
+    const sha1 = await scram(login, 'root', 'root-pass', 'SCRAM-SHA-1')
+    equal(sha1.final.ok, { $numberDouble: '1.0' }, 'SCRAM-SHA-1 accepts the legacy password digest')
+}
+
+{
+    const only256 = await command(login, { createUser: 'only256', pwd: 'only-pass', roles: [], mechanisms: ['SCRAM-SHA-256'], $db: 'admin' })
+    equal(only256.ok, { $numberDouble: '1.0' }, 'a user can be created with one mechanism')
+    const deniedMechanism = await command(login, { saslStart: 1, mechanism: 'SCRAM-SHA-1', payload: binary('n,,n=only256,r=abc'), autoAuthorize: 1, $db: 'admin' })
+    equal(deniedMechanism.code, { $numberInt: '334' }, 'a user without SHA-1 credentials rejects SHA-1')
+    equal(
+        deniedMechanism.errmsg,
+        'Unable to use SCRAM-SHA-1 based authentication for user without any SCRAM-SHA-1 credentials registered',
+        'the unavailable-mechanism text matches mongod'
+    )
+    const supported = await command(login, { hello: 1, saslSupportedMechs: 'admin.only256', $db: 'admin' })
+    equal(supported.saslSupportedMechs, ['SCRAM-SHA-256'], 'a single-mechanism user reports only that mechanism')
+}
+
+{
+    const speculative = await command(login, {
+        hello: 1,
+        saslSupportedMechs: 'admin.root',
+        speculativeAuthenticate: { saslStart: 1, mechanism: 'SCRAM-SHA-256', payload: binary('n,,n=root,r=abcdefgh'), autoAuthorize: 1, db: 'admin' },
+        $db: 'admin'
+    })
+    ok(speculative.speculativeAuthenticate, 'hello answers a speculative SCRAM start')
+    ok(payloadText(speculative.speculativeAuthenticate.payload).startsWith('r=abcdefgh'), 'the speculative reply is server-first')
+    equal(Object.hasOwn(speculative.speculativeAuthenticate, 'ok'), false, 'the speculative reply omits ok like mongod')
+    const ghost = await command(login, {
+        hello: 1,
+        saslSupportedMechs: 'admin.ghost',
+        speculativeAuthenticate: { saslStart: 1, mechanism: 'SCRAM-SHA-256', payload: binary('n,,n=ghost,r=abcdefgh'), autoAuthorize: 1, db: 'admin' },
+        $db: 'admin'
+    })
+    equal(Object.hasOwn(ghost, 'speculativeAuthenticate'), false, 'a failed speculation is omitted')
+}
+
+// A string role names the current database, as `mongod` stores it.
+{
+    const created = await command(login, { createUser: 'stringrole', pwd: 'role-pass', roles: ['readWrite'], $db: 'admin' })
+    equal(created.ok, { $numberDouble: '1.0' }, 'a string role is accepted')
+    const rolesConnection = await connect(authAddress.port)
+    const session = await scram(rolesConnection, 'stringrole', 'role-pass')
+    equal(session.finished.done, true, 'the string-role user logs in')
+    const status = await command(rolesConnection, { connectionStatus: 1, $db: 'admin' })
+    equal(status.authInfo.authenticatedUserRoles, [{ role: 'readWrite', db: 'admin' }], 'a string role is reported with its database')
+    rolesConnection.socket.destroy()
+}
+
+{
+    const out = await command(login, { logout: 1, $db: 'admin' })
+    equal(out.ok, { $numberDouble: '1.0' }, 'logout is acknowledged')
+    const status = await command(login, { connectionStatus: 1, $db: 'admin' })
+    equal(status.authInfo.authenticatedUsers, [], 'logout clears the authenticated user')
+    const denied = await command(login, { find: 'items', filter: {}, $db: 'authdb' })
+    equal(denied.code, { $numberInt: '13' }, 'logout puts the connection back behind the gate')
+}
+
+// A fresh connection cannot create users once one exists.
+{
+    const fresh = await connect(authAddress.port)
+    const denied = await command(fresh, { createUser: 'second', pwd: 'x', roles: [], $db: 'admin' })
+    equal(denied.code, { $numberInt: '13' }, 'createUser past the localhost exception needs authentication')
+    equal(denied.errmsg, 'Command createUser requires authentication', 'the createUser gate text matches mongod')
+    fresh.socket.destroy()
+}
+
+// Official drivers: default mechanism (hello negotiation + speculative start)
+// and the explicit SCRAM-SHA-1 path.
+{
+    const uri = `mongodb://root:root-pass@${authAddress.host}:${authAddress.port}/?authSource=admin&directConnection=true`
+    const authenticated = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 })
+    await authenticated.connect()
+    const collection = authenticated.db('secured').collection('items')
+    await collection.insertMany([{ _id: 1, v: 'a' }, { _id: 2, v: 'b' }])
+    equal((await collection.find({}).sort({ _id: 1 }).toArray()).map((document) => document._id), [1, 2], 'a driver authenticated with SCRAM-SHA-256 runs CRUD')
+    equal((await collection.updateOne({ _id: 1 }, { $set: { v: 'z' } })).modifiedCount, 1, 'an authenticated driver updates')
+    await authenticated.close()
+
+    const legacy = new MongoClient(uri + '&authMechanism=SCRAM-SHA-1', { serverSelectionTimeoutMS: 5000 })
+    await legacy.connect()
+    equal(await legacy.db('secured').collection('items').countDocuments({}), 2, 'a driver authenticated with SCRAM-SHA-1 runs reads')
+    await legacy.close()
+}
+
+login.socket.destroy()
+await authServer.close()
 
 await server.close()
 console.log(`server acceptance: ${assertions} assertions`)

@@ -23,7 +23,9 @@ Tiers describe what it would take to close a gap, not how important it is.
 | `db.runCommand({ping:1})` | `{ok:1}` | OK | done |
 | `db.serverStatus()` | host, version, process, pid, uptime*, localTime, connections, opcounters, mem, asserts, network, ... | OK subset: host, version, process, pid, uptime*, localTime, connections | done (subset); counters are medium |
 | `db.hostInfo()` | `system` + `os` + `extra` | OK subset: `system`, `os`, `extra` | done (subset) |
-| `db.runCommand({connectionStatus:1})` | `authInfo.authenticatedUsers[]` | OK, empty until SCRAM lands | done |
+| `db.runCommand({connectionStatus:1})` | `authInfo.authenticatedUsers[]` | OK; empty before login, populated by SCRAM | done |
+| `db.createUser` / `dropUser` / `logout` | `{ok:1}` | OK, SCRAM-SHA-256 and SCRAM-SHA-1 | done |
+| `show users` (`usersInfo`) | `users[]` from `<db>.system.users` | `no such command: 'usersInfo'` | easy (catalog query) |
 | `db.currentOp()` | `inprog[]` (legacy `currentOp`, `$currentOp` aggregate) | OK, empty `inprog` | done |
 | `db.killOp(0)` | `{info:"attempting to kill op", ok:1}` | OK ack, no in-flight ops to kill | done |
 | `db.getMongo().isWritablePrimary()` | `TypeError: not a function` | same error | not a gap |
