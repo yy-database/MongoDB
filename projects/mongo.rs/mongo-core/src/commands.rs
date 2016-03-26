@@ -304,11 +304,25 @@ pub fn code_name(code: i32) -> Option<&'static str> {
 }
 
 /// `hello` / `isMaster` handshake answer.
+///
+/// The static limits are the ones `mongod 8.0.9` reports for wire version 25.
+/// Topology fields (`setName`, `hosts`, `topologyVersion`, `connectionId`) belong
+/// to the listener, which owns the replica set state and connection counter.
 pub fn hello() -> BsonDocument {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as i64)
+        .unwrap_or(0);
     let mut document = BsonDocument::new();
     document.push("isWritablePrimary".to_string(), BsonValue::Bool(true));
-    document.push("maxWireVersion".to_string(), BsonValue::Int32(17));
+    document.push("maxBsonObjectSize".to_string(), BsonValue::Int32(16_777_216));
+    document.push("maxMessageSizeBytes".to_string(), BsonValue::Int32(48_000_000));
+    document.push("maxWriteBatchSize".to_string(), BsonValue::Int32(100_000));
+    document.push("localTime".to_string(), BsonValue::DateTime(now));
+    document.push("logicalSessionTimeoutMinutes".to_string(), BsonValue::Int32(30));
     document.push("minWireVersion".to_string(), BsonValue::Int32(0));
+    document.push("maxWireVersion".to_string(), BsonValue::Int32(25));
+    document.push("readOnly".to_string(), BsonValue::Bool(false));
     document.push("ok".to_string(), BsonValue::Double(1.0));
     document
 }
@@ -3768,6 +3782,12 @@ impl SessionContext {
                 TransactionBegin::TooOld { newer } => Err(transaction_too_old_error(command, txn_number, newer)),
             };
         }
+        // Only operations inside a multi-document transaction carry
+        // `autocommit: false`; every other `txnNumber` is a retryable write and
+        // runs against committed data, as `mongod` does.
+        if command_bool(command, "autocommit", true) {
+            return Ok(Self { key: None });
+        }
         match store.session_write_state(&session, txn_number) {
             SessionWriteState::Active => Ok(Self { key: Some(session) }),
             SessionWriteState::TooOld { newer } => Err(transaction_too_old_error(command, txn_number, newer)),
@@ -4490,6 +4510,115 @@ pub fn list_databases(store: &Store) -> BsonDocument {
     response.push("totalSizeMb".to_string(), BsonValue::Int64(0));
     response.push("ok".to_string(), BsonValue::Double(1.0));
     response
+}
+
+/// `dbStats` reply, computed from the documents and keys the shard really holds.
+///
+/// `objects` counts the stored documents, `dataSize` sums their encoded BSON
+/// lengths and `avgObjSize` is `dataSize / objects`; all three are exact.
+/// `storageSize` is the byte count of the records this database owns in the
+/// `.yykv` shard (key plus payload), which is the logical size of its data and
+/// not the storage engine's allocation unit. `indexSize` is zero because
+/// indexes are catalog specifications here: nothing materialises them on disk.
+/// Both deviations are recorded in `KNOWN-DIFFERENCES.md`.
+///
+/// `filesystem` carries host-measured `(used, total)` bytes for the data
+/// directory; `None` means the database does not exist, which is the case where
+/// `mongod 8.0.9` also reports zero.
+pub fn db_stats(command: &BsonDocument, store: &Store, filesystem: Option<(i64, i64)>) -> Result<BsonDocument, CommandError> {
+    let scale = db_stats_scale(command)?;
+    let database = command.database();
+    let prefix = format!("{database}.");
+
+    let mut collections = 0_i64;
+    let mut objects = 0_i64;
+    let mut data_size = 0_i64;
+    let mut storage_size = 0_i64;
+    let mut indexes = 0_i64;
+    for namespace in store.namespaces() {
+        let Some(collection) = namespace.strip_prefix(&prefix) else { continue };
+        // `mongod 8.0.9` leaves `system.*` collections out of `dbStats`.
+        if collection.starts_with("system.") {
+            continue;
+        }
+        collections += 1;
+        // Every collection carries the implicit `_id_` index.
+        indexes += 1 + store.index_specs(&namespace).len() as i64;
+        for (key, value) in store.scan(&namespace) {
+            objects += 1;
+            data_size += value.len() as i64;
+            storage_size += (key.len() + value.len()) as i64;
+        }
+    }
+
+    let scaled = |bytes: i64| -> BsonValue {
+        if scale == 1 { count_value(bytes) } else { count_value(bytes / scale) }
+    };
+    let mut document = BsonDocument::new();
+    document.push("db".to_string(), BsonValue::String(database));
+    document.push("collections".to_string(), count_value(collections));
+    document.push("views".to_string(), BsonValue::Int32(0));
+    document.push("objects".to_string(), count_value(objects));
+    document.push(
+        "avgObjSize".to_string(),
+        if objects == 0 {
+            BsonValue::Int32(0)
+        }
+        else if data_size % objects == 0 {
+            count_value(data_size / objects)
+        }
+        else {
+            BsonValue::Double(data_size as f64 / objects as f64)
+        },
+    );
+    document.push(
+        "dataSize".to_string(),
+        if scale == 1 { count_value(data_size) } else { BsonValue::Double(data_size as f64 / scale as f64) },
+    );
+    document.push("storageSize".to_string(), scaled(storage_size));
+    document.push("indexes".to_string(), count_value(indexes));
+    // No index structure is written: the catalog holds specifications only.
+    document.push("indexSize".to_string(), scaled(0));
+    document.push("totalSize".to_string(), scaled(storage_size));
+    document.push("scaleFactor".to_string(), count_value(scale));
+    let (used, total) = filesystem.unwrap_or((0, 0));
+    document.push("fsUsedSize".to_string(), filesystem_value(used, scale));
+    document.push("fsTotalSize".to_string(), filesystem_value(total, scale));
+    document.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(document)
+}
+
+/// `scale` of `dbStats`, validated the way the real command does.
+///
+/// A missing field means factor 1, a factor below 1 is `BadValue`, and a
+/// fractional double is ignored (`mongod 8.0.9` reports `scaleFactor: 1` for
+/// `scale: 1.5` instead of rejecting it). Non-numeric values are `TypeMismatch`.
+fn db_stats_scale(command: &BsonDocument) -> Result<i64, CommandError> {
+    let Some(value) = command.get("scale") else { return Ok(1) };
+    let scale = match value {
+        BsonValue::Int32(number) => i64::from(*number),
+        BsonValue::Int64(number) => *number,
+        BsonValue::Double(number) => integral_value(*number).unwrap_or(1),
+        BsonValue::Decimal128(number) => number.as_str().parse::<f64>().ok().and_then(integral_value).unwrap_or(1),
+        other => {
+            return Err(CommandError::new(
+                14,
+                format!(
+                    "BSON field 'dbStats.scale' is the wrong type '{}', expected types '[decimal, double, int, long']",
+                    bson_type_name(other)
+                ),
+            ));
+        }
+    };
+    if scale < 1 {
+        return Err(CommandError::new(2, "Scale factor must be greater than zero"));
+    }
+    Ok(scale)
+}
+
+/// Filesystem bytes keep `mongod`'s `long` type at factor 1 and shrink with it otherwise.
+fn filesystem_value(bytes: i64, scale: i64) -> BsonValue {
+    if scale == 1 { BsonValue::Int64(bytes) } else { count_value(bytes / scale) }
 }
 
 /// Index options read from one `createIndexes` specification, already validated.

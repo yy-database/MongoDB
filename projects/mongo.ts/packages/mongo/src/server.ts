@@ -5,7 +5,7 @@
 // `OP_COMPRESSED` frame is unwrapped, the payload is decoded by `mongo-core`,
 // and the reply is wrapped in the same compressor the request used (which is
 // what `mongod 8.0.9` does, even when that compressor was not negotiated).
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, statfsSync } from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -21,8 +21,17 @@ import {
     saslContinueCommand,
     saslStartCommand,
     saslSupportedMechsFor,
+    usersInfoCommand,
     type AuthState
 } from './auth.ts'
+import {
+    createReplicaState,
+    noteWrite,
+    numberValue,
+    replicaCommand,
+    topologyHandshake,
+    type ReplicaState
+} from './replica.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
 import {
@@ -50,6 +59,8 @@ export interface ServerOptions {
     compressors?: string[]
     /** Background TTL scan period, mirroring `ttlMonitorSleepSecs`. */
     ttlMonitorSleepSecs?: number
+    /** Replica set name, mirroring `mongod --replSet`. */
+    replSet?: string
     /**
      * Require authentication before non-handshake commands, like `mongod --auth`.
      * When off (the default) credentials are still validated, but no command is
@@ -84,15 +95,39 @@ interface Session {
     negotiated: string[]
     /** Authentication state owned by this connection. */
     auth: AuthState
+    /** `connectionId` reported by the handshake, in accept order. */
+    connectionId: number
 }
 
 interface ServerView {
     port: number | null
     openConnections: number
     totalConnections: number
+    dataDir: string
+    replica: ReplicaState
 }
 
 const OK = { $numberDouble: '1.0' }
+
+/** Commands that advance the replica-set `optime`, as `mongod`'s writes do. */
+const WRITE_COMMANDS = new Set([
+    'insert',
+    'update',
+    'delete',
+    'findAndModify',
+    'bulkWrite',
+    'create',
+    'collMod',
+    'createIndexes',
+    'dropIndexes',
+    'createUser',
+    'dropUser',
+    'commitTransaction'
+])
+
+function replyOk(body: any): boolean {
+    return body?.ok === 1 || body?.ok?.$numberDouble === '1.0' || body?.ok?.$numberInt === '1'
+}
 
 function hostPrefix(): string {
     return os.hostname()
@@ -115,24 +150,36 @@ function commandText(command: any): string {
     return JSON.stringify(command)
 }
 
+/**
+ * `dbStats` reply. The Rust primitive computes every count and byte from the
+ * stored documents; this host only contributes the filesystem figures it can
+ * measure, and only for a database that exists (which is when `mongod 8.0.9`
+ * reports them).
+ */
+function databaseStatsReply(session: Session, command: any, dataDir: string): any {
+    const database = command.$db ?? 'admin'
+    const databases = document(binding.listDatabases(session.store)).databases
+    const exists = Array.isArray(databases) && databases.some((entry) => entry?.name === database)
+    let filesystem: [number, number] | null = null
+    if (exists) {
+        try {
+            const stats = statfsSync(dataDir)
+            const total = stats.blocks * stats.bsize
+            filesystem = [(stats.blocks - stats.bfree) * stats.bsize, total]
+        } catch {
+            // An unreadable filesystem reports zero, like an unknown database.
+        }
+    }
+    return document(binding.dbStats(session.store, commandText(command), filesystem?.[0] ?? null, filesystem?.[1] ?? null))
+}
+
 /** Intersection of the client's `compression` array and what this server really does. */
 export function negotiatedCompressors(offered: unknown, supported: string[] = SUPPORTED_COMPRESSORS): string[] {
     if (!Array.isArray(offered)) return []
     return offered.filter((name) => typeof name === 'string' && supported.includes(name))
 }
 
-/** Inserts extra fields immediately before `ok`, the order `mongod` uses. */
-function beforeOk(base: any, extras: [string, any][]): any {
-    if (extras.length === 0) return base
-    const result: any = {}
-    for (const [key, value] of Object.entries(base)) {
-        if (key === 'ok') for (const [extraKey, extraValue] of extras) result[extraKey] = extraValue
-        result[key] = value
-    }
-    return result
-}
-
-function helloReply(command: any, supported: string[], session: Session): any {
+function helloReply(command: any, supported: string[], session: Session, view: ServerView): any {
     const negotiated = negotiatedCompressors(command.compression, supported)
     session.negotiated = negotiated
     const extras: [string, any][] = []
@@ -151,10 +198,25 @@ function helloReply(command: any, supported: string[], session: Session): any {
             extras.push(['speculativeAuthenticate', { conversationId, done, payload }])
         }
     }
-    return beforeOk(document(binding.hello()), extras)
+
+    // `mongod` order: topology first in replica set mode (or the writable-primary
+    // flag first standalone), then the static limits, `connectionId` between
+    // `logicalSessionTimeoutMinutes` and `minWireVersion`, then negotiated extras.
+    const base = document(binding.hello())
+    const name = Object.keys(command)[0]
+    const result: any = {}
+    for (const [key, value] of topologyHandshake(view.replica, name)) result[key] = value
+    for (const [key, value] of Object.entries(base)) {
+        if (key === 'ok' || key === 'isWritablePrimary') continue
+        if (key === 'minWireVersion') result.connectionId = numberValue(session.connectionId)
+        result[key] = value
+    }
+    for (const [key, value] of extras) result[key] = value
+    result.ok = base.ok
+    return result
 }
 
-function dispatch(session: Session, supported: string[], command: any, view: ServerView, authRequired: boolean): any {
+function dispatch(session: Session, supported: string[], command: any, view: ServerView, authRequired: boolean, me: string): any {
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') throw new WireError('command document is empty')
 
@@ -165,7 +227,10 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
         if (!localhostException) return authenticationRequired(name)
     }
 
-    if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session)
+    if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session, view)
+    if (name === 'replSetInitiate' || name === 'replSetGetConfig' || name === 'replSetGetStatus') {
+        return replicaCommand(view.replica, name, command, me)
+    }
 
     // `db.currentOp()` is an aggregate over `$currentOp`; there are no
     // background operations in this server, so an empty list is the honest
@@ -198,6 +263,8 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
             return dropUserCommand(session, command)
         case 'logout':
             return logoutCommand(session)
+        case 'usersInfo':
+            return usersInfoCommand(session, command)
         case 'insert':
             return document(binding.insert(session.store, text))
         case 'find':
@@ -234,6 +301,8 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
             return document(binding.abortTransaction(session.store, text))
         case 'listDatabases':
             return document(binding.listDatabases(session.store))
+        case 'dbStats':
+            return databaseStatsReply(session, command, view.dataDir)
         case 'createIndexes':
             return document(binding.createIndexes(session.store, text))
         case 'listIndexes':
@@ -310,6 +379,7 @@ export function createServer(options: ServerOptions): MongoServer {
 
     const store = new binding.MongoStore(join(options.dataDir, 'mongo.yykv'))
     const authRequired = options.auth === true
+    const replica = createReplicaState(options.replSet ?? null)
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
     let replyId = 0
     let closed = false
@@ -322,7 +392,8 @@ export function createServer(options: ServerOptions): MongoServer {
             store,
             cursors: new binding.MongoCursors(),
             negotiated: [],
-            auth: createAuthState()
+            auth: createAuthState(),
+            connectionId: (replica.connectionCounter += 1)
         }
 
         let buffer = Buffer.alloc(0)
@@ -390,10 +461,15 @@ export function createServer(options: ServerOptions): MongoServer {
                     {
                         port: boundPort(netServer),
                         openConnections: sockets.size,
-                        totalConnections: stats.connections
+                        totalConnections: stats.connections,
+                        dataDir: options.dataDir,
+                        replica
                     },
-                    authRequired
+                    authRequired,
+                    `${socket.localAddress}:${socket.localPort}`
                 )
+                const commandName = Object.keys(command)[0]
+                if (WRITE_COMMANDS.has(commandName) && replyOk(body)) noteWrite(replica)
                 stats.negotiated = session.negotiated
                 reply(inbound.header.requestId, inbound, body)
             } catch (error) {

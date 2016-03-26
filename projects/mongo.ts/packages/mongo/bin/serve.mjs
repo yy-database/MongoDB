@@ -4,6 +4,7 @@
 //
 // usage: node bin/serve.mjs --data-dir <dir> [--port <n>] [--host <addr>]
 //                            [--compressors snappy,zlib,zstd] [--auth]
+//                            [--repl-set <name>]
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -31,8 +32,9 @@ const port = Number(option('port') ?? '27017')
 const host = option('host') ?? '127.0.0.1'
 const compressors = option('compressors')?.split(',').filter(Boolean)
 const auth = args.includes('--auth')
+const replSet = option('repl-set')
 
-const server = createServer({ dataDir, port, host, compressors, auth })
+const server = createServer({ dataDir, port, host, compressors, auth, replSet })
 const address = await server.listening
 console.log(JSON.stringify({ ready: true, host: address.host, port: address.port }))
 

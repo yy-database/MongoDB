@@ -236,6 +236,16 @@ pub fn list_databases(store: &MongoStore) -> String {
     reply(&commands::list_databases(store_of(store)))
 }
 
+/// `dbStats` reply.
+///
+/// `fsUsed` / `fsTotal` are filesystem bytes measured by the host; `None` when
+/// the database does not exist, which is when `mongod` also reports zero.
+#[napi]
+pub fn db_stats(store: &MongoStore, command: String, fs_used: Option<i64>, fs_total: Option<i64>) -> Result<String> {
+    let filesystem = fs_used.zip(fs_total);
+    Ok(command_reply(commands::db_stats(&decode_command(&command)?, store_of(store), filesystem)))
+}
+
 /// `createIndexes` reply.
 #[napi]
 pub fn create_indexes(store: &MongoStore, command: String) -> Result<String> {

@@ -60,3 +60,85 @@ Deliberate limits:
   `mongod` answers `RoleNotFound` (31). Custom roles do not exist here.
 - **`saslStart` payload type.** A base64 string payload is decoded, and an
   invalid one answers `Failed decoding SASL payload: invalid base64` (10270).
+
+## `dbStats`
+
+`objects`, `dataSize` and `avgObjSize` are exact: a document counts its encoded
+BSON length, which is what `mongod` sums, and `system.*` collections are
+excluded.
+
+`storageSize` is an estimate. Indexes are not stored as separate structures, so
+`indexSize` is always 0 and `storageSize` sums document key and value bytes
+instead of the `.yykv` page layout `mongod` reports. `fsUsedSize` and
+`fsTotalSize` come from the volume that holds the data directory (the host
+filesystem, not a database-private quota), and `freeStorage` is not reported.
+`scale` follows `mongod`: zero or negative answers code 2, a fractional value
+counts as 1, and a non-numeric value answers code 14.
+
+## `usersInfo` / `show users`
+
+`usersInfo: 1`, a user name, `{user, db}`, an array of either and
+`{forAllDBs: true}` are answered from `<db>.system.users` with `mongod`'s
+validation texts, field order, `roles` sorting and the fixed
+`['SCRAM-SHA-1', 'SCRAM-SHA-256']` mechanism list.
+
+**`showPrivileges` is partial.** The reply reports `inheritedRoles` as the
+stored roles, `inheritedPrivileges` as an empty array and
+`inheritedAuthenticationRestrictions` as an empty array. `mongod` expands
+built-in roles into their privilege sets (and `root` into every privilege), so a
+client that depends on the expanded privileges sees less than a real server.
+Authorization is not enforced yet, so nothing consumes those privileges.
+
+## Replica set
+
+`hello`/`isMaster` and `replSetInitiate` / `replSetGetConfig` /
+`replSetGetStatus` reproduce `mongod 8.0.9` for a **single-member** set,
+including field order, the default configuration that `rs.initiate()` obtains
+from an empty request, and the error codes 76, 93, 94 and 23 with their texts.
+
+Limits a client can observe:
+
+- **Only member 0 is real.** A configuration with several members is stored and
+  `hello.hosts` lists them, but nothing contacts them; `replSetGetStatus` reports
+  member 0 only. There is no election, no sync, no rollback and no failover.
+- **No oplog.** `optime` advances with the writes this server accepts and has
+  `t: -1` until the first one; there is no `local.oplog.rs` collection, so
+  nothing can replay or tail it.
+- **The configuration is in memory.** Real `mongod` persists it in
+  `local.system.replset`; here a restart returns to `NotYetInitialized` (94) and
+  needs `rs.initiate()` again.
+- **`replSetReconfig`, `replSetStepDown` and `replSetFreeze` are not
+  implemented** (CommandNotFound). `topologyVersion.counter` advances when the
+  member state changes (initiation), not on heartbeats.
+- **No cluster time.** Replies carry neither `$clusterTime` nor `operationTime`.
+  Sessions, retryable writes and transactions are accepted, but the retry
+  metadata a real server attaches to replies is absent.
+- **Retryable writes are executed but not deduplicated.** A write stamped with
+  `txnNumber` outside a transaction runs normally, as `mongod` does, but there is
+  no `config.transactions` record, so a retried write with the same `txnNumber`
+  runs a second time instead of being suppressed.
+- **`hello` is not streamed.** An awaitable handshake (`topologyVersion` plus
+  `maxAwaitTimeMS` and `exhaustAllowed`) gets one immediate reply instead of a
+  held-open reply stream, so a client configured with
+  `serverMonitoringMode: stream` sees the stream end. The driver's default
+  monitoring mode and `mongosh` work against the set once it is initiated.
+- **`electionCandidateMetrics` is absent** from `replSetGetStatus`, and
+  `electionTime` is the initiation timestamp rather than an election write.
+
+## Authentication deviations: re-evaluation
+
+After the replica-set block the four open authentication deviations were
+reviewed again. Replica-set mode neither widens nor narrows any of them, but it
+raises the exposure of the first one: production drivers connect with
+`directConnection=false`, so any authenticated client that reaches the set can
+read and write every database.
+
+| Deviation | Risk | Plan |
+|---|---|---|
+| Only authentication, no authorization | **High.** Every authenticated user runs every command; `mongod` answers `not authorized on <db> to execute command` (13) for a role that lacks the action. | Close it in the **first block after `dropDatabase`**, before any external demonstration. Build the built-in role → action table (`read`, `readWrite`, `dbAdmin`, `userAdmin`, `clusterAdmin`, `root`), enforce it in the TypeScript dispatch against the roles already stored in `<db>.system.users`, and expand `showPrivileges` from the same table. Gate: a `readWrite` user is refused `listDatabases` (13) and still reads its own collection. |
+| No SASLprep | Medium, non-ASCII passwords only; ASCII passwords are byte-identical to `mongod`. | Same block: RFC 4013 normalisation in `createUser` and in credential verification, proven with a non-ASCII password fixture. |
+| No GS2 authzid | Low. No mainstream driver sends `a=`; clients that do get `Authentication failed.` instead of a successful login. | Same block: accept and validate `a=` in the client-first message instead of rejecting it. |
+| `createUser` accepts unknown roles | Medium, and it disappears with the role table. | Same block: answer `RoleNotFound` (31) for a role that is neither built-in nor a stored user-defined role. |
+
+Until that block lands, `--auth` protects identities but not data and must not be
+described as an authorization boundary.

@@ -207,7 +207,7 @@ for (const [name, id, compressor] of [
 
 // --- official Node driver ---------------------------------------------------
 
-const { MongoClient } = await import('mongodb')
+const { MongoClient, BSON } = await import('mongodb')
 const client = new MongoClient(`mongodb://${address.host}:${address.port}/?directConnection=true`, {
     compressors: ['zlib'],
     serverSelectionTimeoutMS: 5000
@@ -454,6 +454,219 @@ const login = await connect(authAddress.port)
     equal(await legacy.db('secured').collection('items').countDocuments({}), 2, 'a driver authenticated with SCRAM-SHA-1 runs reads')
     await legacy.close()
 }
+
+// --- dbStats ----------------------------------------------------------------
+
+// Real byte counts from the stored documents, never a constant. The `acceptance`
+// database holds `{_id: 1, v: 'a'}` and `{_id: 2, v: 'z'}` in one collection.
+{
+    const connection = await connect(address.port)
+    const expectedSize = BSON.calculateObjectSize({ _id: 1, v: 'a' }) + BSON.calculateObjectSize({ _id: 2, v: 'z' })
+    const stats = await command(connection, { dbStats: 1, $db: 'acceptance' })
+    equal(stats.db, 'acceptance', 'dbStats names the database')
+    equal(stats.collections, { $numberInt: '1' }, 'dbStats counts the stored collections')
+    equal(stats.objects, { $numberInt: '2' }, 'dbStats counts the stored documents')
+    equal(Number(stats.dataSize.$numberInt ?? stats.dataSize.$numberLong), expectedSize, 'dbStats sums the encoded document bytes')
+    equal(Number(stats.avgObjSize.$numberInt ?? stats.avgObjSize.$numberDouble), expectedSize / 2, 'avgObjSize divides dataSize by objects')
+    equal(stats.indexes, { $numberInt: '1' }, 'dbStats counts the implicit _id index')
+    equal(stats.indexSize, { $numberInt: '0' }, 'indexSize is zero because indexes are not materialised')
+    ok(Number(stats.storageSize.$numberInt) > expectedSize, 'storageSize counts the shard records, keys included')
+    ok(Number(stats.fsTotalSize.$numberLong) > 0, 'filesystem sizes come from the host volume')
+
+    const scaled = await command(connection, { dbStats: 1, scale: 1024, $db: 'acceptance' })
+    equal(scaled.scaleFactor, { $numberInt: '1024' }, 'dbStats reports the scale factor')
+    equal(Number(scaled.dataSize.$numberDouble), expectedSize / 1024, 'scaled dataSize stays a double')
+    equal(Number(scaled.storageSize.$numberInt), Math.floor(Number(stats.storageSize.$numberInt) / 1024), 'scaled storageSize shrinks')
+
+    const absent = await command(connection, { dbStats: 1, $db: 'never_created' })
+    equal(absent.collections, { $numberInt: '0' }, 'an absent database has no collections')
+    equal(absent.fsUsedSize, { $numberLong: '0' }, 'an absent database reports zero filesystem usage')
+
+    const invalid = await command(connection, { dbStats: 1, scale: 0, $db: 'acceptance' })
+    equal(invalid.code, { $numberInt: '2' }, 'a zero scale is a bad value')
+    equal(invalid.errmsg, 'Scale factor must be greater than zero', 'the scale text matches mongod')
+    connection.socket.destroy()
+}
+
+// --- usersInfo (`show users`) ----------------------------------------------
+
+{
+    const inspector = await connect(authAddress.port)
+    const session = await scram(inspector, 'root', 'root-pass')
+    equal(session.finished.done, true, 'the inspector logs in')
+
+    const all = await command(inspector, { usersInfo: 1, $db: 'admin' })
+    ok(Array.isArray(all.users), 'usersInfo answers a users array')
+    const root = all.users.find((entry) => entry.user === 'root')
+    ok(root !== undefined, 'the root user is listed')
+    equal(root._id, 'admin.root', 'the user id names the database')
+    equal(root.db, 'admin', 'the user reports its database')
+    equal(root.roles, [{ role: 'root', db: 'admin' }], 'the roles are reported as documents')
+    equal(root.mechanisms, ['SCRAM-SHA-1', 'SCRAM-SHA-256'], 'both registered mechanisms are reported')
+    equal(Object.hasOwn(root, 'credentials'), false, 'credentials stay hidden by default')
+
+    const withCredentials = await command(inspector, { usersInfo: 'root', showCredentials: true, $db: 'admin' })
+    ok(withCredentials.users[0].credentials['SCRAM-SHA-1'] !== undefined, 'showCredentials reveals the SHA-1 credential')
+    equal(Number(withCredentials.users[0].credentials['SCRAM-SHA-1'].iterationCount.$numberInt), 10000, 'the SHA-1 iteration count is mongod\u2019s')
+    equal(Number(withCredentials.users[0].credentials['SCRAM-SHA-256'].iterationCount.$numberInt), 15000, 'the SHA-256 iteration count is mongod\u2019s')
+
+    const byName = await command(inspector, { usersInfo: [{ user: 'root', db: 'admin' }], $db: 'admin' })
+    equal(byName.users.length, 1, 'an array of lookups is answered')
+    const ghost = await command(inspector, { usersInfo: 'ghost', $db: 'admin' })
+    equal(ghost.users, [], 'a missing user yields an empty array')
+    const everything = await command(inspector, { usersInfo: { forAllDBs: true }, $db: 'admin' })
+    ok(everything.users.length >= 3, 'forAllDBs lists every stored user')
+
+    const wrongType = await command(inspector, { usersInfo: true, $db: 'admin' })
+    equal(wrongType.code, { $numberInt: '2' }, 'a boolean lookup is a bad value')
+    equal(wrongType.errmsg, 'UserName must be either a string or an object', 'the lookup type text matches mongod')
+    const noDatabase = await command(inspector, { usersInfo: { user: 'root' }, $db: 'admin' })
+    equal(noDatabase.errmsg, 'UserName must contain a field named: db', 'a lookup without db matches mongod')
+    const empty = await command(inspector, { usersInfo: [], $db: 'admin' })
+    equal(empty.errmsg, '$or argument must be a non-empty array', 'an empty lookup array matches mongod')
+    inspector.socket.destroy()
+}
+
+// --- replica set ------------------------------------------------------------
+
+const replicaDir = mkdtempSync(join(tmpdir(), 'mongo-rs-'))
+const replicaServer = createServer({ dataDir: replicaDir, port: 0, replSet: 'rs0' })
+const replicaAddress = await replicaServer.listening
+const replicaConnection = await connect(replicaAddress.port)
+const replicaMe = `127.0.0.1:${replicaAddress.port}`
+
+const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin' })
+{
+    equal(Object.hasOwn(beforeInitiate, 'topologyVersion'), true, 'hello announces the topology version')
+    ok(typeof beforeInitiate.topologyVersion.processId.$oid === 'string', 'topologyVersion carries a process id')
+    equal(beforeInitiate.isWritablePrimary, false, 'an uninitiated set is not writable')
+    equal(beforeInitiate.secondary, false, 'an uninitiated member is not secondary')
+    equal(beforeInitiate.info, 'Does not have a valid replica set config', 'the uninitiated text matches mongod')
+    equal(beforeInitiate.isreplicaset, true, 'an uninitiated set reports isreplicaset')
+    equal(beforeInitiate.maxWireVersion, { $numberInt: '25' }, 'the wire version is 25')
+    equal(beforeInitiate.logicalSessionTimeoutMinutes, { $numberInt: '30' }, 'sessions time out in 30 minutes')
+    ok(typeof beforeInitiate.connectionId.$numberInt === 'string', 'hello carries a connectionId')
+
+    const legacy = await command(replicaConnection, { isMaster: 1, $db: 'admin' })
+    equal(legacy.ismaster, false, 'isMaster uses the legacy writable field')
+    equal(Object.hasOwn(legacy, 'isWritablePrimary'), false, 'isMaster omits isWritablePrimary')
+
+    const notYet = await command(replicaConnection, { replSetGetStatus: 1, $db: 'admin' })
+    equal(notYet.code, { $numberInt: '94' }, 'status before initiation matches mongod')
+    equal(notYet.errmsg, 'no replset config has been received', 'the not-yet text matches mongod')
+
+    const initiated = await command(replicaConnection, { replSetInitiate: {}, $db: 'admin' })
+    equal(initiated.ok, { $numberDouble: '1.0' }, 'an empty initiate uses the default configuration')
+    equal(initiated.info2, 'no configuration specified. Using a default configuration for the set', 'the default-config text matches mongod')
+    equal(initiated.me, replicaMe, 'the default member is the address the client used')
+
+    const repeated = await command(replicaConnection, { replSetInitiate: {}, $db: 'admin' })
+    equal(repeated.code, { $numberInt: '23' }, 'a second initiate is rejected')
+    equal(repeated.errmsg, 'already initialized', 'the already-initialized text matches mongod')
+
+    const config = (await command(replicaConnection, { replSetGetConfig: 1, $db: 'admin' })).config
+    equal(config._id, 'rs0', 'the config carries the command-line set name')
+    equal(config.version, { $numberInt: '1' }, 'the config version starts at one')
+    equal(config.term, { $numberInt: '0' }, 'a fresh config has no term')
+    equal(config.members.length, 1, 'the default config has one member')
+    equal(config.members[0]._id, { $numberInt: '0' }, 'the member id is zero')
+    equal(config.members[0].host, replicaMe, 'the member host is the connection address')
+    equal(config.protocolVersion, { $numberLong: '1' }, 'protocolVersion is a long like mongod')
+    ok(typeof config.settings.replicaSetId.$oid === 'string', 'the config carries a replica set id')
+
+    const status = await command(replicaConnection, { replSetGetStatus: 1, $db: 'admin' })
+    equal(status.set, 'rs0', 'status names the set')
+    equal(status.myState, { $numberInt: '1' }, 'the member is primary')
+    equal(status.members.length, 1, 'status lists one member')
+    equal(status.members[0]._id, { $numberInt: '0' }, 'the member id is zero')
+    equal(status.members[0].stateStr, 'PRIMARY', 'the member state string is PRIMARY')
+    equal(status.members[0].syncSourceHost, '', 'a primary has no sync source')
+    equal(status.members[0].configVersion, { $numberInt: '1' }, 'the member reports its config version')
+    ok(status.members[0].optime.ts.$timestamp !== undefined, 'the member reports an optime')
+    equal(status.syncSourceHost, '', 'status has no sync source')
+
+    const after = await command(replicaConnection, { hello: 1, $db: 'admin' })
+    equal(after.isWritablePrimary, true, 'initiation makes the member writable')
+    equal(after.secondary, false, 'the member is not secondary')
+    equal(after.setName, 'rs0', 'hello names the set')
+    equal(after.hosts, [replicaMe], 'hello lists the member host')
+    equal(after.primary, replicaMe, 'hello names the primary')
+    equal(after.me, replicaMe, 'hello names this member')
+    ok(
+        Number(after.topologyVersion.counter.$numberLong) > Number(beforeInitiate.topologyVersion.counter.$numberLong),
+        'the topology counter advances when the member state changes'
+    )
+
+    const write = await command(replicaConnection, { insert: 'items', documents: [{ _id: 1, ok: true }], $db: 'rs_accept' })
+    equal(write.ok, { $numberDouble: '1.0' }, 'a write lands on the replica set')
+    const advanced = await command(replicaConnection, { replSetGetStatus: 1, $db: 'admin' })
+    equal(advanced.members[0].optime.t, { $numberLong: '1' }, 'the optime term becomes 1 after a write')
+}
+
+{
+    const freshDir = mkdtempSync(join(tmpdir(), 'mongo-rs-fresh-'))
+    const freshServer = createServer({ dataDir: freshDir, port: 0, replSet: 'rs0' })
+    const freshAddress = await freshServer.listening
+    const fresh = await connect(freshAddress.port)
+
+    const wrongName = await command(fresh, { replSetInitiate: { _id: 'wrong', members: [{ _id: 0, host: '127.0.0.1:1' }] }, $db: 'admin' })
+    equal(wrongName.code, { $numberInt: '93' }, 'a mismatched set name is rejected')
+    ok(wrongName.errmsg.includes('initiate set name: wrong, command line set name: rs0'), 'the mismatch text names both sets')
+
+    const missingMembers = await command(fresh, { replSetInitiate: { _id: 'rs0' }, $db: 'admin' })
+    equal(missingMembers.errmsg, "BSON field 'ReplSetConfig.members' is missing but a required field", 'a config without members matches mongod')
+
+    const emptyMembers = await command(fresh, { replSetInitiate: { _id: 'rs0', members: [] }, $db: 'admin' })
+    equal(
+        emptyMembers.errmsg,
+        'Replica set configuration contains 0 members, but must have at least 1 and no more than  50',
+        'an empty member list matches mongod'
+    )
+
+    const noHost = await command(fresh, { replSetInitiate: { _id: 'rs0', members: [{ _id: 0 }] }, $db: 'admin' })
+    ok(noHost.errmsg.startsWith("member: { _id: 0 } :: caused by :: BSON field 'MemberConfig.host'"), 'a member without host matches mongod')
+
+    const numeric = await command(fresh, { replSetInitiate: 1, $db: 'admin' })
+    equal(numeric.info2, 'no configuration specified. Using a default configuration for the set', 'a numeric initiate also uses the default configuration')
+    fresh.socket.destroy()
+    await freshServer.close()
+}
+
+{
+    const standalone = await connect(address.port)
+    const status = await command(standalone, { replSetGetStatus: 1, $db: 'admin' })
+    equal(status.code, { $numberInt: '76' }, 'a standalone node has no replication')
+    equal(status.errmsg, 'not running with --replSet', 'the standalone status text matches mongod')
+    const config = await command(standalone, { replSetGetConfig: 1, $db: 'admin' })
+    equal(config.code, { $numberInt: '76' }, 'a standalone node has no config')
+    const initiate = await command(standalone, { replSetInitiate: {}, $db: 'admin' })
+    equal(initiate.code, { $numberInt: '76' }, 'a standalone node cannot be initiated')
+    equal(initiate.errmsg, 'This node was not started with replication enabled.', 'the standalone initiate text matches mongod')
+    standalone.socket.destroy()
+}
+
+{
+    const replicaClient = new MongoClient(`mongodb://127.0.0.1:${replicaAddress.port}/?replicaSet=rs0`, {
+        serverSelectionTimeoutMS: 5000
+    })
+    await replicaClient.connect()
+    equal(replicaClient.topology.description.type, 'ReplicaSetWithPrimary', 'the driver discovers the primary without directConnection')
+    const session = replicaClient.startSession()
+    await session.withTransaction(async () => {
+        const items = replicaClient.db('rs_accept').collection('items')
+        await items.insertOne({ _id: 2, ok: true }, { session })
+    })
+    await session.endSession()
+    equal((await replicaClient.db('rs_accept').collection('items').findOne({ _id: 2 })).ok, true, 'a transaction commits on the replica set')
+    // Outside a transaction the driver still stamps `txnNumber`, which makes the
+    // write retryable; `mongod` accepts it without an open transaction.
+    await replicaClient.db('rs_accept').collection('items').insertOne({ _id: 3, ok: true })
+    equal((await replicaClient.db('rs_accept').collection('items').findOne({ _id: 3 })).ok, true, 'a retryable write outside a transaction lands')
+    await replicaClient.close()
+}
+
+replicaConnection.socket.destroy()
+await replicaServer.close()
 
 login.socket.destroy()
 await authServer.close()

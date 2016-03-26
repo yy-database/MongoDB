@@ -42,6 +42,8 @@ const mismatches = []
 const normalize = (value) =>
     value
         .replace(/"\$oid":"[0-9a-f]{24}"/g, '"$oid":"<generated>"')
+        // `hello` reports the wall clock; the two runners never share a millisecond.
+        .replace(/"localTime":\{"\$date":\{"\$numberLong":"\d+"\}\}/g, '"localTime":"<now>"')
         .replace(/`[^`"]*(?:\.yyds|\.yykv)`/g, '`<path>`')
 for (const [id, tsResult] of tsCases) {
     const pyResult = pyCases.get(id)

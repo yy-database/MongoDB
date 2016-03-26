@@ -7,10 +7,15 @@
             "program": [{ "op": "hello", "as": "r1" }],
             "checks": [
                 { "at": "/r1/isWritablePrimary", "equals": true },
-                { "at": "/r1/maxWireVersion", "equals": { "$numberInt": "17" } },
+                { "at": "/r1/maxWireVersion", "equals": { "$numberInt": "25" } },
                 { "at": "/r1/minWireVersion", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/maxBsonObjectSize", "equals": { "$numberInt": "16777216" } },
+                { "at": "/r1/maxMessageSizeBytes", "equals": { "$numberInt": "48000000" } },
+                { "at": "/r1/maxWriteBatchSize", "equals": { "$numberInt": "100000" } },
+                { "at": "/r1/logicalSessionTimeoutMinutes", "equals": { "$numberInt": "30" } },
+                { "at": "/r1/readOnly", "equals": false },
                 { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } },
-                { "at": "/r1/#", "equals": 4 }
+                { "at": "/r1/#", "equals": 10 }
             ]
         },
         {

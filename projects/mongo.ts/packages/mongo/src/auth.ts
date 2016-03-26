@@ -346,6 +346,161 @@ export function logoutCommand(session: { auth: AuthState }): any {
     return { ok: OK }
 }
 
+/** Mechanism order `mongod 8.0.9` reports in `usersInfo` and `showCredentials`. */
+const USER_REPORT_MECHANISMS: ScramMechanism[] = ['SCRAM-SHA-1', 'SCRAM-SHA-256']
+
+const USER_LOOKUP_FIELDS = new Set(['user', 'db'])
+
+/** Every user document of one database, in stored `_id` order. */
+function storedUsers(session: { store: any; cursors: any }, db: string): any[] {
+    const find = JSON.stringify({ find: 'system.users', filter: {}, $db: db })
+    const batch = JSON.parse(binding.find(session.store, session.cursors, find))?.cursor?.firstBatch
+    return Array.isArray(batch) ? batch : []
+}
+
+function storedDatabases(store: any): string[] {
+    const databases = JSON.parse(binding.listDatabases(store))?.databases
+    if (!Array.isArray(databases)) return []
+    return databases.map((entry: any) => entry?.name).filter((name: unknown): name is string => typeof name === 'string')
+}
+
+/** BSON type name used by `mongod`'s lookup validation messages. */
+function typeName(value: unknown): string {
+    if (value === null) return 'null'
+    if (Array.isArray(value)) return 'array'
+    if (typeof value === 'string') return 'string'
+    if (typeof value === 'boolean') return 'bool'
+    if (typeof value === 'number') return Number.isInteger(value) ? 'int' : 'double'
+    if (typeof value === 'object') {
+        const tag = value as Record<string, unknown>
+        if (Object.hasOwn(tag, '$numberInt')) return 'int'
+        if (Object.hasOwn(tag, '$numberLong')) return 'long'
+        if (Object.hasOwn(tag, '$numberDouble')) return 'double'
+        if (Object.hasOwn(tag, '$numberDecimal')) return 'decimal'
+        if (Object.hasOwn(tag, '$binary')) return 'binData'
+        return 'object'
+    }
+    return 'undefined'
+}
+
+interface UserSelection {
+    db: string
+    user: string
+}
+
+/**
+ * Parses the polymorphic `usersInfo` argument: `1` for every user of the
+ * current database, a name, `{user, db}`, an array of either, or
+ * `{forAllDBs: true}`. Replies carry the same validation texts
+ * `mongod 8.0.9` produces.
+ */
+function parseUserSelection(value: any, currentDb: string): UserSelection[] | { error: any } | { allDatabases: true } | { allInDb: string } {
+    if (typeof value === 'string') return [{ db: currentDb, user: value }]
+    if (Array.isArray(value)) {
+        if (value.length === 0) return { error: badValue('$or argument must be a non-empty array') }
+        const selections: UserSelection[] = []
+        for (const element of value) {
+            const parsed = parseUserSelection(element, currentDb)
+            if (!Array.isArray(parsed)) return parsed
+            selections.push(...parsed)
+        }
+        return selections
+    }
+    // A numeric lookup means "every user of this database" when it truncates to
+    // 1, which is the only numeric form `mongod 8.0.9` accepts.
+    const number = numeric(value)
+    if (Number.isFinite(number)) {
+        if (Math.trunc(number) === 1) return { allInDb: currentDb }
+        return { error: badValue('UserName must be either a string or an object') }
+    }
+    if (value === null || typeof value !== 'object') return { error: badValue('UserName must be either a string or an object') }
+    if (Object.hasOwn(value, 'forAllDBs') && value.forAllDBs === true) return { allDatabases: true }
+    for (const key of Object.keys(value)) {
+        if (!USER_LOOKUP_FIELDS.has(key)) return { error: badValue(`UserName contains an unknown field named: '${key}`) }
+    }
+    if (!Object.hasOwn(value, 'user')) return { error: badValue('UserName must contain a field named: user') }
+    if (typeof value.user !== 'string') {
+        return { error: badValue(`UserName must contain a string field named: user. But, has type ${typeName(value.user)}`) }
+    }
+    if (!Object.hasOwn(value, 'db')) return { error: badValue('UserName must contain a field named: db') }
+    if (typeof value.db !== 'string') {
+        return { error: badValue(`UserName must contain a string field named: db. But, has type ${typeName(value.db)}`) }
+    }
+    return [{ db: value.db, user: value.user }]
+}
+
+function sortedRoles(document: any): AuthRole[] {
+    return rolesOf(document).sort((left, right) =>
+        left.role < right.role ? -1 : left.role > right.role ? 1 : left.db < right.db ? -1 : left.db > right.db ? 1 : 0
+    )
+}
+
+/** One entry of `usersInfo.users`, in `mongod`'s field order. */
+function userReport(document: any, showCredentials: boolean, showPrivileges: boolean): any {
+    const report: any = {
+        _id: document._id,
+        userId: document.userId,
+        user: document.user,
+        db: document.db
+    }
+    const mechanisms = USER_REPORT_MECHANISMS.filter((mechanism) => document.credentials?.[mechanism] !== undefined)
+    // `mongod` moves `mechanisms` ahead of the credentials only when privileges
+    // are expanded; otherwise it sits after `roles`.
+    if (showPrivileges) report.mechanisms = mechanisms
+    if (showCredentials) {
+        const credentials: any = {}
+        for (const mechanism of mechanisms) credentials[mechanism] = document.credentials[mechanism]
+        report.credentials = credentials
+    }
+    report.roles = sortedRoles(document)
+    if (!showPrivileges) report.mechanisms = mechanisms
+    if (showPrivileges) {
+        // Role inheritance is not modelled: the stored roles are the inherited
+        // roles, and no privilege is expanded from them.
+        report.inheritedRoles = report.roles
+        report.inheritedPrivileges = []
+        report.inheritedAuthenticationRestrictions = []
+    }
+    return report
+}
+
+/**
+ * `usersInfo`, the command behind `show users`.
+ *
+ * Credentials are read back from `<db>.system.users`; `showCredentials` returns
+ * the stored document and `showPrivileges` reports stored roles without
+ * expanding built-in privileges (see `KNOWN-DIFFERENCES.md`).
+ */
+export function usersInfoCommand(session: { store: any; cursors: any }, command: any): any {
+    const currentDb = command.$db ?? 'admin'
+    const parsed = parseUserSelection(command.usersInfo, currentDb)
+    if ('error' in parsed) return parsed.error
+    const showCredentials = command.showCredentials === true
+    const showPrivileges = command.showPrivileges === true
+
+    const documents: any[] = []
+    if ('allDatabases' in parsed) {
+        for (const db of storedDatabases(session.store)) documents.push(...storedUsers(session, db))
+    }
+    else if ('allInDb' in parsed) {
+        documents.push(...storedUsers(session, parsed.allInDb))
+    }
+    else {
+        const groups = new Map<string, Set<string>>()
+        for (const selection of parsed) {
+            const users = groups.get(selection.db) ?? new Set<string>()
+            users.add(selection.user)
+            groups.set(selection.db, users)
+        }
+        for (const [db, names] of groups) {
+            for (const document of storedUsers(session, db)) {
+                if (names.has(document.user)) documents.push(document)
+            }
+        }
+    }
+    return { users: documents.map((document) => userReport(document, showCredentials, showPrivileges)), ok: OK }
+}
+
 /** Commands `mongod 8.0.9` answers before authentication. */
 const PRE_AUTH_COMMANDS = new Set(['hello', 'isMaster', 'ismaster', 'ping', 'buildInfo', 'connectionStatus', 'saslStart', 'saslContinue', 'authenticate'])
 
