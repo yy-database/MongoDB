@@ -19,10 +19,11 @@ repository = "https://github.com/yy-database/MongoDB"
 # database.rs dependencies: the `database` facade (.yykv shard storage) and the
 # shared `database-protocol-mongo` BSON / wire codec.
 # Pin full 40-char revs. Local path overrides belong in `.cargo/config.toml`.
-database = { git = "https://github.com/oovm/database.rs.git", rev = "904bee590dfc0282d4d2ad5ee31773e7f25e658b", default-features = false }
+# Both pins must name the same `database.rs` `dev` rev: a split pin compiles
+# `database-types` twice from two sources and lets one dependency drift.
+database = { git = "https://github.com/oovm/database.rs.git", rev = "b80ed2156e26695ec3e08c2336f820a123e09d85", default-features = false }
 # BSON / OP_MSG codec lives upstream in the shared protocol crate.
-# Pin the full 40-char rev of `dev` that fixed shared BSON ordering on top of the full BSON surface.
-database-protocol-mongo = { git = "https://github.com/oovm/database.rs.git", rev = "e6cd17a11b9ba15d1d1a8803de0bfefe8c461d4c" }
+database-protocol-mongo = { git = "https://github.com/oovm/database.rs.git", rev = "b80ed2156e26695ec3e08c2336f820a123e09d85" }
 # `preserve_order` keeps command documents in the order the caller sent them.
 # MongoDB compares embedded documents and `$addToSet` values by field order, so
 # sorting keys at parse time would silently merge distinct documents.
