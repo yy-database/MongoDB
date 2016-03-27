@@ -105,6 +105,8 @@ interface ServerView {
     totalConnections: number
     dataDir: string
     replica: ReplicaState
+    /** Every live connection's cursor table, so a drop reaches all of them. */
+    cursorTables: Set<any>
 }
 
 const OK = { $numberDouble: '1.0' }
@@ -120,6 +122,7 @@ const WRITE_COMMANDS = new Set([
     'collMod',
     'createIndexes',
     'dropIndexes',
+    'dropDatabase',
     'createUser',
     'dropUser',
     'commitTransaction'
@@ -171,6 +174,22 @@ function databaseStatsReply(session: Session, command: any, dataDir: string): an
         }
     }
     return document(binding.dbStats(session.store, commandText(command), filesystem?.[0] ?? null, filesystem?.[1] ?? null))
+}
+
+/**
+ * `dropDatabase`: the Rust store removes every collection, index and user of
+ * the database in one atomic step; the reply is `{ ok: 1 }`, and `mongosh`
+ * adds the `dropped` field itself. Every live connection's cursors on that
+ * database are killed, so a later `getMore` answers `QueryPlanKilled` (175)
+ * and then `CursorNotFound`, exactly as `mongod 8.0.9` does.
+ */
+function dropDatabaseCommand(session: Session, command: any, view: ServerView): any {
+    const reply = document(binding.dropDatabase(session.store, commandText(command)))
+    if (replyOk(reply)) {
+        const database = command.$db ?? 'admin'
+        for (const cursors of view.cursorTables) cursors.dropDatabase(database)
+    }
+    return reply
 }
 
 /** Intersection of the client's `compression` array and what this server really does. */
@@ -303,6 +322,8 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
             return document(binding.listDatabases(session.store))
         case 'dbStats':
             return databaseStatsReply(session, command, view.dataDir)
+        case 'dropDatabase':
+            return dropDatabaseCommand(session, command, view)
         case 'createIndexes':
             return document(binding.createIndexes(session.store, text))
         case 'listIndexes':
@@ -385,12 +406,17 @@ export function createServer(options: ServerOptions): MongoServer {
     let closed = false
 
     const sockets = new Set<net.Socket>()
+    // Cursor tables of every open connection: `dropDatabase` must reach cursors
+    // opened by other clients too, not only the caller's own.
+    const cursorTables = new Set<any>()
     const netServer = net.createServer((socket) => {
         stats.connections += 1
         sockets.add(socket)
+        const cursors = new binding.MongoCursors()
+        cursorTables.add(cursors)
         const session: Session = {
             store,
-            cursors: new binding.MongoCursors(),
+            cursors,
             negotiated: [],
             auth: createAuthState(),
             connectionId: (replica.connectionCounter += 1)
@@ -463,7 +489,8 @@ export function createServer(options: ServerOptions): MongoServer {
                         openConnections: sockets.size,
                         totalConnections: stats.connections,
                         dataDir: options.dataDir,
-                        replica
+                        replica,
+                        cursorTables
                     },
                     authRequired,
                     `${socket.localAddress}:${socket.localPort}`
@@ -489,7 +516,10 @@ export function createServer(options: ServerOptions): MongoServer {
             pump()
         })
         socket.on('error', () => socket.destroy())
-        socket.on('close', () => sockets.delete(socket))
+        socket.on('close', () => {
+            sockets.delete(socket)
+            cursorTables.delete(cursors)
+        })
     })
 
     const listening = new Promise<ServerAddress>((resolvePromise, rejectPromise) => {
@@ -529,6 +559,7 @@ export function createServer(options: ServerOptions): MongoServer {
             await new Promise<void>((resolvePromise) => netServer.close(() => resolvePromise()))
             for (const socket of sockets) socket.destroy()
             sockets.clear()
+            cursorTables.clear()
         }
     }
 }

@@ -226,6 +226,86 @@ equal(removed.deletedCount, 1, 'driver delete under zlib')
 equal(await collection.countDocuments({}), 2, 'driver countDocuments under zlib')
 ok(server.stats.compressedRequests > 0, 'the driver actually sent compressed requests')
 ok(server.stats.compressedReplies > 0, 'the server actually sent compressed replies')
+
+// --- dropDatabase -----------------------------------------------------------
+
+{
+    const lived = client.db('drop_acceptance')
+    await lived.collection('items').deleteMany({})
+    await lived.collection('items').insertMany([{ _id: 1 }, { _id: 2 }])
+    await lived.collection('items').createIndex({ x: 1 })
+    await lived.collection('others').insertOne({ _id: 1 })
+    equal((await lived.command({ listCollections: 1 })).cursor.firstBatch.length, 2, 'dropDatabase starts with two collections')
+
+    const reply = await lived.command({ dropDatabase: 1 })
+    equal(JSON.stringify(reply), '{"ok":1}', 'dropDatabase replies with ok only, the shell adds dropped')
+    equal((await lived.command({ listCollections: 1 })).cursor.firstBatch.length, 0, 'listCollections is empty after the drop')
+    equal((await lived.collection('items').find({}).toArray()).length, 0, 'find returns nothing after the drop')
+    let missing = null
+    try {
+        await lived.command({ listIndexes: 'items' })
+    } catch (error) {
+        missing = error
+    }
+    equal(missing?.code, 26, 'listIndexes answers NamespaceNotFound after the drop')
+    equal(missing?.codeName, 'NamespaceNotFound', 'listIndexes names the error after the drop')
+    ok(
+        !(await client.db('admin').command({ listDatabases: 1 })).databases.some((entry) => entry.name === 'drop_acceptance'),
+        'listDatabases no longer lists the dropped database'
+    )
+    equal(JSON.stringify(await client.db('never_created').command({ dropDatabase: 1 })), '{"ok":1}', 'dropping a missing database also replies ok')
+
+    // A cursor on a dropped collection is killed for every connection.
+    await lived.collection('cursors').insertMany(Array.from({ length: 20 }, (_, index) => ({ _id: index })))
+    const cursor = lived.collection('cursors').find({}, { batchSize: 2 })
+    await cursor.next()
+    await cursor.next()
+    const cursorId = cursor.id
+    ok(cursorId !== undefined && !cursorId.isZero(), 'the cursor is still open before the drop')
+    await lived.command({ dropDatabase: 1 })
+    let killed = null
+    try {
+        await cursor.next()
+    } catch (error) {
+        killed = error
+    }
+    equal(killed?.code, 175, 'getMore after dropDatabase answers QueryPlanKilled')
+    equal(killed?.codeName, 'QueryPlanKilled', 'QueryPlanKilled carries its code name')
+    ok(killed?.message.startsWith('collection dropped. UUID '), 'QueryPlanKilled names the dropped collection UUID')
+
+    let later = null
+    try {
+        await lived.command({ getMore: cursorId, collection: 'cursors', batchSize: 2 })
+    } catch (error) {
+        later = error
+    }
+    equal(later?.code, 43, 'a second getMore is CursorNotFound')
+
+    // Drop guards and argument validation.
+    let restricted = null
+    try {
+        await client.db('admin').command({ dropDatabase: 1 })
+    } catch (error) {
+        restricted = error
+    }
+    equal(restricted?.code, 20, 'admin cannot be dropped')
+    equal(restricted?.codeName, 'IllegalOperation', 'the admin guard is IllegalOperation')
+    let zero = null
+    try {
+        await client.db('drop_values').command({ dropDatabase: 0 })
+    } catch (error) {
+        zero = error
+    }
+    equal(zero?.code, 5255100, 'dropDatabase 0 is rejected')
+    let wrongType = null
+    try {
+        await client.db('drop_values').command({ dropDatabase: 'x' })
+    } catch (error) {
+        wrongType = error
+    }
+    equal(wrongType?.code, 14, 'a non-numeric dropDatabase is a type mismatch')
+}
+
 await client.close()
 
 // --- SCRAM-SHA-256 / SCRAM-SHA-1 -------------------------------------------

@@ -64,6 +64,11 @@ impl MongoCursors {
     fn __len__(&self) -> usize {
         self.inner.len()
     }
+
+    /// Marks every cursor on `database` as killed by `dropDatabase`.
+    fn drop_database(&mut self, database: &str) -> usize {
+        self.inner.drop_database(database)
+    }
 }
 
 /// Decodes an `OP_MSG` body into extended JSON.
@@ -235,6 +240,12 @@ fn list_databases(store: PyRef<'_, MongoStore>) -> String {
     reply(&commands::list_databases(&store.inner))
 }
 
+/// `dropDatabase` reply.
+#[pyfunction]
+fn drop_database(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::drop_database(&decode_command(command)?, &store.inner)))
+}
+
 /// `createIndexes` reply.
 #[pyfunction]
 fn create_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
@@ -322,6 +333,7 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(commit_transaction, module)?)?;
     module.add_function(wrap_pyfunction!(abort_transaction, module)?)?;
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
+    module.add_function(wrap_pyfunction!(drop_database, module)?)?;
     module.add_function(wrap_pyfunction!(create_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(list_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(drop_indexes, module)?)?;

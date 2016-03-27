@@ -30,7 +30,7 @@ Tiers describe what it would take to close a gap, not how important it is.
 | `db.killOp(0)` | `{info:"attempting to kill op", ok:1}` | OK ack, no in-flight ops to kill | done |
 | `db.getMongo().isWritablePrimary()` | `TypeError: not a function` | same error | not a gap |
 | `db.stats()` (`dbStats`) | db, collections, views, objects, avgObjSize, dataSize, storageSize, indexes, indexSize, totalSize, fsUsedSize, fsTotalSize | OK; `objects`/`dataSize`/`avgObjSize` exact, `storageSize` is shard record bytes and `indexSize` is 0 (see KNOWN-DIFFERENCES) | done |
-| `db.dropDatabase()` | `{ok:1, dropped:"<db>"}` | `no such command: 'dropDatabase'` | hard |
+| `db.dropDatabase()` | `{ok:1, dropped:"<db>"}` | OK; server replies `{ok:1}` and the shell adds `dropped`; collections, indexes, users and cursors go with it | done |
 | `db.<c>.drop()` | `{ok:1, ns}` | `no such command: 'drop'` | hard |
 | `db.adminCommand({serverStatus:1})` counters (`opcounters`, `mem`, `asserts`) | present | absent | medium |
 | `rs.status()` (`replSetGetStatus`) | member array, `stateStr: PRIMARY`, `optime`, `syncSourceHost: ""` | OK; single member, PRIMARY, `optime` from real writes (see KNOWN-DIFFERENCES) | done |

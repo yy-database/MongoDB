@@ -65,6 +65,15 @@ impl MongoCursors {
         Self { inner: CursorStore::new() }
     }
 
+    /// Marks every cursor on `database` as killed by `dropDatabase`.
+    ///
+    /// Returns how many cursors were affected. The next `getMore` answers
+    /// `QueryPlanKilled` and removes the entry, as `mongod` does.
+    #[napi]
+    pub fn drop_database(&mut self, database: String) -> u32 {
+        self.inner.drop_database(&database) as u32
+    }
+
     /// Number of live cursors.
     #[napi]
     pub fn len(&self) -> u32 {
@@ -234,6 +243,12 @@ pub fn abort_transaction(store: &MongoStore, command: String) -> Result<String> 
 #[napi]
 pub fn list_databases(store: &MongoStore) -> String {
     reply(&commands::list_databases(store_of(store)))
+}
+
+/// `dropDatabase` reply.
+#[napi]
+pub fn drop_database(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::drop_database(&decode_command(&command)?, store_of(store))))
 }
 
 /// `dbStats` reply.

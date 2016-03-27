@@ -21,7 +21,25 @@ pub struct Cursor {
     pub namespace: String,
     /// Documents the next `getMore` returns.
     pub remaining: Vec<BsonValue>,
+    /// Set when the collection was dropped after the cursor was opened.
+    killed: bool,
     last_used: Instant,
+}
+
+/// Why one `getMore` could not return documents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GetMoreError {
+    /// No live cursor carries that id.
+    NotFound(i64),
+    /// The collection behind the cursor was dropped. The cursor is removed by
+    /// this `getMore`, exactly like `mongod 8.0.9`: one `QueryPlanKilled` reply,
+    /// then `CursorNotFound`.
+    CollectionDropped {
+        /// Cursor identifier the client sent.
+        id: i64,
+        /// Namespace the dropped collection lived in.
+        namespace: String,
+    },
 }
 
 /// Per-host cursor table.
@@ -80,17 +98,24 @@ impl CursorStore {
         let first_batch: Vec<BsonValue> = documents.drain(..batch_size).collect();
         let id = self.next_id;
         self.next_id += 1;
-        self.cursors.insert(id, Cursor { namespace: namespace.to_string(), remaining: documents, last_used: Instant::now() });
+        self.cursors
+            .insert(id, Cursor { namespace: namespace.to_string(), remaining: documents, killed: false, last_used: Instant::now() });
         (id, first_batch)
     }
 
     /// Drains `batch_size` documents (or everything when `batch_size` is zero).
-    pub fn get_more(&mut self, id: i64, batch_size: usize) -> Result<(Vec<BsonValue>, String), i64> {
+    pub fn get_more(&mut self, id: i64, batch_size: usize) -> Result<(Vec<BsonValue>, String), GetMoreError> {
         self.reclaim();
-        let Some(cursor) = self.cursors.get_mut(&id)
+        let Some(cursor) = self.cursors.get(&id)
         else {
-            return Err(id);
+            return Err(GetMoreError::NotFound(id));
         };
+        if cursor.killed {
+            let namespace = cursor.namespace.clone();
+            self.cursors.remove(&id);
+            return Err(GetMoreError::CollectionDropped { id, namespace });
+        }
+        let cursor = self.cursors.get_mut(&id).expect("cursor was just read");
         cursor.last_used = Instant::now();
         let take = if batch_size == 0 { cursor.remaining.len() } else { batch_size.min(cursor.remaining.len()) };
         let namespace = cursor.namespace.clone();
@@ -100,6 +125,24 @@ impl CursorStore {
             self.cursors.remove(&id);
         }
         Ok((batch, namespace))
+    }
+
+    /// Marks every cursor on `database` as killed by the drop.
+    ///
+    /// The cursor stays in the table so `killCursors` still reports it as killed,
+    /// and the first `getMore` afterwards answers `QueryPlanKilled` and removes
+    /// it. Dropping another database never touches these entries.
+    pub fn drop_database(&mut self, database: &str) -> usize {
+        let prefix = format!("{database}.");
+        let mut killed = 0;
+        for cursor in self.cursors.values_mut() {
+            if !cursor.killed && cursor.namespace.starts_with(&prefix) {
+                cursor.killed = true;
+                cursor.remaining.clear();
+                killed += 1;
+            }
+        }
+        killed
     }
 
     /// Removes the given cursors and reports which ids were alive.

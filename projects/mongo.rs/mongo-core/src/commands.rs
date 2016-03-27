@@ -15,7 +15,7 @@ use database_protocol_mongo::bson::{
 };
 
 use crate::{
-    cursor::CursorStore,
+    cursor::{CursorStore, GetMoreError},
     json,
     store::{CollectionOptions, IndexSpec, SessionWriteState, Store, TransactionAbort, TransactionBegin, TransactionCommit, TransactionWrite},
 };
@@ -275,7 +275,9 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         11000 => "DuplicateKey",
         112 => "WriteConflict",
         117 => "ConflictingOperationInProgress",
+        20 => "IllegalOperation",
         121 => "DocumentValidationFailure",
+        175 => "QueryPlanKilled",
         251 => "NoSuchTransaction",
         225 => "TransactionTooOld",
         256 => "TransactionCommitted",
@@ -297,6 +299,7 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         51187 => "Location51187",
         40148 => "Location40148",
         40149 => "Location40149",
+        5255100 => "Location5255100",
         5371602 => "Location5371602",
         7158303 => "Location7158303",
         _ => return None,
@@ -3293,8 +3296,14 @@ pub fn get_more(command: &BsonDocument, cursors: &mut CursorStore) -> Result<Bso
         return Err(CommandError::new(2, "getMore requires a cursor id"));
     };
     let batch_size = parse_count(command.get("batchSize"));
-    let (batch, namespace) =
-        cursors.get_more(cursor_id, batch_size).map_err(|id| CommandError::new(43, format!("cursor id {id} not found")))?;
+    let (batch, namespace) = cursors.get_more(cursor_id, batch_size).map_err(|error| match error {
+        GetMoreError::NotFound(id) => CommandError::new(43, format!("cursor id {id} not found")),
+        // `mongod 8.0.9` kills the cursor with the collection and answers one
+        // `QueryPlanKilled` naming the collection UUID.
+        GetMoreError::CollectionDropped { namespace, .. } => {
+            CommandError::new(175, format!("collection dropped. UUID {}", collection_uuid_text(&namespace)))
+        }
+    })?;
     let remaining = if cursors.contains(cursor_id) { cursor_id } else { 0 };
     Ok(cursor_reply(&namespace, "nextBatch", batch, remaining))
 }
@@ -4510,6 +4519,52 @@ pub fn list_databases(store: &Store) -> BsonDocument {
     response.push("totalSizeMb".to_string(), BsonValue::Int64(0));
     response.push("ok".to_string(), BsonValue::Double(1.0));
     response
+}
+
+/// `dropDatabase` reply.
+///
+/// `mongod 8.0.9` answers `{ ok: 1 }` and nothing else; the `dropped` field
+/// printed by `mongosh`'s `db.dropDatabase()` helper is added client-side.
+/// The command drops every collection of the target database together with its
+/// indexes, collection options and the stored users, and the store guarantees a
+/// failure leaves the database either fully present or fully absent.
+pub fn drop_database(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let value = match command.get("dropDatabase") {
+        None | Some(BsonValue::Null) => {
+            return Err(CommandError::new(
+                40414,
+                "BSON field 'dropDatabase.dropDatabase' is missing but a required field",
+            ));
+        }
+        Some(value) => value,
+    };
+    let accepted = match value {
+        BsonValue::Int32(number) => *number == 1,
+        BsonValue::Int64(number) => *number == 1,
+        // `mongod` accepts any double inside `[1, 2)` and rejects 2.0.
+        BsonValue::Double(number) => (1.0..2.0).contains(number),
+        BsonValue::Decimal128(number) => number.as_str().parse::<f64>().map(|value| value == 1.0).unwrap_or(false),
+        other => {
+            return Err(CommandError::new(
+                14,
+                format!(
+                    "BSON field 'dropDatabase.dropDatabase' is the wrong type '{}', expected types '[int, double, long, decimal']",
+                    bson_type_name(other)
+                ),
+            ));
+        }
+    };
+    if !accepted {
+        return Err(CommandError::new(5255100, "Have to pass 1 as 'drop' parameter"));
+    }
+    let database = command.database();
+    if database == "admin" {
+        return Err(CommandError::new(20, "Dropping the 'admin' database is prohibited."));
+    }
+    store.drop_database(&database).map_err(|error| CommandError::new(2, format!("dropDatabase failed: {error}")))?;
+    let mut response = BsonDocument::new();
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
 }
 
 /// `dbStats` reply, computed from the documents and keys the shard really holds.

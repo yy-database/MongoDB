@@ -284,6 +284,10 @@ function runCase(testCase) {
                 return JSON.parse(binding.ttlMonitor(storeOf(step.store), step.nowMs ?? null))
             case 'listDatabases':
                 return JSON.parse(binding.listDatabases(storeOf(step.store)))
+            case 'dropDatabase': {
+                const command = { dropDatabase: step.argument === undefined ? 1 : step.argument }
+                return JSON.parse(binding.dropDatabase(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'hello':
                 return JSON.parse(binding.hello())
             case 'ping':

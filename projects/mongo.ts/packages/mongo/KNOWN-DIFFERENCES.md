@@ -125,6 +125,31 @@ Limits a client can observe:
 - **`electionCandidateMetrics` is absent** from `replSetGetStatus`, and
   `electionTime` is the initiation timestamp rather than an election write.
 
+## `dropDatabase`
+
+The command replies `{ ok: 1 }` only, which is what `mongod 8.0.9` sends; the
+`dropped` field that `mongosh`'s `db.dropDatabase()` helper prints is added by
+the shell, not by the server. `admin` is refused with `IllegalOperation` (20),
+`0`/`2` with `Location5255100`, a non-numeric argument with `TypeMismatch` (14),
+and a missing/null argument with `IDLFailedToParse` (40414).
+
+The whole database is removed together: every collection's documents, its user
+indexes, collection options and the stored `system.users`. Cursors are killed
+for every open connection, so a later `getMore` answers `QueryPlanKilled` (175)
+naming the collection UUID and then `CursorNotFound` (43); `killCursors` before
+that still reports the cursor as killed.
+
+Two limits remain:
+
+- **The collection UUID in the `QueryPlanKilled` text is derived from the
+  namespace**, because this server has no per-collection UUID stored. Real
+  `mongod` reports a random UUID, so the text never matches byte for byte; the
+  code (175) and message shape do.
+- **The drop is two atomic writes, not one.** The catalog is replaced first and
+  the shard records and their `!catalog` mirror are deleted second. A crash
+  exactly between them makes the next `open` merge the mirror back, so the
+  database reappears. `mongod` commits the drop in a single transaction.
+
 ## Authentication deviations: re-evaluation
 
 After the replica-set block the four open authentication deviations were

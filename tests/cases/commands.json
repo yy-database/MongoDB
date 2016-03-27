@@ -119,6 +119,69 @@
             ]
         },
         {
+            "id": "cmd.drop_database.removes_database",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "db": "app", "as": "r1" },
+                { "op": "createIndexes", "collection": "items", "db": "app", "indexes": [{ "key": { "x": 1 }, "name": "x_1" }], "as": "r2" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1 }], "db": "app", "as": "r3" },
+                { "op": "dropDatabase", "db": "app", "as": "r4" },
+                { "op": "listCollections", "db": "app", "as": "r5" },
+                { "op": "listIndexes", "collection": "items", "db": "app", "as": "r6" },
+                { "op": "find", "collection": "items", "db": "app", "as": "r7" },
+                { "op": "listDatabases", "as": "r8" }
+            ],
+            "checks": [
+                { "at": "/r4/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r5/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r6/code", "equals": { "$numberInt": "26" } },
+                { "at": "/r6/codeName", "equals": "NamespaceNotFound" },
+                { "at": "/r7/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r8/databases/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "cmd.drop_database.nonexistent",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropDatabase", "db": "missing", "as": "r1" }
+            ],
+            "checks": [{ "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }]
+        },
+        {
+            "id": "cmd.drop_database.admin_is_prohibited",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropDatabase", "db": "admin", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "20" } },
+                { "at": "/r1/codeName", "equals": "IllegalOperation" },
+                { "at": "/r1/errmsg", "equals": "Dropping the 'admin' database is prohibited." }
+            ]
+        },
+        {
+            "id": "cmd.drop_database.argument_validation",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropDatabase", "db": "app", "argument": 0, "as": "r1" },
+                { "op": "dropDatabase", "db": "app", "argument": "x", "as": "r2" },
+                { "op": "dropDatabase", "db": "app", "argument": null, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "5255100" } },
+                { "at": "/r1/codeName", "equals": "Location5255100" },
+                { "at": "/r1/errmsg", "equals": "Have to pass 1 as 'drop' parameter" },
+                { "at": "/r2/code", "equals": { "$numberInt": "14" } },
+                { "at": "/r3/code", "equals": { "$numberInt": "40414" } }
+            ]
+        },
+        {
             "id": "cmd.list_databases.one",
             "surface": "command",
             "program": [

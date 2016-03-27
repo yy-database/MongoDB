@@ -1157,6 +1157,92 @@ impl Store {
         Ok(removed)
     }
 
+    /// Drops every collection, index, collection option and the `!catalog`
+    /// mirror label of one database.
+    ///
+    /// The `.yyds` catalog is the authority for namespace existence, so it is
+    /// rewritten first through its atomic replace. Every `<database>.` record
+    /// and mirror label is then removed in one durable shard commit. A failed
+    /// shard commit restores the catalog snapshot, so a failed drop leaves the
+    /// database exactly as it was; a crash between the two writes leaves the
+    /// shard mirror intact and the next `open` merges it back, which means
+    /// readers only ever see the database fully present or fully absent.
+    ///
+    /// Returns the number of collections the catalog listed for `database`.
+    pub fn drop_database(&self, database: &str) -> Result<usize, StoreError> {
+        let prefix = format!("{database}.");
+        let mut catalog = self.catalog_lock();
+        let namespaces = catalog.namespaces.clone();
+        let indexes = catalog.indexes.clone();
+        let collections = catalog.collections.clone();
+
+        let removed = catalog.namespaces.iter().filter(|namespace| namespace.starts_with(&prefix)).count();
+        catalog.namespaces.retain(|namespace| !namespace.starts_with(&prefix));
+        catalog.indexes.retain(|index| !index.namespace.starts_with(&prefix));
+        catalog.collections.retain(|namespace, _| !namespace.starts_with(&prefix));
+
+        if removed > 0 {
+            if let Err(error) = catalog.flush() {
+                catalog.namespaces = namespaces;
+                catalog.indexes = indexes;
+                catalog.collections = collections;
+                return Err(error);
+            }
+        }
+
+        // Restoring the snapshot keeps a failed shard commit from leaving a
+        // catalog that has forgotten the database while its data is still there.
+        let restore = |catalog: &mut CatalogState| {
+            catalog.namespaces = namespaces.clone();
+            catalog.indexes = indexes.clone();
+            catalog.collections = collections.clone();
+            let _ = catalog.flush();
+        };
+
+        let mut shard = self.lock();
+        let mut changes = Vec::new();
+        let live = match shard.namespaces() {
+            Ok(namespaces) => namespaces,
+            Err(error) => {
+                drop(shard);
+                restore(&mut catalog);
+                return Err(StoreError::Shard(error.to_string()));
+            }
+        };
+        for namespace in live {
+            if !namespace.0.starts_with(&prefix) {
+                continue;
+            }
+            let records = match shard.scan(&namespace, b"", None, None, 0) {
+                Ok(records) => records,
+                Err(error) => {
+                    drop(shard);
+                    restore(&mut catalog);
+                    return Err(StoreError::Shard(error.to_string()));
+                }
+            };
+            changes.extend(records.into_iter().map(|record| ShardChange::Delete { key: record.key }));
+        }
+        let mirror = match shard.scan(&Namespace(CATALOG_NAMESPACE.to_string()), prefix.as_bytes(), None, None, 0) {
+            Ok(records) => records,
+            Err(error) => {
+                drop(shard);
+                restore(&mut catalog);
+                return Err(StoreError::Shard(error.to_string()));
+            }
+        };
+        changes.extend(mirror.into_iter().map(|record| ShardChange::Delete { key: record.key }));
+
+        if !changes.is_empty() {
+            if let Err(error) = shard.commit_changes(changes) {
+                drop(shard);
+                restore(&mut catalog);
+                return Err(StoreError::Shard(error.to_string()));
+            }
+        }
+        Ok(removed)
+    }
+
     /// Creates the shard named by the catalog when only the catalog survived.
     ///
     /// Deliberately narrow: it never invents a catalog, never overwrites an

@@ -591,6 +591,10 @@ def run_case(case):
         if op == "ttlMonitor":
             # `now_ms` is the caller-supplied clock that compresses the window.
             return json.loads(mongo.ttl_monitor(store_of(step.get("store")), step.get("nowMs")))
+        if op == "dropDatabase":
+            command = {"dropDatabase": step.get("argument", 1)}
+            reply = mongo.drop_database(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "listDatabases":
             return json.loads(mongo.list_databases(store_of(step.get("store"))))
         if op == "hello":
