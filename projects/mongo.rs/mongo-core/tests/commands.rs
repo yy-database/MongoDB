@@ -247,15 +247,13 @@ fn aggregate_matches_groups_and_projects() {
 #[test]
 fn aggregate_rejects_unsupported_stages_even_after_match() {
     let store = store();
+    let search = BsonValue::Document(document(&[("text", text("x"))]));
     let mut aggregate = command("aggregate", "items", "app");
     aggregate.push(
         "pipeline",
         BsonValue::Array(vec![
             BsonValue::Document(document(&[("$match", BsonValue::Document(BsonDocument::new()))])),
-            BsonValue::Document(document(&[(
-                "$sample",
-                BsonValue::Document(document(&[("size", BsonValue::Int32(1))])),
-            )])),
+            BsonValue::Document(document(&[("$search", search)])),
         ]),
     );
 
@@ -263,7 +261,7 @@ fn aggregate_rejects_unsupported_stages_even_after_match() {
     assert_eq!(error.code, 59);
     assert_eq!(
         error.message,
-        "unknown aggregation stage: $sample (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)"
+        "unknown aggregation stage: $search (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out, $unionWith, $sample, $densify, $fill, $redact)"
     );
 }
 
@@ -649,5 +647,294 @@ fn find_and_modify_duplicate_key_failure_leaves_the_document_untouched() {
     let matched = documents.iter().find(|document| document.get("_id") == Some(&BsonValue::Int32(1))).expect("_id 1");
     assert_eq!(matched.get("a"), Some(&BsonValue::Int32(7)), "the conflicting field must not be staged");
     assert_eq!(matched.get("note"), Some(&BsonValue::String("original".to_string())), "no field may be staged");
+}
+
+fn aggregate_pipeline(collection: &str, stages: Vec<BsonValue>) -> BsonDocument {
+    let mut aggregate = command("aggregate", collection, "app");
+    aggregate.push("pipeline", BsonValue::Array(stages));
+    aggregate
+}
+
+fn stage(name: &str, body: BsonValue) -> BsonValue {
+    BsonValue::Document(document(&[(name, body)]) )
+}
+
+#[test]
+fn union_with_appends_documents_from_the_other_collection() {
+    let store = store();
+    insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(1))])]);
+    insert_documents(
+        &store,
+        "other",
+        vec![
+            document(&[("_id", BsonValue::Int32(2)), ("kind", text("b"))]),
+            document(&[("_id", BsonValue::Int32(3)), ("kind", text("a"))]),
+        ],
+    );
+
+    let mut union = BsonDocument::new();
+    union.push("coll", text("other"));
+    union.push(
+        "pipeline",
+        BsonValue::Array(vec![stage("$match", BsonValue::Document(document(&[("kind", text("b"))])))]),
+    );
+    let reply = commands::aggregate(&aggregate_pipeline("items", vec![stage("$unionWith", BsonValue::Document(union))]), &store)
+        .expect("aggregate");
+    let documents = batch(&reply, "firstBatch");
+
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0].get("_id"), Some(&BsonValue::Int32(1)));
+    assert_eq!(documents[1].get("_id"), Some(&BsonValue::Int32(2)));
+}
+
+#[test]
+fn sample_truncates_a_fractional_size() {
+    let store = store();
+    insert_documents(&store, "items", (0..4).map(|index| document(&[("_id", BsonValue::Int32(index))])).collect());
+
+    let reply = commands::aggregate(
+        &aggregate_pipeline(
+            "items",
+            vec![stage("$sample", BsonValue::Document(document(&[("size", BsonValue::Double(1.5))])))],
+        ),
+        &store,
+    )
+    .expect("aggregate");
+
+    assert_eq!(batch(&reply, "firstBatch").len(), 1);
+}
+
+#[test]
+fn densify_fills_numeric_gaps_and_leaves_existing_documents_alone() {
+    let store = store();
+    insert_documents(
+        &store,
+        "items",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("x", BsonValue::Int32(1))]),
+            document(&[("_id", BsonValue::Int32(2)), ("x", BsonValue::Int32(4))]),
+        ],
+    );
+
+    let mut range = BsonDocument::new();
+    range.push("step", BsonValue::Int32(1));
+    range.push("bounds", text("full"));
+    let mut body = BsonDocument::new();
+    body.push("field", text("x"));
+    body.push("range", BsonValue::Document(range));
+
+    let reply = commands::aggregate(&aggregate_pipeline("items", vec![stage("$densify", BsonValue::Document(body))]), &store)
+        .expect("aggregate");
+    let documents = batch(&reply, "firstBatch");
+
+    let values: Vec<i64> = documents.iter().map(|document| int(document, "x")).collect();
+    assert_eq!(values, vec![1, 2, 3, 4]);
+    assert_eq!(documents[0].get("_id"), Some(&BsonValue::Int32(1)));
+    assert!(documents[1].get("_id").is_none(), "generated documents only carry the densified field");
+}
+
+#[test]
+fn fill_locf_carries_the_previous_value_forward() {
+    let store = store();
+    insert_documents(
+        &store,
+        "items",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("t", BsonValue::Int32(1)), ("v", BsonValue::Int32(10))]),
+            document(&[("_id", BsonValue::Int32(2)), ("t", BsonValue::Int32(2)), ("v", BsonValue::Null)]),
+            document(&[("_id", BsonValue::Int32(3)), ("t", BsonValue::Int32(3)), ("v", BsonValue::Int32(30))]),
+        ],
+    );
+
+    let mut body = BsonDocument::new();
+    body.push("sortBy", BsonValue::Document(document(&[("t", BsonValue::Int32(1))])));
+    let mut output = BsonDocument::new();
+    output.push("v", BsonValue::Document(document(&[("method", text("locf"))])));
+    body.push("output", BsonValue::Document(output));
+
+    let reply = commands::aggregate(&aggregate_pipeline("items", vec![stage("$fill", BsonValue::Document(body))]), &store)
+        .expect("aggregate");
+    let documents = batch(&reply, "firstBatch");
+
+    assert_eq!(documents.len(), 3);
+    assert_eq!(int(&documents[0], "v"), 10);
+    assert_eq!(int(&documents[1], "v"), 10, "the null value is filled from the previous document");
+    assert_eq!(int(&documents[2], "v"), 30);
+}
+
+#[test]
+fn redact_prunes_matching_documents_and_descends_into_subdocuments() {
+    let store = store();
+    insert_documents(
+        &store,
+        "items",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("secret", BsonValue::Bool(true)), ("v", text("hidden"))]),
+            document(&[("_id", BsonValue::Int32(2)), ("v", text("shown"))]),
+            document(&[
+                ("_id", BsonValue::Int32(3)),
+                ("child", BsonValue::Document(document(&[("secret", BsonValue::Bool(true))]))),
+            ]),
+        ],
+    );
+
+    let condition = BsonValue::Array(vec![
+        BsonValue::Document(document(&[(
+            "$eq",
+            BsonValue::Array(vec![BsonValue::String("$secret".to_string()), BsonValue::Bool(true)]),
+        )])),
+        BsonValue::String("$$PRUNE".to_string()),
+        BsonValue::String("$$DESCEND".to_string()),
+    ]);
+    let reply = commands::aggregate(
+        &aggregate_pipeline("items", vec![stage("$redact", BsonValue::Document(document(&[("$cond", condition)])))]),
+        &store,
+    )
+    .expect("aggregate");
+    let documents = batch(&reply, "firstBatch");
+
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0].get("_id"), Some(&BsonValue::Int32(2)));
+    let descended = documents.iter().find(|document| document.get("_id") == Some(&BsonValue::Int32(3))).expect("_id 3");
+    assert!(descended.get("child").is_none(), "$$DESCEND prunes the offending subdocument, not the parent");
+}
+
+#[test]
+fn out_replaces_the_target_only_when_the_whole_output_is_valid() {
+    let store = store();
+    insert_documents(&store, "results", vec![document(&[("_id", BsonValue::Int32(1)), ("k", text("a"))])]);
+    let mut create = command("createIndexes", "results", "app");
+    let mut specification = BsonDocument::new();
+    specification.push("key", BsonValue::Document(document(&[("k", BsonValue::Int32(1))])));
+    specification.push("name", text("k_1"));
+    specification.push("unique", BsonValue::Bool(true));
+    create.push("indexes", BsonValue::Array(vec![BsonValue::Document(specification)]));
+    commands::create_indexes(&create, &store).expect("createIndexes");
+
+    insert_documents(
+        &store,
+        "rows",
+        vec![
+            document(&[("_id", BsonValue::Int32(2)), ("k", text("a"))]),
+            document(&[("_id", BsonValue::Int32(3)), ("k", text("a"))]),
+        ],
+    );
+
+    let error = commands::aggregate(&aggregate_pipeline("rows", vec![stage("$out", text("results"))]), &store)
+        .expect_err("duplicate keys must abort the $out");
+    assert_eq!(error.code, 11000);
+
+    let mut cursors = CursorStore::new();
+    let kept = find_all(&store, "results", &mut cursors);
+    assert_eq!(kept.len(), 1, "the old target collection survives a failed $out");
+    assert_eq!(kept[0].get("k"), Some(&text("a")));
+
+    let listed = commands::list_indexes(&command("listIndexes", "results", "app"), &store).expect("listIndexes");
+    assert_eq!(batch(&listed, "firstBatch").len(), 2, "the target keeps its indexes");
+}
+
+#[test]
+fn merge_applies_writes_one_by_one_and_keeps_earlier_ones_on_failure() {
+    let store = store();
+    insert_documents(&store, "target", vec![document(&[("_id", BsonValue::Int32(1)), ("k", text("a"))])]);
+    let mut create = command("createIndexes", "target", "app");
+    let mut specification = BsonDocument::new();
+    specification.push("key", BsonValue::Document(document(&[("k", BsonValue::Int32(1))])));
+    specification.push("name", text("k_1"));
+    specification.push("unique", BsonValue::Bool(true));
+    create.push("indexes", BsonValue::Array(vec![BsonValue::Document(specification)]));
+    commands::create_indexes(&create, &store).expect("createIndexes");
+    insert_documents(
+        &store,
+        "source",
+        vec![
+            document(&[("_id", BsonValue::Int32(1)), ("k", text("a")), ("extra", BsonValue::Bool(true))]),
+            document(&[("_id", BsonValue::Int32(3)), ("k", text("c"))]),
+        ],
+    );
+
+    let mut merge = BsonDocument::new();
+    merge.push("into", text("target"));
+    merge.push("on", text("k"));
+    merge.push("whenNotMatched", text("fail"));
+    let error = commands::aggregate(&aggregate_pipeline("source", vec![stage("$merge", BsonValue::Document(merge))]), &store)
+        .expect_err("the unmatched document must abort");
+    assert_eq!(error.code, 13113);
+
+    let mut cursors = CursorStore::new();
+    let target_documents = find_all(&store, "target", &mut cursors);
+    assert_eq!(target_documents.len(), 1);
+    let merged = &target_documents[0];
+    assert_eq!(merged.get("_id"), Some(&BsonValue::Int32(1)));
+    assert_eq!(
+        merged.get("extra"),
+        Some(&BsonValue::Bool(true)),
+        "the write before the failing document is not rolled back"
+    );
+}
+
+#[test]
+fn wildcard_and_hashed_indexes_follow_the_real_server_rules() {
+    let store = store();
+    insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(1)), ("a", BsonValue::Int32(1))])]);
+
+    let mut wildcard_key = BsonDocument::new();
+    wildcard_key.push("$**", BsonValue::Int32(1));
+    let mut wildcard = BsonDocument::new();
+    wildcard.push("key", BsonValue::Document(wildcard_key));
+    wildcard.push("name", text("wild"));
+    wildcard.push("wildcardProjection", BsonValue::Document(document(&[("a", BsonValue::Int32(1))])));
+    let mut create = command("createIndexes", "items", "app");
+    create.push("indexes", BsonValue::Array(vec![BsonValue::Document(wildcard.clone())]));
+    commands::create_indexes(&create, &store).expect("wildcard index");
+
+    let listed = commands::list_indexes(&command("listIndexes", "items", "app"), &store).expect("listIndexes");
+    let indexes = batch(&listed, "firstBatch");
+    assert_eq!(indexes[1].get("name"), Some(&text("wild")));
+    assert!(matches!(indexes[1].get("wildcardProjection"), Some(BsonValue::Document(_))));
+
+    let mut unique_wildcard = wildcard;
+    unique_wildcard.push("unique", BsonValue::Bool(true));
+    let mut create_unique = command("createIndexes", "items", "app");
+    create_unique.push("indexes", BsonValue::Array(vec![BsonValue::Document(unique_wildcard)]));
+    assert_eq!(commands::create_indexes(&create_unique, &store).expect_err("unique wildcard").code, 67);
+
+    let mut hashed_key = BsonDocument::new();
+    hashed_key.push("h", BsonValue::String("hashed".to_string()));
+    let mut hashed = BsonDocument::new();
+    hashed.push("key", BsonValue::Document(hashed_key));
+    hashed.push("name", text("h_hashed"));
+    let mut create_hashed = command("createIndexes", "items", "app");
+    create_hashed.push("indexes", BsonValue::Array(vec![BsonValue::Document(hashed.clone())]));
+    commands::create_indexes(&create_hashed, &store).expect("hashed index");
+
+    let mut second_hashed = BsonDocument::new();
+    second_hashed.push("h", BsonValue::String("hashed".to_string()));
+    second_hashed.push("i", BsonValue::String("hashed".to_string()));
+    let mut hashed_pair = BsonDocument::new();
+    hashed_pair.push("key", BsonValue::Document(second_hashed));
+    hashed_pair.push("name", text("h_i_hashed"));
+    let mut create_pair = command("createIndexes", "items", "app");
+    create_pair.push("indexes", BsonValue::Array(vec![BsonValue::Document(hashed_pair)]));
+    assert_eq!(commands::create_indexes(&create_pair, &store).expect_err("two hashed fields").code, 31303);
+
+    let mut unique_hashed = hashed;
+    unique_hashed.push("unique", BsonValue::Bool(true));
+    let mut create_unique_hashed = command("createIndexes", "items", "app");
+    create_unique_hashed.push("indexes", BsonValue::Array(vec![BsonValue::Document(unique_hashed)]));
+    assert_eq!(commands::create_indexes(&create_unique_hashed, &store).expect_err("unique hashed").code, 16764);
+
+    let mut text_key = BsonDocument::new();
+    text_key.push("body", BsonValue::String("text".to_string()));
+    let mut text_index = BsonDocument::new();
+    text_index.push("key", BsonValue::Document(text_key));
+    text_index.push("name", text("body_text"));
+    let mut create_text = command("createIndexes", "items", "app");
+    create_text.push("indexes", BsonValue::Array(vec![BsonValue::Document(text_index)]));
+    assert_eq!(
+        commands::create_indexes(&create_text, &store).expect_err("text index").code,
+        59,
+        "text indexes are rejected explicitly instead of being served incorrectly"
+    );
 }
 

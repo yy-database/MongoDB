@@ -302,6 +302,35 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         5255100 => "Location5255100",
         5371602 => "Location5371602",
         7158303 => "Location7158303",
+        13113 => "MergeStageNoMatchingDocument",
+        16764 => "Location16764",
+        31303 => "Location31303",
+        28745 => "Location28745",
+        28746 => "Location28746",
+        28747 => "Location28747",
+        28748 => "Location28748",
+        28749 => "Location28749",
+        40600 => "Location40600",
+        40601 => "Location40601",
+        51047 => "Location51047",
+        16410 => "Location16410",
+        17053 => "Location17053",
+        17072 => "Location17072",
+        17276 => "Location17276",
+        5733201 => "Location5733201",
+        5733401 => "Location5733401",
+        5733402 => "Location5733402",
+        5733408 => "Location5733408",
+        5733409 => "Location5733409",
+        5946802 => "Location5946802",
+        605001 => "Location605001",
+        6050200 => "Location6050200",
+        6050201 => "Location6050201",
+        6050202 => "Location6050202",
+        6050203 => "Location6050203",
+        6050204 => "Location6050204",
+        6053600 => "Location6053600",
+        6586400 => "Location6586400",
         _ => return None,
     })
 }
@@ -1993,7 +2022,7 @@ fn run_pipeline(
     session: Option<&str>,
     variables: &ExpressionVariables,
 ) -> Result<Vec<BsonDocument>, CommandError> {
-    for stage in stages {
+    for (position, stage) in stages.iter().enumerate() {
         let BsonValue::Document(stage_document) = stage
         else {
             return Err(CommandError::new(2, "aggregate stage must be a document"));
@@ -2005,6 +2034,12 @@ fn run_pipeline(
         else {
             return Err(CommandError::new(2, "aggregate stage is empty"));
         };
+        if matches!(name.as_str(), "$out" | "$merge") && position + 1 != stages.len() {
+            return Err(CommandError::new(
+                40601,
+                format!("{name} can only be the final stage in the pipeline"),
+            ));
+        }
         // Each stage consumes the previous stage's output: the pipeline is applied
         // in order, never collected and matched in one pass.
         match name.as_str() {
@@ -2062,6 +2097,16 @@ fn run_pipeline(
             "$sortByCount" => documents = sort_by_count_stage(&documents, body)?,
             "$graphLookup" => documents = graph_lookup_stage(documents, body, store, namespace, session, variables)?,
             "$replaceWith" => documents = replace_with_stage(documents, body, variables)?,
+            "$unionWith" => {
+                documents = union_with_stage(documents, body, store, namespace, session, variables)?;
+            }
+            "$sample" => documents = sample_stage(documents, body)?,
+            "$densify" => documents = densify_stage(documents, body, variables)?,
+            "$fill" => documents = fill_stage(documents, body, variables)?,
+            "$redact" => documents = redact_stage(documents, body, variables)?,
+            "$documents" => {
+                return Err(CommandError::new(73, "'$documents' can only be run with {aggregate: 1}"));
+            }
             "$merge" => {
                 documents = merge_stage(documents, body, store, namespace, session, variables)?;
             }
@@ -4705,6 +4750,190 @@ fn requested_bool(specification: &BsonDocument, field: &str, quirky: bool) -> Re
     }
 }
 
+fn requested_wildcard_projection(specification: &BsonDocument) -> Result<Option<BsonDocument>, CommandError> {
+    match specification.get("wildcardProjection") {
+        None => Ok(None),
+        Some(BsonValue::Document(projection)) => Ok(Some(projection.clone())),
+        Some(other) => Err(CommandError::new(
+            14,
+            format!(
+                "BSON field 'createIndexes.indexes.wildcardProjection' is the wrong type '{}', expected type 'object'",
+                bson_type_name(other)
+            ),
+        )),
+    }
+}
+
+fn index_specification_display(specification: &BsonDocument) -> BsonValue {
+    // `mongod` echoes the specification in the order the caller sent it.
+    let mut display = specification.clone();
+    // `v: 2` appears only in the wildcard-specific validation messages.
+    let wildcard = match specification.get("key") {
+        Some(BsonValue::Document(key)) => key
+            .fields
+            .iter()
+            .any(|(field, _)| field == "$**" || field.ends_with(".$**")),
+        _ => false,
+    };
+    if wildcard {
+        display.push("v".to_string(), BsonValue::Int32(2));
+    }
+    BsonValue::Document(display)
+}
+
+/// `mongod` reports hashed-index validation failures from the index builder, so
+/// the message carries the build wrapper and the normalized specification.
+fn index_build_failure(
+    code: i32,
+    namespace: &str,
+    specification: &BsonDocument,
+    reason: &str,
+) -> CommandError {
+    let mut normalized = BsonDocument::new();
+    normalized.push("v".to_string(), BsonValue::Int32(2));
+    if matches!(specification.get("unique"), Some(BsonValue::Bool(true))) {
+        normalized.push("unique".to_string(), BsonValue::Bool(true));
+    }
+    if let Some(key) = specification.get("key") {
+        normalized.push("key".to_string(), key.clone());
+    }
+    if let Some(name) = specification.get("name") {
+        normalized.push("name".to_string(), name.clone());
+    }
+    let uuid = collection_uuid_text(namespace);
+    CommandError::new(
+        code,
+        format!(
+            "Index build failed: {uuid}: Collection {namespace} ( {uuid} ) :: caused by :: Caught exception during index builder ((None)) initialization on namespace{namespace} ({uuid}). 1 index specs provided. First index spec: {} :: caused by :: {reason}",
+            render_shell_value(&BsonValue::Document(normalized))
+        ),
+    )
+}
+
+/// Validate the index key pattern the way `mongod` does: numeric directions
+/// must be non-zero, string values are index plugins, and wildcard keys are
+/// `$**` or `path.$**`. Text indexes are not implemented yet and are refused
+/// explicitly rather than silently stored under the wrong catalog shape.
+fn validate_index_key(
+    key: &BsonDocument,
+    specification: &BsonDocument,
+    namespace: &str,
+    unique: bool,
+    sparse: Option<bool>,
+) -> Result<(), CommandError> {
+    let mut hashed = 0usize;
+    let mut text = false;
+    let mut wildcard = false;
+    for (field, value) in &key.fields {
+        if field == "$**" || field.ends_with(".$**") {
+            wildcard = true;
+        }
+        match value {
+            BsonValue::Int32(number) if *number == 0 => {
+                return Err(CommandError::new(
+                    67,
+                    format!(
+                        "Error in specification {} :: caused by :: Values in the index key pattern cannot be 0.",
+                        render_shell_value(&index_specification_display(specification))
+                    ),
+                ));
+            }
+            BsonValue::Int64(number) if *number == 0 => {
+                return Err(CommandError::new(
+                    67,
+                    format!(
+                        "Error in specification {} :: caused by :: Values in the index key pattern cannot be 0.",
+                        render_shell_value(&index_specification_display(specification))
+                    ),
+                ));
+            }
+            BsonValue::Double(number) if *number == 0.0 => {
+                return Err(CommandError::new(
+                    67,
+                    format!(
+                        "Error in specification {} :: caused by :: Values in the index key pattern cannot be 0.",
+                        render_shell_value(&index_specification_display(specification))
+                    ),
+                ));
+            }
+            BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => {}
+            BsonValue::String(plugin) => match plugin.as_str() {
+                "hashed" => hashed += 1,
+                "text" => text = true,
+                "2dsphere" | "2d" | "geoHaystack" => {}
+                other => {
+                    return Err(CommandError::new(
+                        67,
+                        format!(
+                            "Error in specification {} :: caused by :: Unknown index plugin '{other}'",
+                            render_shell_value(&index_specification_display(specification))
+                        ),
+                    ));
+                }
+            },
+            other => {
+                return Err(CommandError::new(
+                    67,
+                    format!(
+                        "Error in specification {} :: caused by :: Values in the index key pattern must be 1 or -1 or a supported index plugin name, but found {}",
+                        render_shell_value(&index_specification_display(specification)),
+                        bson_type_name(other)
+                    ),
+                ));
+            }
+        }
+    }
+    if text {
+        return Err(CommandError::new(59, "text indexes are not supported yet"));
+    }
+    if hashed > 1 {
+        let mut key_text = String::new();
+        for (field, value) in &key.fields {
+            if !key_text.is_empty() {
+                key_text.push_str(", ");
+            }
+            key_text.push_str(field);
+            key_text.push_str(": ");
+            key_text.push_str(&render_shell_value(value));
+        }
+        return Err(index_build_failure(
+            31303,
+            namespace,
+            specification,
+            &format!("A maximum of one index field is allowed to be hashed but found {hashed} for 'key' {{ {key_text} }}"),
+        ));
+    }
+    if wildcard {
+        if unique {
+            return Err(CommandError::new(
+                67,
+                format!(
+                    "Error in specification {} :: caused by :: Index type 'wildcard' does not support the 'unique' option",
+                    render_shell_value(&index_specification_display(specification))
+                ),
+            ));
+        }
+        if sparse == Some(true) {
+            return Err(CommandError::new(
+                67,
+                format!(
+                    "Error in specification {} :: caused by :: Index type 'wildcard' does not support the 'sparse' option",
+                    render_shell_value(&index_specification_display(specification))
+                ),
+            ));
+        }
+    }
+    if hashed == 1 && unique {
+        return Err(index_build_failure(
+            16764,
+            namespace,
+            specification,
+            "Currently hashed indexes cannot guarantee uniqueness. Use a regular index.",
+        ));
+    }
+    Ok(())
+}
+
 fn requested_ttl(specification: &BsonDocument) -> Result<Option<i32>, CommandError> {
     let Some(value) = specification.get("expireAfterSeconds") else { return Ok(None) };
     let numeric = match value {
@@ -4929,6 +5158,7 @@ fn same_index_options(left: &IndexSpec, right: &IndexSpec) -> bool {
         && left.expire_after_seconds == right.expire_after_seconds
         && left.collation == right.collation
         && left.partial_filter_expression == right.partial_filter_expression
+        && left.wildcard_projection == right.wildcard_projection
 }
 
 fn render_index_definition(specification: &IndexSpec) -> String {
@@ -4953,6 +5183,9 @@ fn render_index_definition(specification: &IndexSpec) -> String {
     }
     if let Some(filter) = &specification.partial_filter_expression {
         definition.push("partialFilterExpression".to_string(), BsonValue::Document(filter.clone()));
+    }
+    if let Some(projection) = &specification.wildcard_projection {
+        definition.push("wildcardProjection".to_string(), BsonValue::Document(projection.clone()));
     }
     render_shell_value(&BsonValue::Document(definition))
 }
@@ -5030,6 +5263,8 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
         let expire_after_seconds = requested_ttl(specification)?;
         let collation = requested_collation(specification)?;
         let partial_filter_expression = partial_filter_from(specification)?;
+        let wildcard_projection = requested_wildcard_projection(specification)?;
+        validate_index_key(&key, specification, &namespace, unique, sparse)?;
 
         let mut candidate = IndexSpec {
             namespace: namespace.clone(),
@@ -5041,6 +5276,7 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
             expire_after_seconds,
             collation,
             partial_filter_expression,
+            wildcard_projection,
         };
 
         if is_id_key(key) {
@@ -5233,6 +5469,9 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
         entry.push("v".to_string(), BsonValue::Int32(2));
         entry.push("key".to_string(), BsonValue::Document(specification.key.clone()));
         entry.push("name".to_string(), BsonValue::String(specification.name.clone()));
+        if let Some(projection) = &specification.wildcard_projection {
+            entry.push("wildcardProjection".to_string(), BsonValue::Document(projection.clone()));
+        }
         if specification.unique {
             entry.push("unique".to_string(), BsonValue::Bool(true));
         }
@@ -5524,7 +5763,7 @@ fn unsupported_stage(stage: &str) -> CommandError {
     CommandError::new(
         59,
         format!(
-            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)"
+            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out, $unionWith, $sample, $densify, $fill, $redact)"
         ),
     )
 }
@@ -5808,6 +6047,7 @@ fn lookup_stage(
             candidates = matched;
         }
         if let Some(stages) = &pipeline {
+            reject_stage_outside(stages, 51047, "is not allowed within a $lookup's sub-pipeline")?;
             candidates = run_pipeline(candidates, stages, store, &foreign_namespace, session, &bound)?;
         }
 
@@ -6086,8 +6326,1155 @@ fn stage_target_namespace(body: &BsonValue, namespace: &str, stage: &str) -> Res
     }
 }
 
-/// `$out`: replaces the target collection with the pipeline output while
-/// keeping the target's indexes, then emits no documents.
+fn temporary_aggregation_namespace(namespace: &str) -> String {
+    let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+    let mut state = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0x9e37_79b9_7f4a_7c15)
+        | 1;
+    let mut hex = String::with_capacity(32);
+    for _ in 0..32 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        hex.push(char::from_digit((state & 0xf) as u32, 16).unwrap());
+    }
+    format!(
+        "{database}.tmp.agg_out.{}-{}-4{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[13..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
+}
+
+fn out_duplicate_error(namespace: &str, index_name: &str, key_value: &BsonDocument) -> CommandError {
+    let mut key_text = String::new();
+    for (field, value) in &key_value.fields {
+        if !key_text.is_empty() {
+            key_text.push_str(", ");
+        }
+        key_text.push_str(field);
+        key_text.push_str(": ");
+        key_text.push_str(&render_shell_value(value));
+    }
+    CommandError::new(
+        11000,
+        format!(
+            "PlanExecutor error during aggregation :: caused by :: E11000 duplicate key error collection: {namespace} index: {index_name} dup key: {{ {key_text} }}"
+        ),
+    )
+    .with_detail("keyValue", BsonValue::Document(key_value.clone()))
+}
+
+fn reject_stage_outside(stages: &[BsonValue], code: i32, within: &str) -> Result<(), CommandError> {
+    for stage in stages {
+        let BsonValue::Document(document) = stage
+        else {
+            continue;
+        };
+        if let Some((name, _)) = document.fields.first() {
+            if matches!(name.as_str(), "$out" | "$merge") {
+                return Err(CommandError::new(code, format!("{name} {within}")));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `$unionWith`: appends the documents of another collection, optionally
+/// filtered by a sub-pipeline. The sub-pipeline runs in the target collection's
+/// namespace, exactly like `$lookup`'s `from`.
+fn union_with_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    store: &Store,
+    namespace: &str,
+    session: Option<&str>,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let (collection, pipeline) = match body {
+        BsonValue::String(collection) => (Some(collection.clone()), None),
+        BsonValue::Document(specification) => {
+            let mut collection = None;
+            let mut pipeline = None;
+            for (key, value) in &specification.fields {
+                match key.as_str() {
+                    "coll" => match value {
+                        BsonValue::String(name) => collection = Some(name.clone()),
+                        other => {
+                            return Err(CommandError::new(
+                                14,
+                                format!(
+                                    "BSON field '$unionWith.coll' is the wrong type '{}', expected type 'string'",
+                                    bson_type_name(other)
+                                ),
+                            ));
+                        }
+                    },
+                    "pipeline" => match value {
+                        BsonValue::Array(stages) => pipeline = Some(stages.clone()),
+                        _ => return Err(CommandError::new(14, "'pipeline' option must be specified as an array")),
+                    },
+                    other => {
+                        return Err(CommandError::new(40415, format!("BSON field '$unionWith.{other}' is an unknown field.")));
+                    }
+                }
+            }
+            (collection, pipeline)
+        }
+        other => {
+            return Err(CommandError::new(
+                9,
+                format!("the $unionWith stage specification must be an object or string, but found {}", bson_type_name(other)),
+            ));
+        }
+    };
+
+    let database = namespace.split_once('.').map(|(database, _)| database).unwrap_or("admin");
+    let documents_required = || {
+        CommandError::new(
+            9,
+            "$unionWith stage without explicit collection must have a pipeline with $documents as first stage",
+        )
+    };
+    let mut output = documents;
+    match collection {
+        Some(collection) if !collection.is_empty() => {
+            let target = format!("{database}.{collection}");
+            let mut candidates = collect_matching(store, &target, &BsonDocument::new(), session)?;
+            if let Some(stages) = &pipeline {
+                candidates = run_pipeline(candidates, stages, store, &target, session, variables)?;
+            }
+            output.extend(candidates);
+        }
+        Some(_) => {
+            return Err(CommandError::new(
+                73,
+                format!("PlanExecutor error during aggregation :: caused by :: Namespace {database} is not a valid collection name"),
+            ));
+        }
+        None => {
+            let Some(stages) = pipeline else {
+                return Err(documents_required());
+            };
+            let Some(BsonValue::Document(first)) = stages.first() else {
+                return Err(documents_required());
+            };
+            let Some((first_name, first_body)) = first.fields.first() else {
+                return Err(documents_required());
+            };
+            if first_name != "$documents" || first.fields.len() != 1 {
+                return Err(documents_required());
+            }
+            let BsonValue::Array(items) = first_body else {
+                return Err(CommandError::new(
+                    14,
+                    format!("BSON field '$documents' is the wrong type '{}', expected type 'array'", bson_type_name(first_body)),
+                ));
+            };
+            let mut candidates = Vec::with_capacity(items.len());
+            for item in items {
+                let BsonValue::Document(document) = item else {
+                    return Err(CommandError::new(
+                        14,
+                        format!("$documents requires an array of documents, but found {}", bson_type_name(item)),
+                    ));
+                };
+                candidates.push(document.clone());
+            }
+            if stages.len() > 1 {
+                candidates = run_pipeline(candidates, &stages[1..], store, namespace, session, variables)?;
+            }
+            output.extend(candidates);
+        }
+    }
+    Ok(output)
+}
+
+/// `$sample`: at most `size` documents in arbitrary order. `mongod` truncates a
+/// fractional size toward zero and treats anything at or above the input count
+/// as "all documents".
+fn sample_stage(mut documents: Vec<BsonDocument>, body: &BsonValue) -> Result<Vec<BsonDocument>, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(28745, "the $sample stage specification must be an object"));
+    };
+    for (key, _) in &specification.fields {
+        if key != "size" {
+            return Err(CommandError::new(28748, format!("unrecognized option to $sample: {key}")));
+        }
+    }
+    let Some(value) = specification.get("size") else {
+        return Err(CommandError::new(28749, "$sample stage must specify a size"));
+    };
+    let Some(number) = number_of(value) else {
+        return Err(CommandError::new(28746, "size argument to $sample must be a number"));
+    };
+    let truncated = number.trunc();
+    if truncated < 0.0 {
+        return Err(CommandError::new(28747, "size argument to $sample must not be negative"));
+    }
+    let size = if truncated >= documents.len() as f64 { documents.len() } else { truncated as usize };
+
+    // A xorshift shuffle keeps `$sample` random without pulling a dependency in.
+    let mut state = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0x9e37_79b9_7f4a_7c15)
+        | 1;
+    for index in (1..documents.len()).rev() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let swap = (state % (index as u64 + 1)) as usize;
+        documents.swap(index, swap);
+    }
+    documents.truncate(size);
+    Ok(documents)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DensifyKind {
+    Numeric,
+    Date,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TimeUnit {
+    Millisecond,
+    Second,
+    Minute,
+    Hour,
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+impl TimeUnit {
+    fn millis(self) -> Option<i64> {
+        match self {
+            TimeUnit::Millisecond => Some(1),
+            TimeUnit::Second => Some(1_000),
+            TimeUnit::Minute => Some(60_000),
+            TimeUnit::Hour => Some(3_600_000),
+            TimeUnit::Day => Some(86_400_000),
+            TimeUnit::Week => Some(604_800_000),
+            TimeUnit::Month | TimeUnit::Year => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum DensifyBounds {
+    Full,
+    Partition,
+    Array(BsonValue, BsonValue),
+}
+
+struct DensifySpecification {
+    field: String,
+    partition_fields: Vec<String>,
+    bounds: DensifyBounds,
+    step: f64,
+    unit: Option<TimeUnit>,
+}
+
+fn parse_densify_unit(value: &BsonValue) -> Result<TimeUnit, CommandError> {
+    let BsonValue::String(name) = value else {
+        return Err(CommandError::new(
+            14,
+            format!("BSON field '$densify.range.unit' is the wrong type '{}', expected type 'string'", bson_type_name(value)),
+        ));
+    };
+    match name.as_str() {
+        "millisecond" | "milliseconds" => Ok(TimeUnit::Millisecond),
+        "second" | "seconds" => Ok(TimeUnit::Second),
+        "minute" | "minutes" => Ok(TimeUnit::Minute),
+        "hour" | "hours" => Ok(TimeUnit::Hour),
+        "day" | "days" => Ok(TimeUnit::Day),
+        "week" | "weeks" => Ok(TimeUnit::Week),
+        "month" | "months" => Ok(TimeUnit::Month),
+        "year" | "years" => Ok(TimeUnit::Year),
+        other => Err(CommandError::new(9, format!("unknown time unit value: {other}"))),
+    }
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let month_index = (month + 9) % 12;
+    let day_of_year = (153 * month_index + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let shifted = days + 719_468;
+    let era = if shifted >= 0 { shifted } else { shifted - 146_096 } / 146_097;
+    let day_of_era = shifted - era * 146_097;
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ => {
+            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+    }
+}
+
+fn add_calendar_units(millis: i64, count: i64, unit: TimeUnit) -> i64 {
+    let day_millis = 86_400_000;
+    let remainder = millis.rem_euclid(day_millis);
+    let days = (millis - remainder) / day_millis;
+    let (year, month, day) = civil_from_days(days);
+    let (new_year, new_month) = match unit {
+        TimeUnit::Month => {
+            let total = year * 12 + (month - 1) + count;
+            (total.div_euclid(12), total.rem_euclid(12) + 1)
+        }
+        TimeUnit::Year => (year + count, month),
+        _ => (year, month),
+    };
+    let clamped_day = day.min(days_in_month(new_year, new_month));
+    days_from_civil(new_year, new_month, clamped_day) * day_millis + remainder
+}
+
+fn densify_value_as_number(value: &BsonValue) -> Option<f64> {
+    match value {
+        BsonValue::Int32(number) => Some(f64::from(*number)),
+        BsonValue::Int64(number) => Some(*number as f64),
+        BsonValue::Double(number) => Some(*number),
+        _ => None,
+    }
+}
+
+fn densify_number_value(value: f64, hint: &BsonValue) -> BsonValue {
+    match hint {
+        BsonValue::Int32(_) => {
+            if let Ok(integer) = i32::try_from(value as i64) {
+                if value == integer as f64 {
+                    return BsonValue::Int32(integer);
+                }
+            }
+            BsonValue::Double(value)
+        }
+        BsonValue::Int64(_) => {
+            let integer = value as i64;
+            if value == integer as f64 {
+                BsonValue::Int64(integer)
+            } else {
+                BsonValue::Double(value)
+            }
+        }
+        _ => BsonValue::Double(value),
+    }
+}
+
+fn parse_densify(body: &BsonValue) -> Result<DensifySpecification, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(9, "the $densify stage specification must be an object"));
+    };
+    let mut field = None;
+    let mut partition_fields = Vec::new();
+    let mut range = None;
+    for (key, value) in &specification.fields {
+        match key.as_str() {
+            "field" => match value {
+                BsonValue::String(name) => field = Some(name.clone()),
+                other => {
+                    return Err(CommandError::new(
+                        14,
+                        format!("BSON field '$densify.field' is the wrong type '{}', expected type 'string'", bson_type_name(other)),
+                    ));
+                }
+            },
+            "partitionByFields" => match value {
+                BsonValue::Array(items) => {
+                    for item in items {
+                        let BsonValue::String(name) = item else {
+                            return Err(CommandError::new(
+                                14,
+                                format!(
+                                    "BSON field '$densify.partitionByFields' is the wrong type '{}', expected type 'string'",
+                                    bson_type_name(item)
+                                ),
+                            ));
+                        };
+                        partition_fields.push(name.clone());
+                    }
+                }
+                other => {
+                    return Err(CommandError::new(
+                        14,
+                        format!(
+                            "BSON field '$densify.partitionByFields' is the wrong type '{}', expected type 'array'",
+                            bson_type_name(other)
+                        ),
+                    ));
+                }
+            },
+            "range" => range = Some(value),
+            other => {
+                return Err(CommandError::new(40415, format!("BSON field '$densify.{other}' is an unknown field.")));
+            }
+        }
+    }
+    let Some(field) = field else {
+        return Err(CommandError::new(40414, "BSON field '$densify.field' is missing but a required field"));
+    };
+    if field.starts_with('$') {
+        return Err(CommandError::new(
+            16410,
+            "FieldPath field names may not start with '$'. Consider using $getField or $setField.",
+        ));
+    }
+    for name in &partition_fields {
+        if name.starts_with('$') {
+            return Err(CommandError::new(
+                16410,
+                "FieldPath field names may not start with '$'. Consider using $getField or $setField.",
+            ));
+        }
+    }
+    let Some(range) = range else {
+        return Err(CommandError::new(40414, "BSON field '$densify.range' is missing but a required field"));
+    };
+    let BsonValue::Document(range) = range else {
+        return Err(CommandError::new(
+            14,
+            format!("BSON field '$densify.range' is the wrong type '{}', expected type 'object'", bson_type_name(range)),
+        ));
+    };
+    let mut step = None;
+    let mut unit = None;
+    let mut bounds = None;
+    for (key, value) in &range.fields {
+        match key.as_str() {
+            "step" => match value {
+                BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => step = Some(number_of(value).unwrap_or(0.0)),
+                other => {
+                    return Err(CommandError::new(
+                        14,
+                        format!(
+                            "BSON field '$densify.range.step' is the wrong type '{}', expected types '[int, double, decimal, long']",
+                            bson_type_name(other)
+                        ),
+                    ));
+                }
+            },
+            "unit" => unit = Some(parse_densify_unit(value)?),
+            "bounds" => bounds = Some(value),
+            other => {
+                return Err(CommandError::new(40415, format!("BSON field '$densify.range.{other}' is an unknown field.")));
+            }
+        }
+    }
+    let Some(step) = step else {
+        return Err(CommandError::new(40414, "BSON field '$densify.range.step' is missing but a required field"));
+    };
+    if step <= 0.0 {
+        return Err(CommandError::new(
+            5733401,
+            "The step parameter in a range statement must be a strictly positive numeric value",
+        ));
+    }
+    let Some(bounds) = bounds else {
+        return Err(CommandError::new(40414, "BSON field '$densify.range.bounds' is missing but a required field"));
+    };
+    let bounds = match bounds {
+        BsonValue::String(name) => match name.as_str() {
+            "full" => DensifyBounds::Full,
+            "partition" => {
+                if partition_fields.is_empty() {
+                    return Err(CommandError::new(
+                        5733408,
+                        "One cannot specify the bounds as 'partition' without specifying a non-empty array of partitionByFields. You may have meant to specify 'full' bounds.",
+                    ));
+                }
+                DensifyBounds::Partition
+            }
+            _ => return Err(CommandError::new(5946802, "Bounds string must either be 'full' or 'partition'")),
+        },
+        BsonValue::Array(items) if items.len() == 2 => {
+            let lower = &items[0];
+            let upper = &items[1];
+            let numeric = densify_value_as_number(lower).is_some() && densify_value_as_number(upper).is_some();
+            let dated = matches!(lower, BsonValue::DateTime(_)) && matches!(upper, BsonValue::DateTime(_));
+            if numeric {
+                if unit.is_some() {
+                    return Err(CommandError::new(5733409, "Numeric bounds may not have unit parameter"));
+                }
+                if densify_value_as_number(lower).unwrap() >= densify_value_as_number(upper).unwrap() {
+                    return Err(CommandError::new(
+                        5733402,
+                        "A bounding array must be an ascending array of either two dates or two numbers",
+                    ));
+                }
+            } else if !dated || unit.is_none() {
+                return Err(CommandError::new(
+                    5733402,
+                    "A bounding array must be an ascending array of either two dates or two numbers",
+                ));
+            } else if let (BsonValue::DateTime(lower), BsonValue::DateTime(upper)) = (lower, upper) {
+                if *lower >= *upper {
+                    return Err(CommandError::new(
+                        5733402,
+                        "A bounding array must be an ascending array of either two dates or two numbers",
+                    ));
+                }
+            }
+            DensifyBounds::Array(lower.clone(), upper.clone())
+        }
+        _ => {
+            return Err(CommandError::new(
+                5733402,
+                "A bounding array must be an ascending array of either two dates or two numbers",
+            ));
+        }
+    };
+    Ok(DensifySpecification { field, partition_fields, bounds, step, unit })
+}
+
+fn densify_partition_fields(specification: &DensifySpecification, document: &BsonDocument) -> Vec<BsonValue> {
+    specification
+        .partition_fields
+        .iter()
+        .map(|field| lookup_field(document, field).cloned().unwrap_or(BsonValue::Null))
+        .collect()
+}
+
+fn densify_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let specification = parse_densify(body)?;
+    let _ = variables;
+
+    let mut kind: Option<DensifyKind> = None;
+    for document in &documents {
+        let Some(value) = lookup_field(document, &specification.field) else {
+            continue;
+        };
+        match value {
+            BsonValue::Null | BsonValue::Undefined => {}
+            BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_) => {
+                if kind == Some(DensifyKind::Date) {
+                    return Err(CommandError::new(
+                        5733201,
+                        "PlanExecutor error during aggregation :: caused by :: Densify field type must be numeric or a date",
+                    ));
+                }
+                kind = Some(DensifyKind::Numeric);
+            }
+            BsonValue::DateTime(_) => {
+                if kind == Some(DensifyKind::Numeric) {
+                    return Err(CommandError::new(
+                        5733201,
+                        "PlanExecutor error during aggregation :: caused by :: Densify field type must be numeric or a date",
+                    ));
+                }
+                kind = Some(DensifyKind::Date);
+            }
+            _ => {
+                return Err(CommandError::new(
+                    5733201,
+                    "PlanExecutor error during aggregation :: caused by :: Densify field type must be numeric or a date",
+                ));
+            }
+        }
+    }
+    let Some(kind) = kind else {
+        return Ok(documents);
+    };
+    if kind == DensifyKind::Date && specification.unit.is_none() {
+        return Err(CommandError::new(
+            6053600,
+            "PlanExecutor error during aggregation :: caused by :: Encountered date densify value in collection when step does not have a date unit.",
+        ));
+    }
+    if kind == DensifyKind::Numeric && specification.unit.is_some() {
+        return Err(CommandError::new(
+            6053600,
+            "PlanExecutor error during aggregation :: caused by :: Encountered numeric densify value in collection when step has a date unit.",
+        ));
+    }
+
+    // Sort by partition fields and then the densified field, which is the order
+    // `mongod` emits (the gap documents are spliced into that sequence).
+    let mut sorted = documents;
+    sorted.sort_by(|left, right| {
+        for (position, field) in specification.partition_fields.iter().enumerate() {
+            let _ = position;
+            let left_value = lookup_field(left, field).cloned().unwrap_or(BsonValue::Null);
+            let right_value = lookup_field(right, field).cloned().unwrap_or(BsonValue::Null);
+            let ordering = compare_values(&left_value, &right_value);
+            if ordering != Ordering::Equal {
+                return ordering;
+            }
+        }
+        let left_value = lookup_field(left, &specification.field).cloned().unwrap_or(BsonValue::Null);
+        let right_value = lookup_field(right, &specification.field).cloned().unwrap_or(BsonValue::Null);
+        compare_values(&left_value, &right_value)
+    });
+
+    let numeric_value = |document: &BsonDocument| -> Option<f64> {
+        lookup_field(document, &specification.field).and_then(|value| match value {
+            BsonValue::Null | BsonValue::Undefined => None,
+            other => densify_value_as_number(other),
+        })
+    };
+    let date_value = |document: &BsonDocument| -> Option<i64> {
+        lookup_field(document, &specification.field).and_then(|value| match value {
+            BsonValue::DateTime(millis) => Some(*millis),
+            _ => None,
+        })
+    };
+
+    let mut global_range: Option<(f64, f64)> = None;
+    if matches!(specification.bounds, DensifyBounds::Full) {
+        let mut lower = f64::INFINITY;
+        let mut upper = f64::NEG_INFINITY;
+        for document in &sorted {
+            if let Some(value) = numeric_value(document) {
+                lower = lower.min(value);
+                upper = upper.max(value);
+            } else if let Some(millis) = date_value(document) {
+                lower = lower.min(millis as f64);
+                upper = upper.max(millis as f64);
+            }
+        }
+        if lower.is_finite() && upper.is_finite() {
+            global_range = Some((lower, upper));
+        }
+    }
+    let mut global_dates: Option<(i64, i64)> = None;
+    if matches!(specification.bounds, DensifyBounds::Full) {
+        let mut lower = i64::MAX;
+        let mut upper = i64::MIN;
+        for document in &sorted {
+            if let Some(millis) = date_value(document) {
+                lower = lower.min(millis);
+                upper = upper.max(millis);
+            }
+        }
+        if lower != i64::MAX {
+            global_dates = Some((lower, upper));
+        }
+    }
+
+    let mut output: Vec<BsonDocument> = Vec::with_capacity(sorted.len());
+    let mut index = 0;
+    while index < sorted.len() {
+        let key = densify_partition_fields(&specification, &sorted[index]);
+        let start = index;
+        while index < sorted.len() && densify_partition_fields(&specification, &sorted[index]) == key {
+            index += 1;
+        }
+        let group = &sorted[start..index];
+
+        let hint = group
+            .iter()
+            .find_map(|document| match lookup_field(document, &specification.field) {
+                Some(value @ (BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_))) => Some(value.clone()),
+                _ => None,
+            })
+            .unwrap_or(BsonValue::Double(0.0));
+
+        let mut existing_numbers: BTreeSet<u64> = BTreeSet::new();
+        let mut group_number_range: Option<(f64, f64)> = None;
+        let mut existing_dates: BTreeSet<i64> = BTreeSet::new();
+        let mut group_date_range: Option<(i64, i64)> = None;
+        for document in group {
+            if let Some(value) = numeric_value(document) {
+                existing_numbers.insert(value.to_bits());
+                group_number_range = Some(match group_number_range {
+                    Some((lower, upper)) => (lower.min(value), upper.max(value)),
+                    None => (value, value),
+                });
+            }
+            if let Some(millis) = date_value(document) {
+                existing_dates.insert(millis);
+                group_date_range = Some(match group_date_range {
+                    Some((lower, upper)) => (lower.min(millis), upper.max(millis)),
+                    None => (millis, millis),
+                });
+            }
+        }
+
+        let mut generated: Vec<BsonDocument> = Vec::new();
+        let make_document = |value: BsonValue| {
+            let mut document = BsonDocument::new();
+            for (field, field_value) in specification.partition_fields.iter().zip(&key) {
+                let _ = field;
+                if let Some(original) = group
+                    .iter()
+                    .find_map(|candidate| lookup_field(candidate, field).cloned())
+                {
+                    document.push(field.clone(), original);
+                } else {
+                    let _ = field_value;
+                }
+            }
+            document.push(specification.field.clone(), value);
+            document
+        };
+
+        if kind == DensifyKind::Numeric {
+            let range = match &specification.bounds {
+                DensifyBounds::Full => global_range,
+                DensifyBounds::Partition => group_number_range,
+                DensifyBounds::Array(lower, upper) => {
+                    match (densify_value_as_number(lower), densify_value_as_number(upper)) {
+                        (Some(lower), Some(upper)) => Some((lower, upper)),
+                        _ => None,
+                    }
+                }
+            };
+            if let Some((lower, upper)) = range {
+                let mut value = lower;
+                let mut iterations = 0usize;
+                while value < upper && iterations < 10_000_000 {
+                    if !existing_numbers.contains(&value.to_bits()) {
+                        generated.push(make_document(densify_number_value(value, &hint)));
+                    }
+                    value += specification.step;
+                    iterations += 1;
+                }
+            }
+        } else {
+            let unit = specification.unit.unwrap_or(TimeUnit::Millisecond);
+            let range = match &specification.bounds {
+                DensifyBounds::Full => global_dates,
+                DensifyBounds::Partition => group_date_range,
+                DensifyBounds::Array(lower, upper) => match (lower, upper) {
+                    (BsonValue::DateTime(lower), BsonValue::DateTime(upper)) => Some((*lower, *upper)),
+                    _ => None,
+                },
+            };
+            if let Some((lower, upper)) = range {
+                let mut value = lower;
+                let mut iterations = 0usize;
+                while value < upper && iterations < 10_000_000 {
+                    if !existing_dates.contains(&value) {
+                        generated.push(make_document(BsonValue::DateTime(value)));
+                    }
+                    match unit {
+                        TimeUnit::Month | TimeUnit::Year => {
+                            value = add_calendar_units(value, 1, unit);
+                        }
+                        _ => {
+                            value = value.saturating_add(unit.millis().unwrap_or(1));
+                        }
+                    }
+                    iterations += 1;
+                }
+            }
+        }
+
+        // Merge the group's own documents with the generated gap documents.
+        let mut group_cursor = 0;
+        let mut generated_cursor = 0;
+        while group_cursor < group.len() || generated_cursor < generated.len() {
+            let take_original = match (group.get(group_cursor), generated.get(generated_cursor)) {
+                (Some(original), Some(gap)) => {
+                    let original_value = lookup_field(original, &specification.field).cloned().unwrap_or(BsonValue::Null);
+                    let gap_value = lookup_field(gap, &specification.field).cloned().unwrap_or(BsonValue::Null);
+                    compare_values(&original_value, &gap_value) != Ordering::Greater
+                }
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => break,
+            };
+            if take_original {
+                output.push(group[group_cursor].clone());
+                group_cursor += 1;
+            } else {
+                output.push(generated[generated_cursor].clone());
+                generated_cursor += 1;
+            }
+        }
+    }
+    Ok(output)
+}
+
+#[derive(Clone)]
+enum FillMethod {
+    Value(BsonValue),
+    Locf,
+    Linear,
+}
+
+struct FillField {
+    field: String,
+    method: FillMethod,
+}
+
+fn fill_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    let BsonValue::Document(specification) = body
+    else {
+        return Err(CommandError::new(9, "the $fill stage specification must be an object"));
+    };
+    let mut sort_by: Option<Vec<(String, i32)>> = None;
+    let mut partition_by: Option<BsonValue> = None;
+    let mut partition_fields: Option<Vec<String>> = None;
+    let mut output = None;
+    for (key, value) in &specification.fields {
+        match key.as_str() {
+            "sortBy" => match value {
+                BsonValue::Document(sort) => sort_by = Some(parse_sort_stage(sort)?),
+                other => {
+                    return Err(CommandError::new(
+                        14,
+                        format!("BSON field '$fill.sortBy' is the wrong type '{}', expected type 'object'", bson_type_name(other)),
+                    ));
+                }
+            },
+            "partitionBy" => partition_by = Some(value.clone()),
+            "partitionByFields" => match value {
+                BsonValue::Array(items) => {
+                    let mut fields = Vec::with_capacity(items.len());
+                    for item in items {
+                        let BsonValue::String(name) = item else {
+                            return Err(CommandError::new(
+                                14,
+                                format!(
+                                    "BSON field '$fill.partitionByFields' is the wrong type '{}', expected type 'string'",
+                                    bson_type_name(item)
+                                ),
+                            ));
+                        };
+                        fields.push(name.clone());
+                    }
+                    partition_fields = Some(fields);
+                }
+                other => {
+                    return Err(CommandError::new(
+                        14,
+                        format!(
+                            "BSON field '$fill.partitionByFields' is the wrong type '{}', expected type 'array'",
+                            bson_type_name(other)
+                        ),
+                    ));
+                }
+            },
+            "output" => output = Some(value),
+            other => {
+                return Err(CommandError::new(40415, format!("BSON field '$fill.{other}' is an unknown field.")));
+            }
+        }
+    }
+    let Some(output) = output else {
+        return Err(CommandError::new(40414, "BSON field '$fill.output' is missing but a required field"));
+    };
+    let BsonValue::Document(output) = output else {
+        return Err(CommandError::new(
+            14,
+            format!("BSON field '$fill.output' is the wrong type '{}', expected type 'object'", bson_type_name(output)),
+        ));
+    };
+    if output.fields.is_empty() {
+        return Err(CommandError::new(
+            6050203,
+            "The output field in '$fill' must contain an object with at least one element",
+        ));
+    }
+    let mut fills: Vec<FillField> = Vec::new();
+    for (field, entry) in &output.fields {
+        let BsonValue::Document(entry) = entry else {
+            return Err(CommandError::new(6050200, "Each fill output specification must be an object with exactly one field"));
+        };
+        for (name, _) in &entry.fields {
+            if name != "value" && name != "method" {
+                return Err(CommandError::new(40415, format!("BSON field '$fill.{name}' is an unknown field.")));
+            }
+        }
+        let value = entry.get("value");
+        let method = entry.get("method");
+        if value.is_some() && method.is_some() {
+            return Err(CommandError::new(
+                6050201,
+                "Each fill output specification must have exactly one of 'method' or 'value' fields, not both",
+            ));
+        }
+        let fill_method = match (value, method) {
+            (Some(value), None) => FillMethod::Value(value.clone()),
+            (None, Some(method)) => match method {
+                BsonValue::String(name) if name == "locf" => FillMethod::Locf,
+                BsonValue::String(name) if name == "linear" => FillMethod::Linear,
+                _ => return Err(CommandError::new(6050202, "Method must be either locf or linear")),
+            },
+            (None, None) => continue,
+            _ => unreachable!(),
+        };
+        fills.push(FillField { field: field.clone(), method: fill_method });
+    }
+    if partition_by.is_some() && partition_fields.is_some() {
+        return Err(CommandError::new(
+            6050204,
+            "Maximum one of 'partitionBy' and 'partitionByFields can be specified in '$fill'",
+        ));
+    }
+    let linear = fills.iter().any(|fill| matches!(fill.method, FillMethod::Linear));
+    if linear {
+        match &sort_by {
+            Some(sort) if sort.len() == 1 => {}
+            _ => {
+                return Err(CommandError::new(
+                    605001,
+                    "$linearFill must be specified with a top level sortBy expression with exactly one element",
+                ));
+            }
+        }
+    }
+
+    let partition_key = |document: &BsonDocument| -> Result<Vec<u8>, CommandError> {
+        if let Some(fields) = &partition_fields {
+            let mut key = Vec::new();
+            for field in fields {
+                let value = lookup_field(document, field).cloned().unwrap_or(BsonValue::Null);
+                key.extend_from_slice(&value_to_key(&value));
+            }
+            return Ok(key);
+        }
+        if let Some(expression) = &partition_by {
+            let value = evaluate_expression_vars(document, expression, variables)?;
+            return Ok(value_to_key(&value));
+        }
+        Ok(Vec::new())
+    };
+
+    let mut working = documents;
+    let ordered = fills.iter().any(|fill| !matches!(fill.method, FillMethod::Value(_)));
+    if ordered {
+        if let Some(sort) = &sort_by {
+            sort_documents(&mut working, sort);
+        }
+    }
+
+    // Group indices by partition while preserving the document order.
+    let mut groups: Vec<(Vec<u8>, Vec<usize>)> = Vec::new();
+    for (position, document) in working.iter().enumerate() {
+        let key = partition_key(document)?;
+        match groups.iter_mut().find(|(existing, _)| existing == &key) {
+            Some((_, members)) => members.push(position),
+            None => groups.push((key, vec![position])),
+        }
+    }
+
+    for (_, members) in &groups {
+        for fill in &fills {
+            match &fill.method {
+                FillMethod::Value(value) => {
+                    for position in members {
+                        let document = &mut working[*position];
+                        match lookup_field(document, &fill.field) {
+                            Some(BsonValue::Null) | Some(BsonValue::Undefined) | None => {
+                                set_field_path(document, &fill.field, value.clone());
+                            }
+                            Some(_) => {}
+                        }
+                    }
+                }
+                FillMethod::Locf => {
+                    let mut last: Option<BsonValue> = None;
+                    for position in members {
+                        let document = &mut working[*position];
+                        match lookup_field(document, &fill.field).cloned() {
+                            Some(BsonValue::Null) | Some(BsonValue::Undefined) | None => {
+                                if let Some(value) = &last {
+                                    set_field_path(document, &fill.field, value.clone());
+                                }
+                            }
+                            Some(value) => last = Some(value),
+                        }
+                    }
+                }
+                FillMethod::Linear => {
+                    let mut anchors: Vec<(usize, f64)> = Vec::new();
+                    for position in members {
+                        match lookup_field(&working[*position], &fill.field) {
+                            Some(BsonValue::Null) | Some(BsonValue::Undefined) | None => {}
+                            Some(BsonValue::Int32(_) | BsonValue::Int64(_) | BsonValue::Double(_)) => {
+                                let value = densify_value_as_number(lookup_field(&working[*position], &fill.field).unwrap()).unwrap();
+                                anchors.push((*position, value));
+                            }
+                            Some(other) => {
+                                return Err(CommandError::new(
+                                    14,
+                                    format!(
+                                        "PlanExecutor error during aggregation :: caused by :: Value to be filled must be numeric or nullish, but found {}",
+                                        bson_type_name(other)
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                    for pair in anchors.windows(2) {
+                        let (left_position, left_value) = pair[0];
+                        let (right_position, right_value) = pair[1];
+                        if right_position == left_position + 1 {
+                            continue;
+                        }
+                        let steps = (right_position - left_position) as f64;
+                        for offset in 1..(right_position - left_position) {
+                            let ratio = offset as f64 / steps;
+                            let value = left_value + (right_value - left_value) * ratio;
+                            // `mongod` always yields a double for interpolated values.
+                            set_field_path(&mut working[left_position + offset], &fill.field, BsonValue::Double(value));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // `locf` and `linear` emit documents in the sort order they used; `value`
+    // fills keep the caller's order.
+    if ordered {
+        let mut ordered_documents = Vec::with_capacity(working.len());
+        for (_, members) in &groups {
+            for position in members {
+                ordered_documents.push(working[*position].clone());
+            }
+        }
+        return Ok(ordered_documents);
+    }
+    Ok(working)
+}
+
+/// `$redact` sentinels. They must not collide with ordinary string values
+/// because `"$$KEEP"` produced as a literal is an error in `mongod`.
+const REDACT_KEEP: &str = "\u{1}$KEEP";
+const REDACT_DESCEND: &str = "\u{1}$DESCEND";
+const REDACT_PRUNE: &str = "\u{1}$PRUNE";
+
+fn validate_redact_variables(
+    expression: &BsonValue,
+    variables: &ExpressionVariables,
+) -> Result<(), CommandError> {
+    const RESERVED: [&str; 5] = ["ROOT", "CURRENT", "KEEP", "DESCEND", "PRUNE"];
+    match expression {
+        BsonValue::String(name) if name.starts_with("$$") => {
+            let variable = &name[2..];
+            if !RESERVED.contains(&variable) && !variables.contains_key(variable) {
+                return Err(CommandError::new(17276, format!("Use of undefined variable: {variable}")));
+            }
+        }
+        BsonValue::Document(document) => {
+            for (_, value) in &document.fields {
+                validate_redact_variables(value, variables)?;
+            }
+        }
+        BsonValue::Array(items) => {
+            for item in items {
+                validate_redact_variables(item, variables)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn redact_value(
+    value: &BsonValue,
+    expression: &BsonValue,
+    variables: &ExpressionVariables,
+    root: &BsonDocument,
+) -> Result<Option<BsonValue>, CommandError> {
+    match value {
+        BsonValue::Document(document) => Ok(redact_document(document, expression, variables, root)?.map(BsonValue::Document)),
+        BsonValue::Array(items) => {
+            let mut kept = Vec::with_capacity(items.len());
+            for item in items {
+                if let Some(value) = redact_value(item, expression, variables, root)? {
+                    kept.push(value);
+                }
+            }
+            Ok(Some(BsonValue::Array(kept)))
+        }
+        other => Ok(Some(other.clone())),
+    }
+}
+
+fn redact_document(
+    document: &BsonDocument,
+    expression: &BsonValue,
+    variables: &ExpressionVariables,
+    root: &BsonDocument,
+) -> Result<Option<BsonDocument>, CommandError> {
+    let mut bound = variables.clone();
+    bound.insert("ROOT".to_string(), BsonValue::Document(root.clone()));
+    bound.insert("CURRENT".to_string(), BsonValue::Document(document.clone()));
+    bound.insert("KEEP".to_string(), BsonValue::String(REDACT_KEEP.to_string()));
+    bound.insert("DESCEND".to_string(), BsonValue::String(REDACT_DESCEND.to_string()));
+    bound.insert("PRUNE".to_string(), BsonValue::String(REDACT_PRUNE.to_string()));
+    let decision = evaluate_expression_optional_vars(document, expression, &bound)?;
+    match decision {
+        Some(BsonValue::String(name)) if name == REDACT_KEEP => Ok(Some(document.clone())),
+        Some(BsonValue::String(name)) if name == REDACT_PRUNE => Ok(None),
+        Some(BsonValue::String(name)) if name == REDACT_DESCEND => {
+            let mut descended = BsonDocument::new();
+            for (field, value) in &document.fields {
+                if let Some(value) = redact_value(value, expression, variables, root)? {
+                    descended.push(field.clone(), value);
+                }
+            }
+            Ok(Some(descended))
+        }
+        other => {
+            let rendered = match &other {
+                Some(value) => render_shell_value(value),
+                None => "MISSING".to_string(),
+            };
+            Err(CommandError::new(
+                17053,
+                format!(
+                    "PlanExecutor error during aggregation :: caused by :: $redact's expression should not return anything aside from the variables $$KEEP, $$DESCEND, and $$PRUNE, but returned {rendered}"
+                ),
+            ))
+        }
+    }
+}
+
+fn redact_stage(
+    documents: Vec<BsonDocument>,
+    body: &BsonValue,
+    variables: &ExpressionVariables,
+) -> Result<Vec<BsonDocument>, CommandError> {
+    validate_redact_variables(body, variables)?;
+    let mut output = Vec::with_capacity(documents.len());
+    for document in &documents {
+        if let Some(redacted) = redact_document(document, body, variables, document)? {
+            output.push(redacted);
+        }
+    }
+    Ok(output)
+}
+
 fn out_stage(
     documents: Vec<BsonDocument>,
     body: &BsonValue,
@@ -6096,15 +7483,51 @@ fn out_stage(
     session: Option<&str>,
 ) -> Result<Vec<BsonDocument>, CommandError> {
     let target = stage_target_namespace(body, namespace, "$out")?;
+    // `$out` is atomic in `mongod`: it writes every document first and only
+    // replaces the target once the whole output set satisfies the target's
+    // unique indexes. Validate that here so a failure cannot leave the old
+    // collection half-deleted.
+    let mut staged_documents = Vec::with_capacity(documents.len());
+    for mut document in documents {
+        if document.get("_id").is_none() {
+            document.push("_id".to_string(), BsonValue::ObjectId(generate_object_id()));
+        }
+        staged_documents.push(document);
+    }
+    let temporary = temporary_aggregation_namespace(&target);
+    let mut identifiers: BTreeSet<Vec<u8>> = BTreeSet::new();
+    for document in &staged_documents {
+        let identifier = document.get("_id").cloned().unwrap_or(BsonValue::Null);
+        if !identifiers.insert(value_to_key(&identifier)) {
+            let mut key_value = BsonDocument::new();
+            key_value.push("_id".to_string(), identifier);
+            return Err(out_duplicate_error(&temporary, "_id_", &key_value));
+        }
+    }
+    let indexes = store.index_specs(&target);
+    for specification in indexes.iter().filter(|index| index.unique) {
+        let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
+        for document in &staged_documents {
+            for tuple in index_entries(document, specification) {
+                if !seen.insert(index_tuple(&tuple)) {
+                    let mut key_value = BsonDocument::new();
+                    for ((field, _), value) in specification.key.fields.iter().zip(&tuple) {
+                        key_value.push(field.clone(), value.clone());
+                    }
+                    return Err(out_duplicate_error(&temporary, &specification.name, &key_value));
+                }
+            }
+        }
+    }
     let target_keys: Vec<Vec<u8>> = namespace_documents(store, &target, session).into_iter().map(|(key, _)| key).collect();
     if !target_keys.is_empty() {
         stage_delete(store, session, &target, &target_keys)?;
     }
-    let entries: Vec<(Vec<u8>, Vec<u8>)> = documents
+    let entries: Vec<(Vec<u8>, Vec<u8>)> = staged_documents
         .into_iter()
-        .filter_map(|document| {
-            let identifier = document.get("_id")?.clone();
-            Some((value_to_key(&identifier), encode_bson(&document)))
+        .map(|document| {
+            let identifier = document.get("_id").cloned().unwrap_or(BsonValue::Null);
+            (value_to_key(&identifier), encode_bson(&document))
         })
         .collect();
     stage_insert(store, session, &target, &entries)?;
@@ -6279,6 +7702,13 @@ fn merge_immutable_id_error(identifier: &BsonValue) -> CommandError {
     )
 }
 
+fn merge_immutable_field_error() -> CommandError {
+    CommandError::new(
+        66,
+        "PlanExecutor error during aggregation :: caused by :: $merge failed to update the matching document, did you attempt to modify the _id or the shard key? :: caused by :: Performing an update on the path '_id' would modify the immutable field '_id'",
+    )
+}
+
 fn merge_duplicate_error(namespace: &str, index_name: &str, key_pattern: &BsonDocument, key_value: &BsonDocument, when_matched_fail: bool) -> CommandError {
     let mut key_text = String::new();
     for (field, value) in &key_value.fields {
@@ -6354,14 +7784,12 @@ fn merge_stage(
     if !store.namespace_exists(&target) {
         store.import(&target, &[]).map_err(|error| CommandError::new(2, format!("$merge failed: {error}")))?;
     }
-    let Some((index_name, _key_pattern)) = merge_unique_index(store, &target, &on_fields) else {
+    let Some((index_name, key_pattern)) = merge_unique_index(store, &target, &on_fields) else {
         return Err(CommandError::new(51183, "Cannot find index to verify that join fields will be unique"));
     };
 
     let mut target_documents: Vec<BsonDocument> =
         collect_matching(store, &target, &BsonDocument::new(), session)?;
-    let mut replacements: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
-    let mut inserts: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
 
     // `mongod` validates every document's `on` values before applying any
     // write, so a later document can reject the whole aggregation.
@@ -6401,16 +7829,24 @@ fn merge_stage(
             let updated = match mode {
                 MergeMode::KeepExisting => continue,
                 MergeMode::Fail => {
-                    let mut id_pattern = BsonDocument::new();
-                    id_pattern.push("_id".to_string(), BsonValue::Int32(1));
-                    let id_value = merge_key_value(&existing, &id_pattern);
-                    return Err(merge_duplicate_error(
-                        &target,
-                        "_id_",
-                        &id_pattern,
-                        &id_value,
-                        index_name == "_id_",
-                    ));
+                    let same_identifier = match (existing.get("_id"), document.get("_id")) {
+                        (Some(left), Some(right)) => value_to_key(left) == value_to_key(right),
+                        _ => false,
+                    };
+                    if index_name == "_id_" || same_identifier {
+                        let mut id_pattern = BsonDocument::new();
+                        id_pattern.push("_id".to_string(), BsonValue::Int32(1));
+                        let id_value = merge_key_value(&existing, &id_pattern);
+                        return Err(merge_duplicate_error(
+                            &target,
+                            "_id_",
+                            &id_pattern,
+                            &id_value,
+                            index_name == "_id_",
+                        ));
+                    }
+                    let on_value = merge_key_value(&existing, &key_pattern);
+                    return Err(merge_duplicate_error(&target, &index_name, &key_pattern, &on_value, true));
                 }
                 MergeMode::Replace => {
                     let mut replacement = document.clone();
@@ -6430,16 +7866,16 @@ fn merge_stage(
             };
             target_documents[position] = updated.clone();
             let identifier = updated.get("_id").cloned().unwrap_or(BsonValue::Null);
-            replacements.push((value_to_key(&identifier), encode_bson(&updated)));
+            // `$merge` applies each document as it goes: a later failure does not
+            // roll back the writes already made, which is what `mongod` does.
+            stage_replace(store, session, &target, &[(value_to_key(&identifier), encode_bson(&updated))])?;
         } else {
             match not_matched {
                 MergeNotMatched::Discard => continue,
                 MergeNotMatched::Fail => {
                     return Err(CommandError::new(
-                        11000,
-                        format!(
-                            "PlanExecutor error during aggregation :: caused by :: $merge with whenNotMatched: fail found no matching document for the 'on' fields"
-                        ),
+                        13113,
+                        "PlanExecutor error during aggregation :: caused by :: $merge could not find a matching document in the target collection for at least one document in the source collection",
                     ));
                 }
                 MergeNotMatched::Insert => {}
@@ -6460,16 +7896,10 @@ fn merge_stage(
                 return Err(merge_duplicate_error(&target, &conflict_name, &conflict_pattern, &conflict_value, false));
             }
             target_documents.push(inserted.clone());
-            inserts.push((identifier_key, encode_bson(&inserted)));
+            stage_insert(store, session, &target, &[(identifier_key, encode_bson(&inserted))])?;
         }
     }
 
-    if !replacements.is_empty() {
-        stage_replace(store, session, &target, &replacements)?;
-    }
-    if !inserts.is_empty() {
-        stage_insert(store, session, &target, &inserts)?;
-    }
     Ok(Vec::new())
 }
 
@@ -6555,7 +7985,7 @@ fn merge_unique_index(store: &Store, namespace: &str, on_fields: &[String]) -> O
 fn merge_document(existing: &BsonDocument, incoming: &BsonDocument) -> Result<BsonDocument, CommandError> {
     if let (Some(left), Some(right)) = (existing.get("_id"), incoming.get("_id")) {
         if value_to_key(left) != value_to_key(right) {
-            return Err(merge_immutable_id_error(right));
+            return Err(merge_immutable_field_error());
         }
     }
     let mut merged = existing.clone();
@@ -6608,6 +8038,7 @@ fn facet_stage(
         else {
             return Err(CommandError::new(2, format!("$facet branch `{name}` must be a pipeline array")));
         };
+        reject_stage_outside(stages, 40600, "is not allowed to be used within a $facet stage")?;
         let branch_output = run_pipeline(documents.clone(), stages, store, namespace, session, variables)?;
         faceted.push(name.clone(), BsonValue::Array(branch_output.into_iter().map(BsonValue::Document).collect()));
     }
@@ -7371,12 +8802,18 @@ fn project_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Re
         return Ok(projected);
     }
 
-    let id_excluded = specification.get("_id").map(rule_is_exclusion).unwrap_or(false);
+    let id_rule = specification.get("_id");
+    let id_excluded = id_rule.map(rule_is_exclusion).unwrap_or(false);
+    let id_expression = id_rule.filter(|rule| !rule_is_exclusion(rule) && !rule_is_inclusion(rule));
     let mut projected = Vec::new();
     for document in documents {
         let mut result = BsonDocument::new();
         if !id_excluded {
-            if let Some(identifier) = document.get("_id") {
+            if let Some(expression) = id_expression {
+                if let Some(value) = evaluate_expression_optional(document, expression)? {
+                    result.push("_id".to_string(), value);
+                }
+            } else if let Some(identifier) = document.get("_id") {
                 result.push("_id".to_string(), identifier.clone());
             }
         }
@@ -7541,6 +8978,31 @@ fn evaluate_expression_vars(
                     let value = evaluate_expression_vars(document, first, variables)?;
                     Ok(BsonValue::Bool(!expression_truthy(&value)))
                 }
+                "$cond" => {
+                    let (condition, then_value, else_value) = match argument {
+                        BsonValue::Array(arguments) if arguments.len() == 3 => {
+                            (&arguments[0], &arguments[1], &arguments[2])
+                        }
+                        BsonValue::Document(options) => {
+                            let condition = options.get("if").ok_or_else(|| CommandError::new(17072, "$cond requires an 'if' argument"))?;
+                            let then_value = options.get("then").ok_or_else(|| CommandError::new(17072, "$cond requires a 'then' argument"))?;
+                            let else_value = options.get("else").ok_or_else(|| CommandError::new(17072, "$cond requires an 'else' argument"))?;
+                            (condition, then_value, else_value)
+                        }
+                        _ => {
+                            return Err(CommandError::new(
+                                17072,
+                                "$cond requires either an array of three expressions or an object with 'if', 'then' and 'else'",
+                            ));
+                        }
+                    };
+                    let condition = evaluate_expression_vars(document, condition, variables)?;
+                    if expression_truthy(&condition) {
+                        evaluate_expression_vars(document, then_value, variables)
+                    } else {
+                        evaluate_expression_vars(document, else_value, variables)
+                    }
+                }
                 "$add" => {
                     let BsonValue::Array(arguments) = argument else {
                         return Err(CommandError::new(2, "$add requires an array of expressions"));
@@ -7610,7 +9072,7 @@ fn evaluate_expression_vars(
                 other => Err(CommandError::new(
                     59,
                     format!(
-                        "unknown $project expression: {other} (supported: $add, $concat, $ifNull, $size, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)"
+                        "unknown $project expression: {other} (supported: $add, $concat, $cond, $ifNull, $size, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)"
                     ),
                 )),
             }

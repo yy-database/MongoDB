@@ -207,3 +207,75 @@ Two limits remain:
   the shard records and their `!catalog` mirror are deleted second. A crash
   exactly between them makes the next `open` merge the mirror back, so the
   database reappears. `mongod` commits the drop in a single transaction.
+
+## Aggregation stages
+
+`$unionWith` (string form, `{coll, pipeline}`, `$documents` as the first
+sub-pipeline stage), `$sample`, `$densify` (numeric and date ranges, `full` and
+`partition` bounds, month/year calendar steps), `$fill` (`value`, `locf`,
+`linear`), `$redact`, `$merge` and `$out` were measured against `mongod 8.0.9`
+and the corpus gate compares them per field.
+
+Two limits remain:
+
+- **Natural order is `_id` order.** Unsorted scans here return documents in
+  `_id` order; `mongod` returns insertion order. `$merge` applies its input as it
+  goes and does not roll back, so a run that fails half-way may have applied a
+  different prefix of source documents than `mongod` would. Adding a `$sort`
+  before `$merge` (or inserting documents in `_id` order) makes the two
+  identical; the insertion-order difference itself is visible in any unsorted
+  `find`/`$limit`/`$skip` as well.
+- **`$merge` pipeline expressions are the shared expression subset.** A
+  `whenMatched` pipeline may use only the operators the expression evaluator
+  knows; `mongod` accepts the full aggregation expression set.
+
+## Index types
+
+Wildcard (`$**`, `path.$**`, `wildcardProjection` reported by `listIndexes`),
+hashed (one hashed field per index, no `unique`) and compound multikey indexes,
+including `unique` + `sparse` combinations, are stored, listed and enforced with
+the same catalog shape and error codes (`31303`, `16764`, `67`, `11000`) as
+`mongod 8.0.9`. Hashed validation errors carry the index-builder wrapper text
+(`Index build failed: <uuid>: ... 1 index specs provided. First index spec: ...`).
+
+**Text indexes are not implemented.** `createIndexes` with a `text` key answers
+`59 text indexes are not supported yet` instead of storing the `_fts` / `_ftsx`
+catalog entry, so `$text`, `$meta: "textScore"` and weights are unavailable.
+
+### Text index feasibility (measured, not implemented)
+
+What a real `mongod 8.0.9` does, captured from `createIndexes` / `listIndexes`:
+
+| Aspect | Measured behaviour |
+|---|---|
+| Catalog key | `{ _fts: "text", _ftsx: 1 }` for every text index |
+| `weights` | one entry per text field, default `1`; `weights: {title: 5}` is preserved |
+| `default_language` | `"english"` |
+| `language_override` | `"language"` |
+| `textIndexVersion` | `3` |
+| Compound form | `{a: 1, body: "text"}` keeps the prefix key and indexes only text fields |
+| Field order | `weights`, `default_language`, `language_override`, `textIndexVersion` after `name` |
+| Options | a text index cannot be `unique`; it is always sparse; one text index per collection |
+
+What would have to be built before the stage is worth attempting:
+
+1. **Catalog shape**: the two-part `_fts`/`_ftsx` entry plus weights/language
+   fields, and `listIndexes` rendering (the corpus gate would then cover it).
+2. **Tokenizer and stemmer per language**: `mongod` uses ICU-backed Snowball
+   stemmers and stop-word lists for ~15 languages; mapping every language is a
+   large, separate block. An English-only tokenizer would be a visible deviation
+   as soon as `default_language` differs.
+3. **Query parser**: `$text: {$search}` supports phrases (`"..."`), negation
+   (`-term`), OR (`term1 term2` is OR by default in `$text`), case folding, and
+   `$caseSensitive` / `$diacriticSensitive`; each needs its own oracle pass.
+4. **Scoring**: `$meta: "textScore"` projection and `$sort: {score: {$meta: ...}}`
+   need the TF-IDF-ish score `mongod` computes; matching the *ordering* is the
+   hard part, not the number.
+5. **Planner interaction**: `$text` requires an existing text index (error 27
+   otherwise), cannot be combined with `$near`, and `hint` by name has to route
+   to it.
+
+Conclusion: the catalog part is small; the language/analyzer and scoring parts
+are the bulk of the work and are where compatibility would be graded. This is
+deliberately deferred rather than approximated, because an English-only
+implementation would silently disagree with `mongod` for every other language.

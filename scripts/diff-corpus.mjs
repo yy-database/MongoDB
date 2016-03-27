@@ -39,7 +39,7 @@ const option = (name, fallback) => {
 const HOST = option('host', '127.0.0.1')
 const PORT = Number(option('port', '28017'))
 const SEED = Number(option('seed', '20261106'))
-const COUNT = Number(option('count', '291'))
+const COUNT = Number(option('count', '309'))
 const ONLY = option('only', null)
 const VERIFY = args.includes('--verify')
 const CHECK = args.includes('--check')
@@ -984,6 +984,31 @@ function buildIndexes(seed) {
         { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'c_bad', collation: { locale: 'bogus' } }] },
         { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1, b: 1 }, name: 'ab_ttl', expireAfterSeconds: 60 }] },
         { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 1 }, name: 'a_ttl_neg', expireAfterSeconds: -1 }] }
+    ])
+    addWithDocs('wildcard_list', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { '$**': 1 }, name: 'wild', wildcardProjection: { a: 1 } }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { 'tags.$**': 1 }, name: 'tags_wild' }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('wildcard_errors', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { '$**': 1 }, name: 'wild_unique', unique: true }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { '$**': 1 }, name: 'wild_sparse', sparse: true }] }
+    ])
+    addWithDocs('hashed_list', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 'hashed' }, name: 'a_hashed' }] },
+        { op: 'listIndexes', collection: `diff_index_${n}` }
+    ])
+    addWithDocs('hashed_errors', docs(), null, [
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 'hashed', b: 'hashed' }, name: 'ab_hashed' }] },
+        { op: 'createIndexes', collection: `diff_index_${n}`, indexes: [{ key: { a: 'hashed' }, name: 'a_hashed_unique', unique: true }] }
+    ])
+    addWithDocs('multikey_compound_unique_sparse', docs(), [
+        { key: { tags: 1, a: 1 }, name: 'tags_a_unique_sparse', unique: true, sparse: true }
+    ], [
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 9, tags: ['blue'], a: 10 }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 10, tags: ['blue', 'green'], a: 20 }] },
+        { op: 'insert', collection: `diff_index_${n}`, documents: [{ _id: 11, tags: ['red'], a: 40 }] },
+        { op: 'find', collection: `diff_index_${n}`, filter: {}, sort: { _id: 1 } }
     ])
     return entries
 }
@@ -2055,6 +2080,229 @@ function buildRemainingStages(seed) {
             { op: 'aggregate', collection: 'oe', pipeline: [{ $out: { db: 'diff', coll: '' } }] },
             { op: 'aggregate', collection: 'oe', pipeline: [{ $out: { db: 'diff', coll: 'oe_x', extra: 1 } }] }
         ])
+    })
+
+    entries.push({
+        id: 'union_with_pipeline',
+        setup: [
+            { op: 'insert', collection: 'uw', documents: [{ _id: 1, g: 'a' }, { _id: 2, g: 'b' }, { _id: 3, g: 'a' }] },
+            { op: 'insert', collection: 'uw2', documents: [{ _id: 4, g: 'a' }, { _id: 5, g: 'c' }] }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'uw',
+                pipeline: [
+                    { $sort: { _id: 1 } },
+                    { $project: { _id: 1 } },
+                    { $unionWith: { coll: 'uw2', pipeline: [{ $match: { g: 'a' } }, { $project: { _id: 1 } }] } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'union_with_string_and_self',
+        setup: [{ op: 'insert', collection: 'uw3', documents: [{ _id: 1 }, { _id: 2 }] }],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'uw3',
+                pipeline: [
+                    { $project: { _id: 1 } },
+                    { $unionWith: 'uw3_missing' },
+                    { $sort: { _id: 1 } }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'uw3',
+                pipeline: [{ $unionWith: { coll: 'uw3' } }, { $project: { _id: 1 } }, { $sort: { _id: 1 } }]
+            }
+        ]
+    })
+    entries.push({
+        id: 'union_with_documents',
+        setup: [{ op: 'insert', collection: 'uw4', documents: [{ _id: 1 }, { _id: 2 }] }],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'uw4',
+                pipeline: [
+                    { $sort: { _id: 1 } },
+                    {
+                        $unionWith: {
+                            pipeline: [{ $documents: [{ _id: 9, g: 'x' }] }, { $project: { _id: 1 } }]
+                        }
+                    },
+                    { $sort: { _id: 1 } }
+                ]
+            }
+        ]
+    })
+    entries.push({
+        id: 'union_with_errors',
+        setup: [{ op: 'insert', collection: 'ue', documents: [{ _id: 1 }] }],
+        steps: errors([
+            { op: 'aggregate', collection: 'ue', pipeline: [{ $unionWith: 5 }] },
+            { op: 'aggregate', collection: 'ue', pipeline: [{ $unionWith: { coll: '' } }] },
+            { op: 'aggregate', collection: 'ue', pipeline: [{ $unionWith: { coll: 'ue', pipeline: 5 } }] },
+            { op: 'aggregate', collection: 'ue', pipeline: [{ $unionWith: { coll: 'ue', extra: 1 } }] },
+            { op: 'aggregate', collection: 'ue', pipeline: [{ $unionWith: { pipeline: [{ $match: {} }] } }] }
+        ])
+    })
+
+    entries.push({
+        id: 'sample_counts',
+        setup: [{ op: 'insert', collection: 'sp', documents: [{ _id: 1 }, { _id: 2 }, { _id: 3 }, { _id: 4 }] }],
+        steps: [
+            { op: 'aggregate', collection: 'sp', pipeline: [{ $sample: { size: 2 } }, { $count: 'n' }] },
+            { op: 'aggregate', collection: 'sp', pipeline: [{ $sample: { size: 9 } }, { $count: 'n' }] },
+            { op: 'aggregate', collection: 'sp', pipeline: [{ $sample: { size: 0 } }, { $count: 'n' }] }
+        ]
+    })
+    entries.push({
+        id: 'sample_errors',
+        setup: [{ op: 'insert', collection: 'se', documents: [{ _id: 1 }] }],
+        steps: errors([
+            { op: 'aggregate', collection: 'se', pipeline: [{ $sample: { size: -1 } }] },
+            { op: 'aggregate', collection: 'se', pipeline: [{ $sample: { size: 'two' } }] },
+            { op: 'aggregate', collection: 'se', pipeline: [{ $sample: {} }] },
+            { op: 'aggregate', collection: 'se', pipeline: [{ $sample: { size: 1, extra: 1 } }] },
+            { op: 'aggregate', collection: 'se', pipeline: [{ $sample: 5 }] }
+        ])
+    })
+
+    entries.push({
+        id: 'densify_numeric',
+        setup: [{ op: 'insert', collection: 'dn', documents: [{ _id: 1, x: 1 }, { _id: 2, x: 3 }] }],
+        steps: [
+            { op: 'aggregate', collection: 'dn', pipeline: [{ $densify: { field: 'x', range: { step: 1, bounds: 'full' } } }] }
+        ]
+    })
+    entries.push({
+        id: 'densify_partition',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'dp',
+                documents: [
+                    { _id: 1, g: 'a', x: 1 },
+                    { _id: 2, g: 'a', x: 3 },
+                    { _id: 3, g: 'b', x: 2 },
+                    { _id: 4, g: 'b', x: 6 }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'dp',
+                pipeline: [{ $densify: { field: 'x', partitionByFields: ['g'], range: { step: 1, bounds: 'partition' } } }]
+            }
+        ]
+    })
+    entries.push({
+        id: 'densify_dates',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'dd',
+                documents: [
+                    { _id: 1, d: { $date: { $numberLong: '1704067200000' } } },
+                    { _id: 2, d: { $date: { $numberLong: '1704326400000' } } }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'dd',
+                pipeline: [{ $densify: { field: 'd', range: { step: 1, unit: 'day', bounds: 'full' } } }]
+            }
+        ]
+    })
+    entries.push({
+        id: 'densify_errors',
+        setup: [{ op: 'insert', collection: 'de', documents: [{ _id: 1, x: 1 }, { _id: 2, x: 'two' }] }],
+        steps: errors([
+            { op: 'aggregate', collection: 'de', pipeline: [{ $densify: { field: 'x', range: { step: 0, bounds: 'full' } } }] },
+            { op: 'aggregate', collection: 'de', pipeline: [{ $densify: { field: 'x', range: { step: 1, bounds: 'partition' } } }] },
+            { op: 'aggregate', collection: 'de', pipeline: [{ $densify: { field: 'x', range: { step: 1, bounds: [3, 1] } } }] },
+            { op: 'aggregate', collection: 'de', pipeline: [{ $densify: { field: '$x', range: { step: 1, bounds: 'full' } } }] },
+            { op: 'aggregate', collection: 'de', pipeline: [{ $densify: { field: 'x', range: { step: 1, bounds: 'bogus' } } }] }
+        ])
+    })
+
+    entries.push({
+        id: 'fill_value_and_locf',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'fl',
+                documents: [
+                    { _id: 1, t: 1, v: 10, w: 5 },
+                    { _id: 2, t: 2, v: null },
+                    { _id: 3, t: 3, v: 30, w: 7 }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'fl',
+                pipeline: [{ $fill: { sortBy: { t: 1 }, output: { v: { method: 'locf' }, w: { value: 0 } } } }]
+            },
+            {
+                op: 'aggregate',
+                collection: 'fl',
+                pipeline: [{ $fill: { sortBy: { t: 1 }, output: { w: { method: 'linear' } } } }]
+            }
+        ]
+    })
+    entries.push({
+        id: 'fill_errors',
+        setup: [{ op: 'insert', collection: 'fe', documents: [{ _id: 1, t: 1, v: 'text' }, { _id: 2, t: 2, v: null }] }],
+        steps: errors([
+            { op: 'aggregate', collection: 'fe', pipeline: [{ $fill: { output: { v: { method: 'bogus' } } } }] },
+            { op: 'aggregate', collection: 'fe', pipeline: [{ $fill: { output: { v: { method: 'locf', value: 5 } } } }] },
+            { op: 'aggregate', collection: 'fe', pipeline: [{ $fill: { sortBy: { t: 1 }, output: { v: { method: 'linear' } } } }] }
+        ])
+    })
+
+    entries.push({
+        id: 'redact_prune_descend',
+        setup: [
+            {
+                op: 'insert',
+                collection: 'rd',
+                documents: [
+                    { _id: 1, secret: true, v: 'hidden' },
+                    { _id: 2, v: 'shown' },
+                    { _id: 3, child: { secret: true, v: 'nested' } }
+                ]
+            }
+        ],
+        steps: [
+            {
+                op: 'aggregate',
+                collection: 'rd',
+                pipeline: [
+                    {
+                        $redact: {
+                            $cond: [{ $eq: ['$secret', true] }, '$$PRUNE', '$$DESCEND']
+                        }
+                    }
+                ]
+            },
+            {
+                op: 'aggregate',
+                collection: 'rd',
+                pipeline: [
+                    { $match: { _id: 1 } },
+                    { $redact: { $cond: [{ $eq: ['$secret', true] }, '$$PRUNE', '$$KEEP'] } }
+                ]
+            }
+        ]
     })
 
     entries.push({

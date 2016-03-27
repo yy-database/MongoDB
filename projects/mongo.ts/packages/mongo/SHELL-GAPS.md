@@ -32,6 +32,8 @@ Tiers describe what it would take to close a gap, not how important it is.
 | `db.stats()` (`dbStats`) | db, collections, views, objects, avgObjSize, dataSize, storageSize, indexes, indexSize, totalSize, fsUsedSize, fsTotalSize | OK; `objects`/`dataSize`/`avgObjSize` exact, `storageSize` is shard record bytes and `indexSize` is 0 (see KNOWN-DIFFERENCES) | done |
 | `db.dropDatabase()` | `{ok:1, dropped:"<db>"}` | OK; server replies `{ok:1}` and the shell adds `dropped`; collections, indexes, users and cursors go with it | done |
 | `db.<c>.drop()` | `{ok:1, ns}` | `no such command: 'drop'` | hard |
+| `db.<c>.createIndex` (wildcard / hashed / multikey, `unique`+`sparse`) | `indexes[]` in `listIndexes` | OK; same catalog shape, same error codes (see KNOWN-DIFFERENCES) | done |
+| `db.<c>.createIndex({body:'text'})` + `$text` | `_fts`/`_ftsx` entry, `weights`, `$meta:"textScore"` | `text indexes are not supported yet` (59) | hard; feasibility in KNOWN-DIFFERENCES |
 | `db.adminCommand({serverStatus:1})` counters (`opcounters`, `mem`, `asserts`) | present | absent | medium |
 | `rs.status()` (`replSetGetStatus`) | member array, `stateStr: PRIMARY`, `optime`, `syncSourceHost: ""` | OK; single member, PRIMARY, `optime` from real writes (see KNOWN-DIFFERENCES) | done |
 | `rs.conf()` (`replSetGetConfig`) | `config` with set name, members, settings | OK, same fields for the single member | done |

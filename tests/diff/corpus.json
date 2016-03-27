@@ -1,7 +1,7 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 291,
+  "count": 309,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
@@ -9,7 +9,7 @@
     "update": 43,
     "delete": 8,
     "insert": 10,
-    "indexes": 21,
+    "indexes": 26,
     "cursor": 8,
     "findAndModify": 18,
     "distinct": 11,
@@ -18,10 +18,10 @@
     "listCollections": 8,
     "count": 10,
     "hint": 25,
-    "undefined": 32,
+    "undefined": 45,
     "bsonTypes": 6
   },
-  "digest": "a758a218bd7c7f4cf69677f17882c06737f0b0a2908aa1604d6db8bc8122d03e",
+  "digest": "6b07c402b5b9678139b3bd2634e2406b4b1d2324d8433e40a58a895d71a7d9b2",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -14144,6 +14144,373 @@
       "seed": 20300701
     },
     {
+      "id": "diff.index.wildcard_list",
+      "cluster": "indexes",
+      "collection": "diff_index_21",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_21",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_21",
+          "indexes": [
+            {
+              "key": {
+                "$**": 1
+              },
+              "name": "wild",
+              "wildcardProjection": {
+                "a": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_21",
+          "indexes": [
+            {
+              "key": {
+                "tags.$**": 1
+              },
+              "name": "tags_wild"
+            }
+          ]
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_21"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.wildcard_errors",
+      "cluster": "indexes",
+      "collection": "diff_index_22",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_22",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_22",
+          "indexes": [
+            {
+              "key": {
+                "$**": 1
+              },
+              "name": "wild_unique",
+              "unique": true
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_22",
+          "indexes": [
+            {
+              "key": {
+                "$**": 1
+              },
+              "name": "wild_sparse",
+              "sparse": true
+            }
+          ]
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.hashed_list",
+      "cluster": "indexes",
+      "collection": "diff_index_23",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_23",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_23",
+          "indexes": [
+            {
+              "key": {
+                "a": "hashed"
+              },
+              "name": "a_hashed"
+            }
+          ]
+        },
+        {
+          "op": "listIndexes",
+          "collection": "diff_index_23"
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.hashed_errors",
+      "cluster": "indexes",
+      "collection": "diff_index_24",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_24",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_24",
+          "indexes": [
+            {
+              "key": {
+                "a": "hashed",
+                "b": "hashed"
+              },
+              "name": "ab_hashed"
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_24",
+          "indexes": [
+            {
+              "key": {
+                "a": "hashed"
+              },
+              "name": "a_hashed_unique",
+              "unique": true
+            }
+          ]
+        }
+      ],
+      "seed": 20300701
+    },
+    {
+      "id": "diff.index.multikey_compound_unique_sparse",
+      "cluster": "indexes",
+      "collection": "diff_index_25",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_index_25",
+          "documents": [
+            {
+              "_id": 1,
+              "a": 10,
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": 2,
+              "a": 20,
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": 3,
+              "a": 30,
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            }
+          ]
+        },
+        {
+          "op": "createIndexes",
+          "collection": "diff_index_25",
+          "indexes": [
+            {
+              "key": {
+                "tags": 1,
+                "a": 1
+              },
+              "name": "tags_a_unique_sparse",
+              "unique": true,
+              "sparse": true
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "insert",
+          "collection": "diff_index_25",
+          "documents": [
+            {
+              "_id": 9,
+              "tags": [
+                "blue"
+              ],
+              "a": 10
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_25",
+          "documents": [
+            {
+              "_id": 10,
+              "tags": [
+                "blue",
+                "green"
+              ],
+              "a": 20
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "diff_index_25",
+          "documents": [
+            {
+              "_id": 11,
+              "tags": [
+                "red"
+              ],
+              "a": 40
+            }
+          ]
+        },
+        {
+          "op": "find",
+          "collection": "diff_index_25",
+          "filter": {},
+          "sort": {
+            "_id": 1
+          }
+        }
+      ],
+      "seed": 20300701
+    },
+    {
       "id": "diff.cursor.batch2_once",
       "cluster": "cursor",
       "collection": "diff_cursor_0",
@@ -22768,6 +23135,860 @@
                 "db": "diff",
                 "coll": "oe_x",
                 "extra": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "union_with_pipeline",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "uw",
+          "documents": [
+            {
+              "_id": 1,
+              "g": "a"
+            },
+            {
+              "_id": 2,
+              "g": "b"
+            },
+            {
+              "_id": 3,
+              "g": "a"
+            }
+          ]
+        },
+        {
+          "op": "insert",
+          "collection": "uw2",
+          "documents": [
+            {
+              "_id": 4,
+              "g": "a"
+            },
+            {
+              "_id": 5,
+              "g": "c"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "uw",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$project": {
+                "_id": 1
+              }
+            },
+            {
+              "$unionWith": {
+                "coll": "uw2",
+                "pipeline": [
+                  {
+                    "$match": {
+                      "g": "a"
+                    }
+                  },
+                  {
+                    "$project": {
+                      "_id": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "union_with_string_and_self",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "uw3",
+          "documents": [
+            {
+              "_id": 1
+            },
+            {
+              "_id": 2
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "uw3",
+          "pipeline": [
+            {
+              "$project": {
+                "_id": 1
+              }
+            },
+            {
+              "$unionWith": "uw3_missing"
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "uw3",
+          "pipeline": [
+            {
+              "$unionWith": {
+                "coll": "uw3"
+              }
+            },
+            {
+              "$project": {
+                "_id": 1
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "union_with_documents",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "uw4",
+          "documents": [
+            {
+              "_id": 1
+            },
+            {
+              "_id": 2
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "uw4",
+          "pipeline": [
+            {
+              "$sort": {
+                "_id": 1
+              }
+            },
+            {
+              "$unionWith": {
+                "pipeline": [
+                  {
+                    "$documents": [
+                      {
+                        "_id": 9,
+                        "g": "x"
+                      }
+                    ]
+                  },
+                  {
+                    "$project": {
+                      "_id": 1
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "$sort": {
+                "_id": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "union_with_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "ue",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "ue",
+          "pipeline": [
+            {
+              "$unionWith": 5
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ue",
+          "pipeline": [
+            {
+              "$unionWith": {
+                "coll": ""
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ue",
+          "pipeline": [
+            {
+              "$unionWith": {
+                "coll": "ue",
+                "pipeline": 5
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ue",
+          "pipeline": [
+            {
+              "$unionWith": {
+                "coll": "ue",
+                "extra": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "ue",
+          "pipeline": [
+            {
+              "$unionWith": {
+                "pipeline": [
+                  {
+                    "$match": {}
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "sample_counts",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "sp",
+          "documents": [
+            {
+              "_id": 1
+            },
+            {
+              "_id": 2
+            },
+            {
+              "_id": 3
+            },
+            {
+              "_id": 4
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "sp",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": 2
+              }
+            },
+            {
+              "$count": "n"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sp",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": 9
+              }
+            },
+            {
+              "$count": "n"
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "sp",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": 0
+              }
+            },
+            {
+              "$count": "n"
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "sample_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "se",
+          "documents": [
+            {
+              "_id": 1
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "se",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": -1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "se",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": "two"
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "se",
+          "pipeline": [
+            {
+              "$sample": {}
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "se",
+          "pipeline": [
+            {
+              "$sample": {
+                "size": 1,
+                "extra": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "se",
+          "pipeline": [
+            {
+              "$sample": 5
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "densify_numeric",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "dn",
+          "documents": [
+            {
+              "_id": 1,
+              "x": 1
+            },
+            {
+              "_id": 2,
+              "x": 3
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "dn",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "range": {
+                  "step": 1,
+                  "bounds": "full"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "densify_partition",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "dp",
+          "documents": [
+            {
+              "_id": 1,
+              "g": "a",
+              "x": 1
+            },
+            {
+              "_id": 2,
+              "g": "a",
+              "x": 3
+            },
+            {
+              "_id": 3,
+              "g": "b",
+              "x": 2
+            },
+            {
+              "_id": 4,
+              "g": "b",
+              "x": 6
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "dp",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "partitionByFields": [
+                  "g"
+                ],
+                "range": {
+                  "step": 1,
+                  "bounds": "partition"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "densify_dates",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "dd",
+          "documents": [
+            {
+              "_id": 1,
+              "d": {
+                "$date": {
+                  "$numberLong": "1704067200000"
+                }
+              }
+            },
+            {
+              "_id": 2,
+              "d": {
+                "$date": {
+                  "$numberLong": "1704326400000"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "dd",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "d",
+                "range": {
+                  "step": 1,
+                  "unit": "day",
+                  "bounds": "full"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "densify_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "de",
+          "documents": [
+            {
+              "_id": 1,
+              "x": 1
+            },
+            {
+              "_id": 2,
+              "x": "two"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "de",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "range": {
+                  "step": 0,
+                  "bounds": "full"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "de",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "range": {
+                  "step": 1,
+                  "bounds": "partition"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "de",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "range": {
+                  "step": 1,
+                  "bounds": [
+                    3,
+                    1
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "de",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "$x",
+                "range": {
+                  "step": 1,
+                  "bounds": "full"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "de",
+          "pipeline": [
+            {
+              "$densify": {
+                "field": "x",
+                "range": {
+                  "step": 1,
+                  "bounds": "bogus"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "fill_value_and_locf",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "fl",
+          "documents": [
+            {
+              "_id": 1,
+              "t": 1,
+              "v": 10,
+              "w": 5
+            },
+            {
+              "_id": 2,
+              "t": 2,
+              "v": null
+            },
+            {
+              "_id": 3,
+              "t": 3,
+              "v": 30,
+              "w": 7
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "fl",
+          "pipeline": [
+            {
+              "$fill": {
+                "sortBy": {
+                  "t": 1
+                },
+                "output": {
+                  "v": {
+                    "method": "locf"
+                  },
+                  "w": {
+                    "value": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "fl",
+          "pipeline": [
+            {
+              "$fill": {
+                "sortBy": {
+                  "t": 1
+                },
+                "output": {
+                  "w": {
+                    "method": "linear"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "fill_errors",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "fe",
+          "documents": [
+            {
+              "_id": 1,
+              "t": 1,
+              "v": "text"
+            },
+            {
+              "_id": 2,
+              "t": 2,
+              "v": null
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "fe",
+          "pipeline": [
+            {
+              "$fill": {
+                "output": {
+                  "v": {
+                    "method": "bogus"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "fe",
+          "pipeline": [
+            {
+              "$fill": {
+                "output": {
+                  "v": {
+                    "method": "locf",
+                    "value": 5
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "fe",
+          "pipeline": [
+            {
+              "$fill": {
+                "sortBy": {
+                  "t": 1
+                },
+                "output": {
+                  "v": {
+                    "method": "linear"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20371972
+    },
+    {
+      "id": "redact_prune_descend",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "rd",
+          "documents": [
+            {
+              "_id": 1,
+              "secret": true,
+              "v": "hidden"
+            },
+            {
+              "_id": 2,
+              "v": "shown"
+            },
+            {
+              "_id": 3,
+              "child": {
+                "secret": true,
+                "v": "nested"
+              }
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "aggregate",
+          "collection": "rd",
+          "pipeline": [
+            {
+              "$redact": {
+                "$cond": [
+                  {
+                    "$eq": [
+                      "$secret",
+                      true
+                    ]
+                  },
+                  "$$PRUNE",
+                  "$$DESCEND"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "op": "aggregate",
+          "collection": "rd",
+          "pipeline": [
+            {
+              "$match": {
+                "_id": 1
+              }
+            },
+            {
+              "$redact": {
+                "$cond": [
+                  {
+                    "$eq": [
+                      "$secret",
+                      true
+                    ]
+                  },
+                  "$$PRUNE",
+                  "$$KEEP"
+                ]
               }
             }
           ]

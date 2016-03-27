@@ -221,30 +221,30 @@
             "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
         },
         {
-            "id": "err.cmd.unknown_stage_sample",
+            "id": "err.cmd.unknown_stage_search",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $sample is a documented stage this gateway does not implement",
+            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $search needs Atlas Search and is not implemented here",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sample": { "size": 1 } }], "as": "r2" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$search": { "text": "x" } }], "as": "r2" }
             ],
             "checks": [
                 { "at": "/r2/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $sample (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out)" }
+                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $search (supported: $match, $sort, $limit, $skip, $count, $unwind, $lookup, $graphLookup, $facet, $bucket, $bucketAuto, $setWindowFields, $sortByCount, $group, $addFields, $set, $project, $replaceWith, $merge, $out, $unionWith, $sample, $densify, $fill, $redact)" }
             ]
         },
         {
-            "id": "err.cmd.unknown_stage_union_with",
+            "id": "err.cmd.unknown_stage_geo_near",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Stages: $unionWith combines streams; not implemented here (https://www.mongodb.com/docs/manual/reference/operator/aggregation/unionWith/)",
+            "source": "MongoDB manual, Aggregation Pipeline Stages: $geoNear requires a geospatial index; not implemented here (https://www.mongodb.com/docs/manual/reference/operator/aggregation/geoNear/)",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unionWith": "archive" }], "as": "r1" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$geoNear": { "near": [0, 0], "distanceField": "d" } }], "as": "r1" }
             ],
             "checks": [
                 { "at": "/r1/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r1/errmsg", "matches": "unknown aggregation stage: \\$unionWith" }
+                { "at": "/r1/errmsg", "matches": "unknown aggregation stage: \\$geoNear" }
             ]
         },
         {

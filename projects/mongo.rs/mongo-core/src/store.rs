@@ -56,6 +56,8 @@ pub struct IndexSpec {
     pub collation: Option<BsonDocument>,
     /// `partialFilterExpression`: only matching documents join the index.
     pub partial_filter_expression: Option<BsonDocument>,
+    /// `wildcardProjection` of a wildcard index, as `listIndexes` reports it.
+    pub wildcard_projection: Option<BsonDocument>,
 }
 
 impl IndexSpec {
@@ -324,6 +326,13 @@ impl IndexSpec {
                     .unwrap_or_else(|_| "null".to_string())
             ));
         }
+        if let Some(projection) = &self.wildcard_projection {
+            text.push_str(&format!(
+                ",\"wildcardProjection\":{}",
+                serde_json::to_string(&json::to_json(&BsonValue::Document(projection.clone())))
+                    .unwrap_or_else(|_| "null".to_string())
+            ));
+        }
         text.push('}');
         text
     }
@@ -363,6 +372,13 @@ fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
             ),
             None => None,
         };
+        let wildcard_projection = match entry.get("wildcardProjection") {
+            Some(value) => Some(
+                document_option(value)
+                    .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` wildcard projection is invalid: {error}")))?,
+            ),
+            None => None,
+        };
         let Some(pairs) = entry.get("key").and_then(serde_json::Value::as_array) else {
             return Err(StoreError::Catalog(format!("catalog index `{name}` has no key array")));
         };
@@ -392,6 +408,7 @@ fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
             expire_after_seconds,
             collation,
             partial_filter_expression,
+            wildcard_projection,
         });
     }
     Ok(indexes)

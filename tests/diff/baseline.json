@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 291,
+  "count": 309,
   "mongod": "8.0.9",
-  "corpusDigest": "a758a218bd7c7f4cf69677f17882c06737f0b0a2908aa1604d6db8bc8122d03e",
-  "replyDigest": "c129c3e68a01574d62f2bba21408ff3117a5931f85b3934179a047a6e73dba61",
+  "corpusDigest": "6b07c402b5b9678139b3bd2634e2406b4b1d2324d8433e40a58a895d71a7d9b2",
+  "replyDigest": "d065a89a89e374169af7c01d39c85f3c20ba25bfa23f2a2ad140e4ec98bfb90a",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -6424,6 +6424,311 @@
         "codeName": "CannotCreateIndex"
       }
     ],
+    "diff.index.wildcard_list": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "numIndexesBefore": {
+          "$numberInt": "2"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "3"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_21",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "$**": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "wild",
+              "wildcardProjection": {
+                "a": {
+                  "$numberInt": "1"
+                }
+              }
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "tags.$**": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "tags_wild"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.wildcard_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Error in specification { key: { $**: 1 }, name: \"wild_unique\", unique: true, v: 2 } :: caused by :: Index type 'wildcard' does not support the 'unique' option",
+        "code": {
+          "$numberInt": "67"
+        },
+        "codeName": "CannotCreateIndex"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Error in specification { key: { $**: 1 }, name: \"wild_sparse\", sparse: true, v: 2 } :: caused by :: Index type 'wildcard' does not support the 'sparse' option",
+        "code": {
+          "$numberInt": "67"
+        },
+        "codeName": "CannotCreateIndex"
+      }
+    ],
+    "diff.index.hashed_list": [
+      {
+        "numIndexesBefore": {
+          "$numberInt": "1"
+        },
+        "numIndexesAfter": {
+          "$numberInt": "2"
+        },
+        "createdCollectionAutomatically": false,
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_23",
+          "firstBatch": [
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "_id": {
+                  "$numberInt": "1"
+                }
+              },
+              "name": "_id_"
+            },
+            {
+              "v": {
+                "$numberInt": "2"
+              },
+              "key": {
+                "a": "hashed"
+              },
+              "name": "a_hashed"
+            }
+          ]
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.index.hashed_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.diff_index_24 ( <uuid> ) :: caused by :: Caught exception during index builder ((None)) initialization on namespacediff.diff_index_24 (<uuid>). 1 index specs provided. First index spec: { v: 2, key: { a: \"hashed\", b: \"hashed\" }, name: \"ab_hashed\" } :: caused by :: A maximum of one index field is allowed to be hashed but found 2 for 'key' { a: \"hashed\", b: \"hashed\" }",
+        "code": {
+          "$numberInt": "31303"
+        },
+        "codeName": "Location31303"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Index build failed: <uuid>: Collection diff.diff_index_24 ( <uuid> ) :: caused by :: Caught exception during index builder ((None)) initialization on namespacediff.diff_index_24 (<uuid>). 1 index specs provided. First index spec: { v: 2, unique: true, key: { a: \"hashed\" }, name: \"a_hashed_unique\" } :: caused by :: Currently hashed indexes cannot guarantee uniqueness. Use a regular index.",
+        "code": {
+          "$numberInt": "16764"
+        },
+        "codeName": "Location16764"
+      }
+    ],
+    "diff.index.multikey_compound_unique_sparse": [
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_25 index: tags_a_unique_sparse dup key: { tags: \"blue\", a: 10 }",
+            "keyPattern": {
+              "tags": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "tags": "blue",
+              "a": {
+                "$numberInt": "10"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "0"
+        },
+        "writeErrors": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "code": {
+              "$numberInt": "11000"
+            },
+            "errmsg": "E11000 duplicate key error collection: diff.diff_index_25 index: tags_a_unique_sparse dup key: { tags: \"blue\", a: 20 }",
+            "keyPattern": {
+              "tags": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "1"
+              }
+            },
+            "keyValue": {
+              "tags": "blue",
+              "a": {
+                "$numberInt": "20"
+              }
+            }
+          }
+        ],
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "a": {
+                "$numberInt": "10"
+              },
+              "b": "x",
+              "tags": [
+                "red",
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "a": {
+                "$numberInt": "20"
+              },
+              "b": "y",
+              "tags": [
+                "blue"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "a": {
+                "$numberInt": "30"
+              },
+              "b": "z",
+              "tags": [
+                "green"
+              ]
+            },
+            {
+              "_id": {
+                "$numberInt": "11"
+              },
+              "tags": [
+                "red"
+              ],
+              "a": {
+                "$numberInt": "40"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.diff_index_25"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
     "diff.cursor.batch2_once": [
       {
         "cursor": {
@@ -9143,9 +9448,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9225,9 +9528,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9315,9 +9616,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9528,9 +9827,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9703,9 +10000,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9851,9 +10146,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -9951,9 +10244,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10053,9 +10344,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10161,9 +10450,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10283,9 +10570,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10404,9 +10689,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10518,9 +10801,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10641,9 +10922,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10749,9 +11028,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10855,9 +11132,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -10961,9 +11236,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -11067,9 +11340,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -11180,9 +11451,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -11394,9 +11663,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -11662,9 +11929,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -11920,9 +12185,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -12033,9 +12296,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -12255,9 +12516,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -12494,9 +12753,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -12808,9 +13065,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -12901,9 +13156,7 @@
           "queryHash": "<hash>",
           "planCacheShapeHash": "<hash>",
           "planCacheKey": "<hash>",
-          "optimizationTimeMillis": {
-            "$numberInt": "0"
-          },
+          "optimizationTimeMillis": "<millis>",
           "maxIndexedOrSolutionsReached": false,
           "maxIndexedAndSolutionsReached": false,
           "maxScansToExplodeReached": false,
@@ -14851,6 +15104,675 @@
           "$numberInt": "40415"
         },
         "codeName": "IDLUnknownField"
+      }
+    ],
+    "union_with_pipeline": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.uw"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "union_with_string_and_self": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.uw3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.uw3"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "union_with_documents": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "9"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.uw4"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "union_with_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "the $unionWith stage specification must be an object or string, but found int",
+        "code": {
+          "$numberInt": "9"
+        },
+        "codeName": "FailedToParse"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: Namespace diff is not a valid collection name",
+        "code": {
+          "$numberInt": "73"
+        },
+        "codeName": "InvalidNamespace"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "'pipeline' option must be specified as an array",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "BSON field '$unionWith.extra' is an unknown field.",
+        "code": {
+          "$numberInt": "40415"
+        },
+        "codeName": "IDLUnknownField"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$unionWith stage without explicit collection must have a pipeline with $documents as first stage",
+        "code": {
+          "$numberInt": "9"
+        },
+        "codeName": "FailedToParse"
+      }
+    ],
+    "sample_counts": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "n": {
+                "$numberInt": "2"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sp"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "n": {
+                "$numberInt": "4"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sp"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.sp"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "sample_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "size argument to $sample must not be negative",
+        "code": {
+          "$numberInt": "28747"
+        },
+        "codeName": "Location28747"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "size argument to $sample must be a number",
+        "code": {
+          "$numberInt": "28746"
+        },
+        "codeName": "Location28746"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "$sample stage must specify a size",
+        "code": {
+          "$numberInt": "28749"
+        },
+        "codeName": "Location28749"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "unrecognized option to $sample: extra",
+        "code": {
+          "$numberInt": "28748"
+        },
+        "codeName": "Location28748"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "the $sample stage specification must be an object",
+        "code": {
+          "$numberInt": "28745"
+        },
+        "codeName": "Location28745"
+      }
+    ],
+    "densify_numeric": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "x": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "x": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "x": {
+                "$numberInt": "3"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.dn"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "densify_partition": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "g": "a",
+              "x": {
+                "$numberInt": "1"
+              }
+            },
+            {
+              "g": "a",
+              "x": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "g": "a",
+              "x": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "g": "b",
+              "x": {
+                "$numberInt": "2"
+              }
+            },
+            {
+              "g": "b",
+              "x": {
+                "$numberInt": "3"
+              }
+            },
+            {
+              "g": "b",
+              "x": {
+                "$numberInt": "4"
+              }
+            },
+            {
+              "g": "b",
+              "x": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "4"
+              },
+              "g": "b",
+              "x": {
+                "$numberInt": "6"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.dp"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "densify_dates": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "d": {
+                "$date": {
+                  "$numberLong": "1704067200000"
+                }
+              }
+            },
+            {
+              "d": {
+                "$date": {
+                  "$numberLong": "1704153600000"
+                }
+              }
+            },
+            {
+              "d": {
+                "$date": {
+                  "$numberLong": "1704240000000"
+                }
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "d": {
+                "$date": {
+                  "$numberLong": "1704326400000"
+                }
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.dd"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "densify_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "The step parameter in a range statement must be a strictly positive numeric value",
+        "code": {
+          "$numberInt": "5733401"
+        },
+        "codeName": "Location5733401"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "One cannot specify the bounds as 'partition' without specifying a non-empty array of partitionByFields. You may have meant to specify 'full' bounds.",
+        "code": {
+          "$numberInt": "5733408"
+        },
+        "codeName": "Location5733408"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "A bounding array must be an ascending array of either two dates or two numbers",
+        "code": {
+          "$numberInt": "5733402"
+        },
+        "codeName": "Location5733402"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "FieldPath field names may not start with '$'. Consider using $getField or $setField.",
+        "code": {
+          "$numberInt": "16410"
+        },
+        "codeName": "Location16410"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Bounds string must either be 'full' or 'partition'",
+        "code": {
+          "$numberInt": "5946802"
+        },
+        "codeName": "Location5946802"
+      }
+    ],
+    "fill_value_and_locf": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "t": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$numberInt": "10"
+              },
+              "w": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "t": {
+                "$numberInt": "2"
+              },
+              "v": {
+                "$numberInt": "10"
+              },
+              "w": {
+                "$numberInt": "0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "t": {
+                "$numberInt": "3"
+              },
+              "v": {
+                "$numberInt": "30"
+              },
+              "w": {
+                "$numberInt": "7"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.fl"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "1"
+              },
+              "t": {
+                "$numberInt": "1"
+              },
+              "v": {
+                "$numberInt": "10"
+              },
+              "w": {
+                "$numberInt": "5"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "t": {
+                "$numberInt": "2"
+              },
+              "v": null,
+              "w": {
+                "$numberDouble": "6.0"
+              }
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              },
+              "t": {
+                "$numberInt": "3"
+              },
+              "v": {
+                "$numberInt": "30"
+              },
+              "w": {
+                "$numberInt": "7"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.fl"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "fill_errors": [
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Method must be either locf or linear",
+        "code": {
+          "$numberInt": "6050202"
+        },
+        "codeName": "Location6050202"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "Each fill output specification must have exactly one of 'method' or 'value' fields, not both",
+        "code": {
+          "$numberInt": "6050201"
+        },
+        "codeName": "Location6050201"
+      },
+      {
+        "ok": {
+          "$numberDouble": "0.0"
+        },
+        "errmsg": "PlanExecutor error during aggregation :: caused by :: Value to be filled must be numeric or nullish, but found string",
+        "code": {
+          "$numberInt": "14"
+        },
+        "codeName": "TypeMismatch"
+      }
+    ],
+    "redact_prune_descend": [
+      {
+        "cursor": {
+          "firstBatch": [
+            {
+              "_id": {
+                "$numberInt": "2"
+              },
+              "v": "shown"
+            },
+            {
+              "_id": {
+                "$numberInt": "3"
+              }
+            }
+          ],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rd"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "cursor": {
+          "firstBatch": [],
+          "id": {
+            "$numberLong": "0"
+          },
+          "ns": "diff.rd"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
       }
     ],
     "sort_by_count_missing": [
