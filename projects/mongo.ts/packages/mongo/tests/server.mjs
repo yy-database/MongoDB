@@ -321,7 +321,7 @@ const binary = (text) => ({ $binary: { base64: Buffer.from(text, 'utf8').toStrin
 const payloadText = (payload) => Buffer.from(payload.$binary.base64, 'base64').toString('utf8')
 
 /** SCRAM client used by the acceptance tests, mirroring the Node driver. */
-async function scram(connection, user, password, mechanism = 'SCRAM-SHA-256', db = 'admin') {
+async function scram(connection, user, password, mechanism = 'SCRAM-SHA-256', db = 'admin', gs2 = 'n,,', proofBinding = null) {
     const digest = mechanism === 'SCRAM-SHA-256' ? 'sha256' : 'sha1'
     const keyLength = mechanism === 'SCRAM-SHA-256' ? 32 : 20
     const processed = mechanism === 'SCRAM-SHA-256' ? password : createHash('md5').update(`${user}:mongo:${password}`, 'utf8').digest('hex')
@@ -330,7 +330,7 @@ async function scram(connection, user, password, mechanism = 'SCRAM-SHA-256', db
     const start = await command(connection, {
         saslStart: 1,
         mechanism,
-        payload: binary(`n,,${clientFirstBare}`),
+        payload: binary(`${gs2}${clientFirstBare}`),
         autoAuthorize: 1,
         $db: db
     })
@@ -343,7 +343,8 @@ async function scram(connection, user, password, mechanism = 'SCRAM-SHA-256', db
     const hmac = (key, data) => createHmac(digest, key).update(data).digest()
     const clientKey = hmac(salted, 'Client Key')
     const storedKey = hash(clientKey)
-    const withoutProof = `c=biws,r=${serverFirst.split(',')[0].slice(2)}`
+    const channelBinding = proofBinding ?? Buffer.from(gs2, 'utf8').toString('base64')
+    const withoutProof = `c=${channelBinding},r=${serverFirst.split(',')[0].slice(2)}`
     const signature = hmac(storedKey, `${clientFirstBare},${serverFirst},${withoutProof}`)
     const proof = Buffer.alloc(keyLength)
     for (let index = 0; index < keyLength; index += 1) proof[index] = clientKey[index] ^ signature[index]
@@ -533,6 +534,237 @@ const login = await connect(authAddress.port)
     await legacy.connect()
     equal(await legacy.db('secured').collection('items').countDocuments({}), 2, 'a driver authenticated with SCRAM-SHA-1 runs reads')
     await legacy.close()
+}
+
+// --- authorization ----------------------------------------------------------
+//
+// Every expected action below was read from a real `mongod 8.0.9 --auth`
+// instance: the privilege expansions through `showPrivileges`, the refused
+// command texts through the official Node driver, and `listDatabases`
+// behavior through both the driver and raw commands.
+
+async function loginAs(user, db, gs2 = 'n,,') {
+    const connection = await connect(authAddress.port)
+    const session = await scram(connection, user, 'secret', 'SCRAM-SHA-256', db, gs2)
+    ok(session.finished?.done === true, `${user}@${db} logs in`)
+    return { connection, session }
+}
+
+async function driverLogin(user, password, db) {
+    const uri = `mongodb://${user}:${encodeURIComponent(password)}@${authAddress.host}:${authAddress.port}/?authSource=${db}&directConnection=true`
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 })
+    await client.connect()
+    await client.close()
+}
+
+{
+    const database = 'authz'
+    const restored = await scram(login, 'root', 'root-pass')
+    equal(restored.finished.done, true, 'root logs back in for the authorization checks')
+    await command(login, { insert: 'items', documents: [{ _id: 1 }, { _id: 2 }], $db: database })
+    for (const [user, role] of [
+        ['z_read', 'read'],
+        ['z_rw', 'readWrite'],
+        ['z_dba', 'dbAdmin'],
+        ['z_ua', 'userAdmin']
+    ]) {
+        const reply = await command(login, { createUser: user, pwd: 'secret', roles: [{ role, db: database }], $db: database })
+        equal(reply.ok, { $numberDouble: '1.0' }, `createUser accepts the built-in ${role} role`)
+    }
+    for (const [user, role] of [
+        ['z_ca', 'clusterAdmin'],
+        ['z_root', 'root']
+    ]) {
+        const reply = await command(login, { createUser: user, pwd: 'secret', roles: [{ role, db: 'admin' }], $db: 'admin' })
+        equal(reply.ok, { $numberDouble: '1.0' }, `a cluster-scoped ${role} role resolves on admin`)
+    }
+
+    // Role validation, with `mongod 8.0.9`'s own texts.
+    const unknown = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [{ role: 'nosuchrole', db: database }], $db: database })
+    equal(unknown.code, { $numberInt: '31' }, 'an unknown role is RoleNotFound')
+    equal(unknown.codeName, 'RoleNotFound', 'the unknown-role codeName matches mongod')
+    equal(unknown.errmsg, 'Could not find role: nosuchrole@authz', 'the unknown-role text matches mongod')
+    const missingDb = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [{ role: 'read' }], $db: database })
+    equal(missingDb.code, { $numberInt: '2' }, 'a role document without db is a bad value')
+    equal(missingDb.errmsg, 'RoleName must contain a field named: db', 'the missing-db text matches mongod')
+    const numberRole = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [1], $db: database })
+    equal(numberRole.errmsg, 'Role name must be either a document or string', 'a non-document role matches mongod')
+    const numberName = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [{ role: 123, db: database }], $db: database })
+    equal(numberName.errmsg, 'RoleName must contain a string field named: role. But, has type int', 'a non-string role name matches mongod')
+    const numberDb = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [{ role: 'read', db: 5 }], $db: database })
+    equal(numberDb.errmsg, 'RoleName must contain a string field named: db. But, has type int', 'a non-string role db matches mongod')
+    const wrongScope = await command(login, { createUser: 'z_bad', pwd: 'x', roles: [{ role: 'clusterAdmin', db: database }], $db: database })
+    equal(wrongScope.code, { $numberInt: '31' }, 'clusterAdmin only resolves on admin')
+    const absentDb = await command(login, {
+        createUser: 'z_absentdb',
+        pwd: 'x',
+        roles: [{ role: 'read', db: 'never_created' }],
+        $db: database
+    })
+    equal(absentDb.ok, { $numberDouble: '1.0' }, 'a database role resolves on a database that does not exist')
+
+    // read: reads its database, may not write or administer it.
+    const reader = await loginAs('z_read', database)
+    equal((await command(reader.connection, { find: 'items', filter: {}, $db: database })).ok, { $numberDouble: '1.0' }, 'read can find')
+    const readInsert = await command(reader.connection, { insert: 'items', documents: [{ _id: 3 }], $db: database })
+    equal(readInsert.code, { $numberInt: '13' }, 'read cannot insert')
+    equal(
+        readInsert.errmsg,
+        'not authorized on authz to execute command { insert: "items", documents: [ { _id: 3 } ], $db: "authz" }',
+        'the refusal text echoes the redacted command'
+    )
+    const readStats = await command(reader.connection, { dbStats: 1, $db: database })
+    equal(readStats.ok, { $numberDouble: '1.0' }, 'read can read dbStats')
+    const readUsers = await command(reader.connection, { usersInfo: 1, $db: database })
+    equal(readUsers.errmsg, 'not authorized on authz to execute command { usersInfo: 1, $db: "authz" }', 'read cannot inspect users')
+    reader.connection.socket.destroy()
+
+    // readWrite: reads and writes, but not administration.
+    const writer = await loginAs('z_rw', database)
+    equal((await command(writer.connection, { find: 'items', filter: {}, $db: database })).ok, { $numberDouble: '1.0' }, 'readWrite can find')
+    equal((await command(writer.connection, { insert: 'items', documents: [{ _id: 3 }], $db: database })).ok, { $numberDouble: '1.0' }, 'readWrite can insert')
+    equal((await command(writer.connection, { dbStats: 1, $db: database })).ok, { $numberDouble: '1.0' }, 'readWrite can read dbStats')
+    equal((await command(writer.connection, { listCollections: 1, $db: database })).ok, { $numberDouble: '1.0' }, 'readWrite can list collections')
+    equal(
+        (await command(writer.connection, {
+            createIndexes: 'items',
+            indexes: [{ key: { f1: 1 }, name: 'f1_1' }],
+            $db: database
+        })).ok,
+        { $numberDouble: '1.0' },
+        'readWrite can create an index'
+    )
+    equal((await command(writer.connection, { dropIndexes: 'items', index: 'f1_1', $db: database })).ok, { $numberDouble: '1.0' }, 'readWrite can drop an index')
+    const writerDrop = await command(writer.connection, { dropDatabase: 1, $db: database })
+    equal(writerDrop.code, { $numberInt: '13' }, 'readWrite cannot drop the database')
+    equal(writerDrop.errmsg, 'not authorized on authz to execute command { dropDatabase: 1, $db: "authz" }', 'the dropDatabase refusal text matches mongod')
+    const writerCreate = await command(writer.connection, { createUser: 'z_made_by_rw', pwd: 'x', roles: [], $db: database })
+    equal(writerCreate.code, { $numberInt: '13' }, 'readWrite cannot create users')
+    equal(
+        writerCreate.errmsg,
+        'not authorized on authz to execute command { createUser: "z_made_by_rw", pwd: "xxx", roles: [], $db: "authz" }',
+        'the createUser refusal text redacts pwd'
+    )
+    const crossDb = await command(writer.connection, { find: 'items', filter: {}, $db: 'authx' })
+    equal(crossDb.code, { $numberInt: '13' }, 'readWrite cannot read another database')
+    equal(crossDb.errmsg, 'not authorized on authx to execute command { find: "items", filter: {}, $db: "authx" }', 'the cross-database refusal names its database')
+    const listed = await command(writer.connection, { listDatabases: 1, $db: 'admin' })
+    equal(listed.databases.map((entry) => entry.name), [database], 'listDatabases returns only authorized databases')
+    const named = await command(writer.connection, { listDatabases: 1, nameOnly: true, $db: 'admin' })
+    equal(named.databases, [{ name: database }], 'nameOnly strips the size fields')
+    equal(Object.hasOwn(named, 'totalSize'), false, 'nameOnly omits totalSize')
+    const allDatabases = await command(writer.connection, { listDatabases: 1, authorizedDatabases: false, $db: 'admin' })
+    equal(allDatabases.code, { $numberInt: '13' }, 'authorizedDatabases false needs the cluster action')
+    equal(allDatabases.errmsg, 'Insufficient permissions to list all databases', 'the listDatabases refusal text matches mongod')
+    writer.connection.socket.destroy()
+
+    // userAdmin: manages users, does not read data.
+    const userAdmin = await loginAs('z_ua', database)
+    equal((await command(userAdmin.connection, { usersInfo: 1, $db: database })).ok, { $numberDouble: '1.0' }, 'userAdmin can inspect users')
+    equal(
+        (await command(userAdmin.connection, { createUser: 'z_made', pwd: 'x', roles: [], $db: database })).ok,
+        { $numberDouble: '1.0' },
+        'userAdmin can create users'
+    )
+    equal((await command(userAdmin.connection, { find: 'items', filter: {}, $db: database })).code, { $numberInt: '13' }, 'userAdmin cannot read data')
+    userAdmin.connection.socket.destroy()
+
+    // clusterAdmin: cluster actions, not application data.
+    const clusterAdmin = await loginAs('z_ca', 'admin')
+    const clusterList = await command(clusterAdmin.connection, { listDatabases: 1, $db: 'admin' })
+    ok(clusterList.databases.some((entry) => entry.name === database), 'clusterAdmin sees every database')
+    equal(
+        (await command(clusterAdmin.connection, { listDatabases: 1, authorizedDatabases: false, $db: 'admin' })).ok,
+        { $numberDouble: '1.0' },
+        'clusterAdmin can request the unfiltered database list'
+    )
+    equal((await command(clusterAdmin.connection, { serverStatus: 1, $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'clusterAdmin can read serverStatus')
+    equal((await command(clusterAdmin.connection, { find: 'items', filter: {}, $db: database })).code, { $numberInt: '13' }, 'clusterAdmin cannot read application data')
+    clusterAdmin.connection.socket.destroy()
+
+    // root: every privilege.
+    const root = await loginAs('z_root', 'admin')
+    equal((await command(root.connection, { find: 'items', filter: {}, $db: database })).ok, { $numberDouble: '1.0' }, 'root can read')
+    equal((await command(root.connection, { usersInfo: { forAllDBs: true }, $db: database })).ok, { $numberDouble: '1.0' }, 'root can list every user')
+    equal(
+        (await command(root.connection, { listDatabases: 1, authorizedDatabases: false, $db: 'admin' })).ok,
+        { $numberDouble: '1.0' },
+        'root can request the unfiltered database list'
+    )
+    root.connection.socket.destroy()
+
+    // `showPrivileges` expands the same table the dispatch layer enforces.
+    const writerInfo = await command(login, { usersInfo: { user: 'z_rw', db: database }, showPrivileges: true, $db: database })
+    equal(writerInfo.users[0].inheritedRoles, [{ role: 'readWrite', db: 'authz' }], 'inheritedRoles repeats the stored role')
+    equal(writerInfo.users[0].inheritedPrivileges.length, 2, 'readWrite expands to two resources')
+    equal(writerInfo.users[0].inheritedPrivileges[0].resource, { db: 'authz', collection: '' }, 'the first resource covers the database')
+    for (const action of ['find', 'insert', 'update', 'remove']) {
+        ok(writerInfo.users[0].inheritedPrivileges[0].actions.includes(action), `readWrite grant includes ${action}`)
+    }
+    const rootInfo = await command(login, { usersInfo: { user: 'z_root', db: 'admin' }, showPrivileges: true, $db: 'admin' })
+    equal(rootInfo.users[0].inheritedPrivileges.length, 26, 'root expands to the 26 privileges mongod reports')
+    const clusterInfo = await command(login, { usersInfo: { user: 'z_ca', db: 'admin' }, showPrivileges: true, $db: 'admin' })
+    equal(clusterInfo.users[0].inheritedPrivileges.length, 14, 'clusterAdmin expands to the 14 privileges mongod reports')
+
+    // SASLprep: mapping, NFKC and the prohibition tables, checked through the
+    // official driver so the preparation happens on both sides.
+    equal((await command(login, { createUser: 'sasl_nfc', pwd: 'p\u00e4ssw\u00f6rd', roles: [], $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'a Latin-1 password is accepted')
+    await driverLogin('sasl_nfc', 'p\u00e4ssw\u00f6rd', 'admin')
+    assertions += 1
+    equal((await command(login, { createUser: 'sasl_nfkc', pwd: '\u2163', roles: [], $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'an NFKC password is accepted')
+    await driverLogin('sasl_nfkc', 'IV', 'admin')
+    assertions += 1
+    await driverLogin('sasl_nfkc', '\u2163', 'admin')
+    assertions += 1
+    equal((await command(login, { createUser: 'sasl_nbsp', pwd: 'pa\u00a0ss', roles: [], $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'a NBSP password is accepted')
+    await driverLogin('sasl_nbsp', 'pa ss', 'admin')
+    assertions += 1
+    equal((await command(login, { createUser: 'sasl_soft', pwd: 'ab\u00adcd', roles: [], $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'a soft-hyphen password is accepted')
+    await driverLogin('sasl_soft', 'abcd', 'admin')
+    assertions += 1
+    equal((await command(login, { createUser: 'sasl_hebrew', pwd: '\u05d0', roles: [], $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'a RandAL-only password is accepted')
+    await driverLogin('sasl_hebrew', '\u05d0', 'admin')
+    assertions += 1
+    const prohibited = await command(login, { createUser: 'sasl_bad', pwd: 'a\u0007b', roles: [], $db: 'admin' })
+    equal(prohibited.code, { $numberInt: '50692' }, 'a prohibited code point fails preparation')
+    equal(prohibited.errmsg, 'Error preflighting normalization: U_STRINGPREP_PROHIBITED_ERROR', 'the prohibited-code text matches mongod')
+    const bidi = await command(login, { createUser: 'sasl_bidi', pwd: '\u05d0a', roles: [], $db: 'admin' })
+    equal(bidi.code, { $numberInt: '50692' }, 'a RandAL string with an LCat character fails preparation')
+    equal(bidi.errmsg, 'Error preflighting normalization: U_STRINGPREP_CHECK_BIDI_ERROR', 'the bidi text matches mongod')
+
+    // GS2: `n,,` and `y,,` are accepted; `a=` must name the authenticated user.
+    const authzid = await connect(authAddress.port)
+    const authzidSession = await scram(authzid, 'z_rw', 'secret', 'SCRAM-SHA-256', database, 'n,a=z_rw,')
+    equal(authzidSession.finished.done, true, 'a matching GS2 authzid is accepted')
+    authzid.socket.destroy()
+    const emptyAuthzid = await connect(authAddress.port)
+    const emptySession = await scram(emptyAuthzid, 'z_rw', 'secret', 'SCRAM-SHA-256', database, 'n,a=,')
+    equal(emptySession.finished.done, true, 'an empty GS2 authzid is accepted')
+    emptyAuthzid.socket.destroy()
+    const wrongAuthzid = await connect(authAddress.port)
+    const wrongSession = await scram(wrongAuthzid, 'z_rw', 'secret', 'SCRAM-SHA-256', database, 'n,a=z_read,')
+    equal(wrongSession.start.code, { $numberInt: '18' }, 'a GS2 authzid naming another user fails authentication')
+    wrongAuthzid.socket.destroy()
+    const noChannelBinding = await connect(authAddress.port)
+    const bindingSession = await scram(noChannelBinding, 'z_rw', 'secret', 'SCRAM-SHA-256', database, 'y,,')
+    equal(bindingSession.finished.done, true, 'GS2 without channel binding is accepted')
+    noChannelBinding.socket.destroy()
+    // `mongod 8.0.9` never compares `c=` with the GS2 header it received, so a
+    // proof over a different channel binding still logs in; measured with
+    // `c=Zm9v`. The nonce and proof are still checked.
+    const looseBinding = await connect(authAddress.port)
+    const looseSession = await scram(looseBinding, 'z_rw', 'secret', 'SCRAM-SHA-256', database, 'n,,', 'Zm9v')
+    equal(looseSession.finished.done, true, 'a proof over an arbitrary c= is accepted like mongod')
+    looseBinding.socket.destroy()
+
+    // dbAdmin may drop a database it administers; run it last because it
+    // removes the users created above.
+    const dbAdmin = await loginAs('z_dba', database)
+    equal((await command(dbAdmin.connection, { create: 'z_created', $db: database })).ok, { $numberDouble: '1.0' }, 'dbAdmin can create a collection')
+    equal((await command(dbAdmin.connection, { find: 'items', filter: {}, $db: database })).code, { $numberInt: '13' }, 'dbAdmin cannot read data')
+    equal((await command(dbAdmin.connection, { dropDatabase: 1, $db: database })).ok, { $numberDouble: '1.0' }, 'dbAdmin can drop the database')
+    equal((await command(dbAdmin.connection, { listCollections: 1, $db: database })).cursor.firstBatch, [], 'the dropped database has no collection')
+    dbAdmin.connection.socket.destroy()
 }
 
 // --- dbStats ----------------------------------------------------------------

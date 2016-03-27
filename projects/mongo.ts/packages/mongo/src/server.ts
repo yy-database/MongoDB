@@ -32,6 +32,7 @@ import {
     topologyHandshake,
     type ReplicaState
 } from './replica.ts'
+import { authorizeCommand, clusterGrants, databaseInScope, privilegesForRoles } from './authorization.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
 import {
@@ -192,6 +193,46 @@ function dropDatabaseCommand(session: Session, command: any, view: ServerView): 
     return reply
 }
 
+/** Unwraps an extended-JSON numeric value. */
+function scalarNumber(value: unknown): number {
+    if (typeof value === 'number') return value
+    if (value && typeof value === 'object') {
+        const tagged = value as Record<string, unknown>
+        for (const key of ['$numberInt', '$numberLong', '$numberDouble', '$numberDecimal']) {
+            if (Object.hasOwn(tagged, key)) return Number(tagged[key])
+        }
+    }
+    return 0
+}
+
+/**
+ * `listDatabases`, filtered by the authenticated user's scope.
+ *
+ * `mongod 8.0.9` returns every database when the user holds the cluster-wide
+ * `listDatabases` action; otherwise it returns only the databases covered by
+ * one of the user's privileges. `authorizedDatabases: false` asks for the
+ * unfiltered list, and `authorizeCommand` refuses it without that action.
+ */
+function listDatabasesCommand(session: Session, command: any, authRequired: boolean): any {
+    const reply = document(binding.listDatabases(session.store))
+    const databases = Array.isArray(reply.databases) ? reply.databases : null
+    if (!authRequired || session.auth.users.length === 0 || databases === null) return reply
+    const privileges = privilegesForRoles(session.auth.roles)
+    if (clusterGrants(privileges, 'listDatabases')) return reply
+    const scoped = databases.filter((entry: any) => typeof entry?.name === 'string' && databaseInScope(privileges, entry.name))
+    if (command.nameOnly === true) {
+        return { databases: scoped.map((entry: any) => ({ name: entry.name })), ok: reply.ok }
+    }
+    let totalSize = 0
+    for (const entry of scoped) totalSize += scalarNumber(entry?.sizeOnDisk)
+    return {
+        databases: scoped,
+        totalSize: { $numberLong: String(totalSize) },
+        totalSizeMb: { $numberLong: String(Math.trunc(totalSize / (1024 * 1024))) },
+        ok: reply.ok
+    }
+}
+
 /** Intersection of the client's `compression` array and what this server really does. */
 export function negotiatedCompressors(offered: unknown, supported: string[] = SUPPORTED_COMPRESSORS): string[] {
     if (!Array.isArray(offered)) return []
@@ -244,6 +285,14 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
         // credentials, exactly while no user document exists anywhere.
         const localhostException = name === 'createUser' && !anyUserExists(session.store)
         if (!localhostException) return authenticationRequired(name)
+    }
+
+    // Once authenticated, every command passes the role check `mongod` applies.
+    // The localhost exception above runs before any role exists, so it is not
+    // subject to it.
+    if (authRequired && session.auth.users.length > 0) {
+        const denied = authorizeCommand(session, command)
+        if (denied) return denied
     }
 
     if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session, view)
@@ -319,7 +368,7 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
         case 'abortTransaction':
             return document(binding.abortTransaction(session.store, text))
         case 'listDatabases':
-            return document(binding.listDatabases(session.store))
+            return listDatabasesCommand(session, command, authRequired)
         case 'dbStats':
             return databaseStatsReply(session, command, view.dataDir)
         case 'dropDatabase':

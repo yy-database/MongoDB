@@ -44,22 +44,87 @@ layout in `<db>.system.users` (base64 `salt`/`storedKey`/`serverKey`,
 `iterationCount` 15000 for SHA-256 and 10000 for SHA-1) and the MongoDB SHA-1
 password digest `md5("<user>:mongo:<pwd>")`.
 
-Deliberate limits:
+Implemented and verified against `mongod 8.0.9`:
 
-- **No authorization.** A successful login admits every command. `mongod`
-  applies role-based authorization and refuses commands the roles do not grant
-  (code 13). Roles are stored and reported by `connectionStatus`, but they are
-  not enforced; privilege checking is separate scheduling work.
-- **No SASLprep.** SCRAM-SHA-256 hashes the password as UTF-8 without RFC 4013
-  preparation. ASCII passwords behave identically; non-ASCII passwords can
-  disagree with a real server.
-- **No GS2 authzid.** A client-first message carrying `a=<authzid>` is rejected
-  with `Authentication failed.`; `mongod` accepts it.
-- **`createUser` role validation.** Role names are stored verbatim (a string
-  role becomes `{role, db: <user db>}`), but unknown roles are accepted;
-  `mongod` answers `RoleNotFound` (31). Custom roles do not exist here.
+- **SASLprep (RFC 4013).** Passwords are mapped (B.1 to nothing, C.1.2 to
+  space), NFKC-normalised and checked against the prohibition tables; a
+  prohibited code point answers `U_STRINGPREP_PROHIBITED_ERROR` (50692) and a
+  bidirectional violation answers `U_STRINGPREP_CHECK_BIDI_ERROR` (50692), with
+  `mongod`'s wording. Driver logins for `ä`, `Ⅳ`, NBSP, soft hyphen and a
+  Hebrew-only password all match a real `--auth` server.
+- **GS2 authzid.** `n,,`, `y,,`, `n,a=<user>,` and an empty `n,a=,` are accepted;
+  an authzid naming a different or unknown user answers `Authentication failed.`
+  (18) at `saslStart`, exactly as `mongod` does.
+- **`c=` is not verified.** `mongod` accepts a proof built over any channel
+  binding value (measured by sending `c=Zm9v`), so this server does too; the
+  nonce and proof are still checked.
+- **`createUser` role validation.** Role elements are validated in `mongod`'s
+  order and wording (`RoleName must contain a field named: role` / `: db`,
+  `... But, has type int`, `Role name must be either a document or string`),
+  and a role that is not one of the built-ins answers `RoleNotFound` (31) with
+  `Could not find role: <role>@<db>`.
+
+Remaining limits:
+
+- **Only six built-in roles exist** (`read`, `readWrite`, `dbAdmin`, `userAdmin`,
+  `clusterAdmin`, `root`), with `clusterAdmin` and `root` resolved on `admin`
+  only. `mongod`'s other built-ins (`dbOwner`, `readAnyDatabase`,
+  `readWriteAnyDatabase`, `userAdminAnyDatabase`, `dbAdminAnyDatabase`,
+  `clusterMonitor`, `clusterManager`, `hostManager`, `backup`, `restore`,
+  `__system`) and user-defined roles answer `RoleNotFound` (31) instead of
+  resolving, and `createRole`/`dropRole` are not implemented.
+- **SASLprep uses the host's Unicode tables** (Node's `NFKC`), while `mongod`
+  uses ICU. Mapping and prohibition coverage is complete for the code points the
+  fixtures exercise; an exotic code point whose Unicode version differs could
+  prepare differently.
 - **`saslStart` payload type.** A base64 string payload is decoded, and an
   invalid one answers `Failed decoding SASL payload: invalid base64` (10270).
+
+## Authorization
+
+`--auth` is now an authorization boundary, not just an identity check. Built-in
+roles stored in `<db>.system.users` are expanded into privileges by one table in
+`src/authorization.ts`, and the same expansion feeds `showPrivileges`, so the
+enforced and reported sets cannot drift. The command-to-action mapping covers
+`find`, `count`, `distinct`, `aggregate`, `explain`, `insert`, `update`,
+`delete`, `findAndModify`, `bulkWrite`, `create`, `collMod`, `createIndexes`,
+`dropIndexes`, `listIndexes`, `listCollections`, `dbStats`, `dropDatabase`,
+`createUser`, `dropUser`, `usersInfo`, `getMore`, `killCursors`, `listDatabases`
+and the cluster commands (`serverStatus`, `hostInfo`, `currentOp`, `killOp`,
+`replSetGetStatus`, `replSetGetConfig`, `replSetConfigure`).
+
+Measured against a real `--auth` instance:
+
+- The six role privilege expansions are deep-equal to `showPrivileges`
+  (`read` 2, `readWrite` 2, `dbAdmin` 2, `userAdmin` 1, `clusterAdmin` 14,
+  `root` 26).
+- A refused command answers `not authorized on <db> to execute command
+  { <command>, ... }` (13), with `pwd` redacted to `"xxx"` and the `lsid` binary
+  rendered as `UUID("...")`.
+- `listDatabases` returns the databases covered by the user's privileges;
+  `clusterAdmin`/`root` see every database. `authorizedDatabases: false` without
+  the cluster `listDatabases` action answers
+  `Insufficient permissions to list all databases` (13). A `readWrite` user
+  therefore gets a filtered list, not code 13, which is what `mongod` actually
+  does; `nameOnly` strips the size fields and `totalSize`.
+
+Remaining limits:
+
+- **Enforcement is command level.** Actions are granted per resource exactly like
+  `mongod`'s privilege sets, but only the commands listed above consult them; a
+  command outside that list is admitted for any authenticated user.
+- **`system.*` collections inside a granted database** are treated like user
+  collections by `find`/`listCollections`; `mongod` restricts `system.users` to
+  its own commands.
+- **No authentication restrictions and no custom roles**, so `createUser` does
+  not accept `authenticationRestrictions`, and `roles` must name a built-in.
+
+## `showPrivileges`
+
+`inheritedRoles` repeats the stored roles. `inheritedPrivileges` is the built-in
+role expansion from the same table the dispatch layer enforces, and
+`inheritedAuthenticationRestrictions` is an empty array, which is what `mongod`
+reports for the six built-ins.
 
 ## `dbStats`
 
@@ -81,13 +146,6 @@ counts as 1, and a non-numeric value answers code 14.
 `{forAllDBs: true}` are answered from `<db>.system.users` with `mongod`'s
 validation texts, field order, `roles` sorting and the fixed
 `['SCRAM-SHA-1', 'SCRAM-SHA-256']` mechanism list.
-
-**`showPrivileges` is partial.** The reply reports `inheritedRoles` as the
-stored roles, `inheritedPrivileges` as an empty array and
-`inheritedAuthenticationRestrictions` as an empty array. `mongod` expands
-built-in roles into their privilege sets (and `root` into every privilege), so a
-client that depends on the expanded privileges sees less than a real server.
-Authorization is not enforced yet, so nothing consumes those privileges.
 
 ## Replica set
 
@@ -149,21 +207,3 @@ Two limits remain:
   the shard records and their `!catalog` mirror are deleted second. A crash
   exactly between them makes the next `open` merge the mirror back, so the
   database reappears. `mongod` commits the drop in a single transaction.
-
-## Authentication deviations: re-evaluation
-
-After the replica-set block the four open authentication deviations were
-reviewed again. Replica-set mode neither widens nor narrows any of them, but it
-raises the exposure of the first one: production drivers connect with
-`directConnection=false`, so any authenticated client that reaches the set can
-read and write every database.
-
-| Deviation | Risk | Plan |
-|---|---|---|
-| Only authentication, no authorization | **High.** Every authenticated user runs every command; `mongod` answers `not authorized on <db> to execute command` (13) for a role that lacks the action. | Close it in the **first block after `dropDatabase`**, before any external demonstration. Build the built-in role → action table (`read`, `readWrite`, `dbAdmin`, `userAdmin`, `clusterAdmin`, `root`), enforce it in the TypeScript dispatch against the roles already stored in `<db>.system.users`, and expand `showPrivileges` from the same table. Gate: a `readWrite` user is refused `listDatabases` (13) and still reads its own collection. |
-| No SASLprep | Medium, non-ASCII passwords only; ASCII passwords are byte-identical to `mongod`. | Same block: RFC 4013 normalisation in `createUser` and in credential verification, proven with a non-ASCII password fixture. |
-| No GS2 authzid | Low. No mainstream driver sends `a=`; clients that do get `Authentication failed.` instead of a successful login. | Same block: accept and validate `a=` in the client-first message instead of rejecting it. |
-| `createUser` accepts unknown roles | Medium, and it disappears with the role table. | Same block: answer `RoleNotFound` (31) for a role that is neither built-in nor a stored user-defined role. |
-
-Until that block lands, `--auth` protects identities but not data and must not be
-described as an authorization boundary.

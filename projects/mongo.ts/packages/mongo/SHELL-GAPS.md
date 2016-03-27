@@ -56,9 +56,18 @@ size are recorded in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 `1` (numeric, or any number truncating to 1), a user name, `{user, db}`, an
 array of either, and `{forAllDBs: true}` are accepted with `mongod`'s
 validation texts. `showCredentials` returns the stored credential document and
-`showPrivileges` reports the stored roles; built-in role inheritance and
-privilege expansion are not modelled, so `inheritedRoles` repeats the roles and
-`inheritedPrivileges` is empty.
+`showPrivileges` expands the built-in roles into the same privilege table the
+dispatch layer enforces, so `inheritedPrivileges` matches `mongod` for the six
+modelled roles.
+
+## Authorization
+
+With `--auth`, commands are checked against the roles stored in
+`<db>.system.users`: `read`, `readWrite`, `dbAdmin`, `userAdmin` on any
+database, and `clusterAdmin`, `root` on `admin`. A refused command answers
+`not authorized on <db> to execute command` (13); `listDatabases` returns the
+databases the user's privileges cover. Limits (other built-ins, custom roles,
+command-level granularity) are in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 
 ## Replica set
 

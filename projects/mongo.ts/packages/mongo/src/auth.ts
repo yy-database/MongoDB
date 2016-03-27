@@ -7,6 +7,8 @@
 // leaves the connection that owns it.
 import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { binding } from './binding.ts'
+import { builtinRoleExists, privilegesForRoles } from './authorization.ts'
+import { saslprep, SaslprepError } from './saslprep.ts'
 
 /** Mechanisms this server registers in user credentials. */
 export const SCRAM_MECHANISMS = ['SCRAM-SHA-256', 'SCRAM-SHA-1'] as const
@@ -105,7 +107,9 @@ function payloadText(payload: unknown): string | null {
 
 /** `md5("<user>:mongo:<pwd>")` for SHA-1, the plain password (saslprep'd) for SHA-256. */
 function processedPassword(mechanism: ScramMechanism, user: string, password: string): string {
-    return mechanism === 'SCRAM-SHA-256' ? password : createHash('md5').update(`${user}:mongo:${password}`, 'utf8').digest('hex')
+    // RFC 4013 preparation happens before the SHA-1 digest, as `mongod` does.
+    const prepared = saslprep(password)
+    return mechanism === 'SCRAM-SHA-256' ? prepared : createHash('md5').update(`${user}:mongo:${prepared}`, 'utf8').digest('hex')
 }
 
 function scramParameters(mechanism: ScramMechanism): { digest: 'sha256' | 'sha1'; keyLength: number; saltLength: number; iterations: number } {
@@ -186,12 +190,35 @@ export function createUserCommand(session: { store: any; cursors: any }, command
     } else {
         mechanisms = [...SCRAM_MECHANISMS]
     }
+    // Roles are validated before credentials are generated, as `mongod` does;
+    // a string role names the current database.
+    const roles: AuthRole[] = []
+    for (const requested of command.roles) {
+        let role: AuthRole
+        if (typeof requested === 'string') role = { role: requested, db }
+        else if (isDocumentValue(requested)) {
+            if (!Object.hasOwn(requested, 'role')) return badValue('RoleName must contain a field named: role')
+            if (typeof requested.role !== 'string') {
+                return badValue(`RoleName must contain a string field named: role. But, has type ${typeName(requested.role)}`)
+            }
+            if (!Object.hasOwn(requested, 'db')) return badValue('RoleName must contain a field named: db')
+            if (typeof requested.db !== 'string') {
+                return badValue(`RoleName must contain a string field named: db. But, has type ${typeName(requested.db)}`)
+            }
+            role = { role: requested.role, db: requested.db }
+        } else {
+            return badValue('Role name must be either a document or string')
+        }
+        if (!builtinRoleExists(role)) return authError(31, 'RoleNotFound', `Could not find role: ${role.role}@${role.db}`)
+        roles.push(role)
+    }
     const credentials: any = {}
-    for (const mechanism of mechanisms) credentials[mechanism] = makeCredentials(mechanism, name, command.pwd)
-    // A string role names the current database, as `mongod` stores it.
-    const roles = Array.isArray(command.roles)
-        ? command.roles.map((role: unknown) => (typeof role === 'string' ? { role, db } : role))
-        : []
+    try {
+        for (const mechanism of mechanisms) credentials[mechanism] = makeCredentials(mechanism, name, command.pwd)
+    } catch (error) {
+        const kind = error instanceof SaslprepError && error.kind === 'bidi' ? 'CHECK_BIDI' : 'PROHIBITED'
+        return authError(50692, 'Location50692', `Error preflighting normalization: U_STRINGPREP_${kind}_ERROR`)
+    }
     const userDocument = {
         _id: `${db}.${name}`,
         userId: { $binary: { base64: randomBytes(16).toString('base64'), subType: '04' } },
@@ -250,14 +277,31 @@ function startConversation(session: { store: any; cursors: any; auth: AuthState 
         }
         return authError(10270, 'Location10270', 'Failed decoding SASL payload: invalid base64')
     }
-    // GS2 header is `n,,` or `y,,`; the client-first bare follows.
-    if (!payload.startsWith('n,,') && !payload.startsWith('y,,')) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
-    const clientFirstBare = payload.slice(3)
+    // GS2 header: `n` or `y`, an optional `a=<authzid>`, then a comma; the
+    // client-first bare follows. `mongod 8.0.9` accepts `n,a=<user>,` when the
+    // authzid names the user being authenticated and rejects any other.
+    const comma = payload.indexOf(',')
+    const flag = comma < 0 ? '' : payload.slice(0, comma)
+    if (flag !== 'n' && flag !== 'y') return authError(18, 'AuthenticationFailed', 'Authentication failed.')
+    let rest = payload.slice(comma + 1)
+    let authzid = ''
+    if (rest.startsWith('a=')) {
+        const separator = rest.indexOf(',')
+        if (separator < 0) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
+        authzid = rest.slice(2, separator)
+        rest = rest.slice(separator + 1)
+    } else if (rest.startsWith(',')) {
+        rest = rest.slice(1)
+    } else {
+        return authError(18, 'AuthenticationFailed', 'Authentication failed.')
+    }
+    const clientFirstBare = rest
     const parsed = /^n=([^,]*),r=(.+)$/.exec(clientFirstBare)
     if (!parsed) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
     const user = parsed[1]
     const clientNonce = parsed[2]
     if (user.length === 0) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
+    if (authzid !== '' && authzid !== user) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
     const db = command.db ?? command.$db ?? 'admin'
     const document = findUser(session, db, user)
     if (document === null) return authError(18, 'AuthenticationFailed', 'Authentication failed.')
@@ -318,9 +362,12 @@ export function saslContinueCommand(session: { auth: AuthState }, command: any):
         session.auth.conversation = null
         return authError(18, 'AuthenticationFailed', 'Authentication failed.')
     }
-    if (fields.c !== 'biws' || fields.r !== conversation.nonce || typeof fields.p !== 'string') return fail()
+    // `mongod 8.0.9` does not verify the `c=` channel-binding field (it accepts
+    // a proof built over any `c=` value), so neither do we; the client nonce
+    // and the proof still have to match.
+    if (fields.r !== conversation.nonce || typeof fields.p !== 'string') return fail()
     const parameters = scramParameters(conversation.mechanism)
-    const withoutProof = `c=biws,r=${fields.r}`
+    const withoutProof = `c=${fields.c},r=${fields.r}`
     const authMessage = `${conversation.clientFirstBare},${conversation.serverFirst},${withoutProof}`
     const clientSignature = createHmac(parameters.digest, conversation.storedKey).update(authMessage).digest()
     const proof = Buffer.from(fields.p, 'base64')
@@ -362,6 +409,35 @@ function storedDatabases(store: any): string[] {
     const databases = JSON.parse(binding.listDatabases(store))?.databases
     if (!Array.isArray(databases)) return []
     return databases.map((entry: any) => entry?.name).filter((name: unknown): name is string => typeof name === 'string')
+}
+
+/** Tags that canonical extended JSON uses to wrap a non-document value. */
+const SCALAR_TAGS = [
+    '$numberInt',
+    '$numberLong',
+    '$numberDouble',
+    '$numberDecimal',
+    '$oid',
+    '$date',
+    '$timestamp',
+    '$binary',
+    '$code',
+    '$minKey',
+    '$maxKey',
+    '$symbol',
+    '$dbPointer',
+    '$regex'
+]
+
+/**
+ * Whether a decoded command value is a BSON document. Canonical extended JSON
+ * turns scalars such as `1` into `{"$numberInt":"1"}` before they reach this
+ * layer, so a wrapped scalar must not be mistaken for a role document.
+ */
+function isDocumentValue(value: unknown): value is Record<string, unknown> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+    const keys = Object.keys(value as Record<string, unknown>)
+    return !(keys.length === 1 && SCALAR_TAGS.includes(keys[0]))
 }
 
 /** BSON type name used by `mongod`'s lookup validation messages. */
@@ -455,10 +531,10 @@ function userReport(document: any, showCredentials: boolean, showPrivileges: boo
     report.roles = sortedRoles(document)
     if (!showPrivileges) report.mechanisms = mechanisms
     if (showPrivileges) {
-        // Role inheritance is not modelled: the stored roles are the inherited
-        // roles, and no privilege is expanded from them.
+        // The same role table that the dispatch layer enforces expands here, so
+        // a reported privilege is always one that would be honoured.
         report.inheritedRoles = report.roles
-        report.inheritedPrivileges = []
+        report.inheritedPrivileges = privilegesForRoles(report.roles)
         report.inheritedAuthenticationRestrictions = []
     }
     return report
@@ -468,8 +544,8 @@ function userReport(document: any, showCredentials: boolean, showPrivileges: boo
  * `usersInfo`, the command behind `show users`.
  *
  * Credentials are read back from `<db>.system.users`; `showCredentials` returns
- * the stored document and `showPrivileges` reports stored roles without
- * expanding built-in privileges (see `KNOWN-DIFFERENCES.md`).
+ * the stored document and `showPrivileges` expands the built-in roles through
+ * the same table the dispatch layer authorizes against.
  */
 export function usersInfoCommand(session: { store: any; cursors: any }, command: any): any {
     const currentDb = command.$db ?? 'admin'

@@ -244,7 +244,7 @@ const EXPLAIN_HASH_FIELDS = new Set(['queryHash', 'planCacheShapeHash', 'planCac
 
 // Wall-clock measurements move between runs even on the same oracle, so they
 // are compared structurally and never used as gate material.
-const EXPLAIN_TIMING_FIELDS = new Set(['executionTimeMillis', 'executionTimeMillisEstimate'])
+const EXPLAIN_TIMING_FIELDS = new Set(['executionTimeMillis', 'executionTimeMillisEstimate', 'optimizationTimeMillis'])
 
 function normalizeReply(reply) {
     const flags = { cursor: false, uuid: false, oid: false, hash: false, serverInfo: false, timing: false }
