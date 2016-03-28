@@ -156,12 +156,13 @@ from an empty request, and the error codes 76, 93, 94 and 23 with their texts.
 
 Limits a client can observe:
 
-- **Only member 0 is real.** A configuration with several members is stored and
+- **Only the primary exists.** A configuration with several members is stored and
   `hello.hosts` lists them, but nothing contacts them; `replSetGetStatus` reports
-  member 0 only. There is no election, no sync, no rollback and no failover.
-- **No oplog.** `optime` advances with the writes this server accepts and has
-  `t: -1` until the first one; there is no `local.oplog.rs` collection, so
-  nothing can replay or tail it.
+  member 0 only. There is no election, no sync, no rollback and no failover. See
+  the design principle below: this server does not fabricate a SECONDARY.
+- **The oplog is written, not consumed.** Every successful write appends an entry
+  to the persistent `local.oplog.rs` (see below), but no member replays it, so
+  `syncSourceHost` is empty and initial sync does not exist.
 - **The configuration is in memory.** Real `mongod` persists it in
   `local.system.replset`; here a restart returns to `NotYetInitialized` (94) and
   needs `rs.initiate()` again.
@@ -182,6 +183,127 @@ Limits a client can observe:
   monitoring mode and `mongosh` work against the set once it is initiated.
 - **`electionCandidateMetrics` is absent** from `replSetGetStatus`, and
   `electionTime` is the initiation timestamp rather than an election write.
+
+### Design principle: no fake secondaries
+
+This server never reports a member as `SECONDARY`, never advertises a
+`readPreference` route to a member it does not actually serve from, and never
+answers a secondary read from primary data. A `rs.status()` that looks complete
+while a `readPreference: secondary` read silently returns data that is not
+positioned on the oplog is worse than an honest failure: the client cannot tell
+the difference from a real secondary that is lagging. Clients therefore see the
+real topology (one writable member) and get `server selection` failures for
+secondary reads instead of inconsistent data.
+
+## `local.oplog.rs`
+
+Measured against `mongod 8.0.9` on a single-member set:
+
+| Write | Entry |
+|---|---|
+| one insert | `op: "i"`, `o: <document>`, `o2: {_id}` |
+| several inserts | one `op: "c"` on `admin.$cmd` whose `o.applyOps` holds one `i` per document |
+| update | `op: "u"`, `o: {$v: 2, diff: {u: {...}, d: {...}}}`, `o2: {_id}` |
+| delete | `op: "d"`, `o: {_id}` (no `o2`) |
+| `create` | `op: "c"` on `<db>.$cmd`, `o: {create, idIndex}` |
+| `createIndexes` / `dropIndexes` | `op: "c"`, `o: {createIndexes, v: 2, key, name}` / `o2` carries the dropped spec |
+| `collMod` / `drop` | `op: "c"`, `o2.collectionOptions_old` / `o2.numRecords` |
+| `dropDatabase` | `op: "c"` on `<db>.$cmd`, no `ui`, `fromMigrate: false` |
+
+Every entry carries `ts`, `t: 1`, `v: 2` and `wall` (a BSON date) after its
+operation fields, and `ui` (the collection UUID) whenever an operation names a
+collection. `mongod 8.0.9` no longer writes the historical `h` (hash) field,
+and neither does this server. `mongod` also writes a `noop` entry every ten
+seconds; this server writes entries only when a command actually changes
+something, so an idle `local.oplog.rs` stays empty.
+
+Limits a client can observe:
+
+- **The entry is a second durable write, not part of the data write.** A crash
+  between the two can leave a document whose oplog entry is missing. Real
+  `mongod` commits both in one transaction.
+- **The diff is computed, not planned.** `u` records the fields that changed
+  between the stored document and the result; `mongod` records the diff its
+  update executor planned. For the update operators this server supports the two
+  agree; array-element inserts are recorded as a whole-array `u` rather than an
+  `i`.
+- **No missing-field lifecycle events.** `create`/`drop` entries carry the
+  measured fields, but `startIndexBuild`/`abortIndexBuild`, `commitIndexBuild`,
+  `emptycapped` and the `replset.minvalid` / `oplogTruncateAfterPoint`
+  bookkeeping collections are not written.
+- **Transactions write no `applyOps` at commit.** The transaction commit is
+  acknowledged but its operations are not folded into a single oplog entry.
+
+The entries live in the shard under the oplog namespace, so `find` on
+`local.oplog.rs` returns them in timestamp order, `listCollections` reports it
+as the capped collection `mongod` describes (`capped: true`, `autoIndexId: false`,
+no `idIndex`), and the oldest entries are reclaimed once the capped budget is
+exceeded (990 MB by default, `--oplog-size-mb`). Because the write reply's
+`opTime` is the newest persisted timestamp, a client reading the oplog sees
+exactly the timestamps the acknowledgements reported. The budget itself is a
+difference: `mongod` reserves 5.3 GB on this host, while this server defaults to
+990 MB.
+
+## Write concern
+
+`w`, `wtimeout` and `j` are parsed with `mongod`'s validation rules, and the
+rejections a client can trigger are reproduced:
+
+- A `writeConcern` that is not a document answers
+  `14 TypeMismatch` (`"writeConcern" had the wrong type. Expected object, found int`).
+- `w` must be a number, a string or a document; anything else answers
+  `9 FailedToParse` (`w has to be a number, string, or object; found: bool`).
+- A numeric `w` below 0 or above 50 answers `9 FailedToParse`
+  (`w has to be a non-negative number and not greater than 50; found: X`).
+- On a standalone server a numeric `w > 1` answers
+  `2 BadValue` (`cannot use 'w' > 1 when a host is not replicated`), and a
+  non-`majority` name answers `2 BadValue`
+  (`cannot use non-majority 'w' mode "tag" when a host is not a member of a replica set`).
+  These are refused before the write runs, as on `mongod`.
+- On the single-member set a numeric `w > 1` is unsatisfiable. The write
+  succeeds and the reply carries `writeConcernError` `100
+  UnsatisfiableWriteConcern` (`Not enough data-bearing nodes`) with
+  `errInfo.writeConcern`, immediately, even when a `wtimeout` is supplied (which
+  is what the measured server does). An unknown name answers `writeConcernError`
+  `79 UnknownReplWriteConcern`, also with the write already applied.
+- `w: 0` runs the write but withholds the counters: `insert`/`update`/`delete`
+  answer `n: 0` (`nModified: 0` where present) and no `writeErrors`.
+- `j`, `wtimeout` values and their signs are accepted; `j: true` is always
+  satisfied because every write is committed to the shard before the reply.
+
+Every acknowledged write reply on the set carries `electionId` and `opTime`
+after `n` (the timestamp of the last oplog entry, unchanged when the command
+changed nothing), and `writeConcernError` sits immediately before `ok`. A
+standalone reply keeps the standalone shape without those fields.
+
+One limit: **`64 WriteConcernFailed` after `wtimeout` is not reachable.** That
+reply needs a member that could in principle acknowledge but does not, which is
+how a real degraded multi-member set times out. Here the only data-bearing
+member is the process itself: when it is up a numeric `w > 1` is impossible
+(`100`), and when it is down there is no server to answer. Waiting cannot
+change either outcome, so this server never makes a client wait for one.
+
+## `readPreference`
+
+`$readPreference` is validated like `mongod` (an unknown `mode` answers
+`2 BadValue` naming the value) and otherwise ignored, which is what a real
+`mongod` does with the field: routing is the client's job. A driver that selects
+the single-member set with `readPreference: secondary` fails server selection,
+because the only member reports itself as primary; a `directConnection` to that
+member reads normally, as with a real server.
+
+## `drop`
+
+`{drop: <name>}` answers `{nIndexesWas: <n>, ns: "<db>.<name>", ok: 1}` for an
+existing collection and `{ok: 1}` for a missing one, leaving `listCollections`
+empty. A non-string name answers `14 TypeMismatch`; a collection in `admin`,
+`local` or `config` whose name starts with `system.` answers
+`20 IllegalOperation` (`cannot drop system collection <ns>`), and
+`local.oplog.rs` while replication is enabled answers `5255000`
+(`can't drop live oplog while replicating`), both as measured on
+`mongod 8.0.9`. A `system.*` name in any other database is droppable, which is
+where `mongod` draws the same line. The reply carries the index count this
+server actually has (the implicit `_id` index plus the stored user indexes).
 
 ## `dropDatabase`
 
@@ -220,10 +342,13 @@ Two limits remain:
 
 - **Natural order is `_id` order.** Unsorted scans here return documents in
   `_id` order; `mongod` returns insertion order. `$merge` applies its input as it
-  goes and does not roll back, so a run that fails half-way may have applied a
-  different prefix of source documents than `mongod` would. Adding a `$sort`
-  before `$merge` (or inserting documents in `_id` order) makes the two
-  identical; the insertion-order difference itself is visible in any unsorted
+  goes and does not roll back. A run that fails half-way may therefore have
+  written a different prefix of source documents than `mongod` would, and **the
+  set of documents already written before a failure is not guaranteed to have a
+  consistent order**: callers must not rely on which prefix survived, only on
+  the fact that some prefix may have survived. Adding a `$sort` before `$merge`
+  (or inserting documents in `_id` order) makes the two identical; the
+  insertion-order difference itself is visible in any unsorted
   `find`/`$limit`/`$skip` as well.
 - **`$merge` pipeline expressions are the shared expression subset.** A
   `whenMatched` pipeline may use only the operators the expression evaluator

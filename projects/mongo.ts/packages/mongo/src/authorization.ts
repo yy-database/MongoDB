@@ -1014,6 +1014,8 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             ]
         case 'create':
             return [{ action: 'createCollection', db: database, collection: typeof command.create === 'string' ? command.create : '' }]
+        case 'drop':
+            return [{ action: 'dropCollection', db: database, collection: typeof command.drop === 'string' ? command.drop : '' }]
         case 'collMod':
             return [{ action: 'collMod', db: database, collection: typeof command.collMod === 'string' ? command.collMod : '' }]
         case 'createIndexes':

@@ -17,6 +17,7 @@ use database_protocol_mongo::bson::{
 use crate::{
     cursor::{CursorStore, GetMoreError},
     json,
+    oplog::OplogEntry,
     store::{CollectionOptions, IndexSpec, SessionWriteState, Store, TransactionAbort, TransactionBegin, TransactionCommit, TransactionWrite},
 };
 
@@ -300,6 +301,7 @@ pub fn code_name(code: i32) -> Option<&'static str> {
         40148 => "Location40148",
         40149 => "Location40149",
         5255100 => "Location5255100",
+        5255000 => "Location5255000",
         5371602 => "Location5371602",
         7158303 => "Location7158303",
         13113 => "MergeStageNoMatchingDocument",
@@ -488,6 +490,7 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         candidates.push((index, stored, identifier));
     }
 
+    let mut accepted_documents: Vec<BsonDocument> = Vec::new();
     let inserted = if unique_indexes.is_empty() && session.key().is_none() {
         let entries: Vec<(Vec<u8>, Vec<u8>)> =
             candidates.iter().map(|(_, stored, identifier)| (value_to_key(identifier), encode_bson(stored))).collect();
@@ -499,11 +502,22 @@ pub fn insert(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         for duplicate in &report.duplicates {
             write_errors.push(id_duplicate_error(&namespace, positions[*duplicate], &identifiers[*duplicate]));
         }
+        for (position, (_, stored, _)) in candidates.iter().enumerate() {
+            if !report.duplicates.contains(&position) {
+                accepted_documents.push(stored.clone());
+            }
+        }
         report.inserted as usize
     } else {
-        commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, ordered, &mut write_errors)?
+        let (count, accepted) =
+            commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, ordered, &mut write_errors)?;
+        accepted_documents.extend(accepted);
+        count
     };
     write_errors.sort_by_key(|error| error.index);
+    if session.key().is_none() {
+        stage_insert_oplog(store, &namespace, &accepted_documents);
+    }
 
     Ok(write_reply(inserted as i64, None, &write_errors))
 }
@@ -521,7 +535,7 @@ fn commit_insert(
     unique_indexes: &[IndexSpec],
     ordered: bool,
     write_errors: &mut Vec<WriteError>,
-) -> Result<usize, CommandError> {
+) -> Result<(usize, Vec<BsonDocument>), CommandError> {
     let mut indexed: Vec<BTreeSet<Vec<u8>>> = vec![BTreeSet::new(); unique_indexes.len()];
     let mut existing: BTreeSet<Vec<u8>> = BTreeSet::new();
     for (key, payload) in namespace_documents(store, namespace, session) {
@@ -536,6 +550,7 @@ fn commit_insert(
 
     let mut staged: BTreeSet<Vec<u8>> = BTreeSet::new();
     let mut accepted: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    let mut accepted_documents: Vec<BsonDocument> = Vec::new();
     for (index, document, identifier) in candidates {
         let id_key = value_to_key(identifier);
         if existing.contains(&id_key) || staged.contains(&id_key) {
@@ -568,12 +583,33 @@ fn commit_insert(
             }
         }
         accepted.push((id_key, encode_bson(document)));
+        accepted_documents.push(document.clone());
     }
 
     if !accepted.is_empty() {
         stage_insert(store, session, namespace, &accepted)?;
     }
-    Ok(accepted.len())
+    Ok((accepted.len(), accepted_documents))
+}
+
+/// Stages the oplog entries for documents an insert actually wrote.
+///
+/// One document is a plain `i` entry; a batch is a single `applyOps` command
+/// entry, which is what `mongod 8.0.9` writes for a multi-document insert.
+fn stage_insert_oplog(store: &Store, namespace: &str, documents: &[BsonDocument]) {
+    if documents.is_empty() || !store.oplog_enabled() {
+        return;
+    }
+    let uuid = collection_uuid(namespace);
+    let entries: Vec<OplogEntry> =
+        documents.iter().map(|document| OplogEntry::insert(namespace, uuid.clone(), document)).collect();
+    if entries.len() == 1 {
+        if let Some(entry) = entries.into_iter().next() {
+            store.stage_oplog(entry);
+        }
+    } else {
+        store.stage_oplog(OplogEntry::apply_ops(entries));
+    }
 }
 
 fn id_duplicate_error(namespace: &str, index: usize, identifier: &BsonValue) -> WriteError {
@@ -2164,6 +2200,7 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     };
 
     let mut deleted: i64 = 0;
+    let mut deleted_identifiers: Vec<BsonValue> = Vec::new();
     for specification in &specifications {
         let BsonValue::Document(specification) = specification
         else {
@@ -2182,10 +2219,15 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
 
         if let Some(identifier) = single_id_lookup(filter) {
             let key = value_to_key(identifier);
-            deleted += stage_delete(store, session.key(), &namespace, std::slice::from_ref(&key))? as i64;
+            let removed = stage_delete(store, session.key(), &namespace, std::slice::from_ref(&key))?;
+            deleted += removed as i64;
+            if removed > 0 {
+                deleted_identifiers.push(identifier.clone());
+            }
         }
         else {
             let mut keys = Vec::new();
+            let mut identifiers = Vec::new();
             for (key, value) in namespace_documents(store, &namespace, session.key()) {
                 if limit > 0 && keys.len() >= limit {
                     break;
@@ -2195,16 +2237,50 @@ pub fn delete(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     continue;
                 };
                 if document_matches(&candidate, filter)? {
+                    if let Some(identifier) = candidate.get("_id") {
+                        identifiers.push(identifier.clone());
+                    }
                     keys.push(key);
                 }
             }
             if !keys.is_empty() {
                 deleted += stage_delete(store, session.key(), &namespace, &keys)? as i64;
+                deleted_identifiers.extend(identifiers);
             }
         }
     }
+    if session.key().is_none() {
+        stage_delete_oplog(store, &namespace, &deleted_identifiers);
+    }
 
     Ok(write_reply(deleted, None, &[]))
+}
+
+/// Stages one `d` entry per deleted document.
+fn stage_delete_oplog(store: &Store, namespace: &str, identifiers: &[BsonValue]) {
+    if identifiers.is_empty() || !store.oplog_enabled() {
+        return;
+    }
+    let uuid = collection_uuid(namespace);
+    for identifier in identifiers {
+        store.stage_oplog(OplogEntry::delete(namespace, uuid.clone(), identifier));
+    }
+}
+
+/// Stages one `u` entry per document an update actually changed.
+fn stage_update_oplog(
+    store: &Store,
+    session: Option<&str>,
+    namespace: &str,
+    pairs: &[(BsonDocument, BsonDocument)],
+) {
+    if pairs.is_empty() || session.is_some() || !store.oplog_enabled() {
+        return;
+    }
+    let uuid = collection_uuid(namespace);
+    for (old, new) in pairs {
+        store.stage_oplog(OplogEntry::update(namespace, uuid.clone(), old, new));
+    }
 }
 
 /// `update` with the documented update operators, replacement documents and
@@ -2261,6 +2337,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         let multi = matches!(specification.get("multi"), Some(BsonValue::Bool(true)));
 
         let mut changes = Vec::new();
+        let mut oplog_pairs: Vec<(BsonDocument, BsonDocument)> = Vec::new();
         for (key, value) in namespace_documents(store, &namespace, session.key()) {
             let Ok(document) = parse_bson(&value)
             else {
@@ -2287,6 +2364,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     if !changes.is_empty() {
                         stage_replace(store, session.key(), &namespace, &changes)?;
                     }
+                    stage_update_oplog(store, session.key(), &namespace, &oplog_pairs);
                     return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message.clone())]));
                 }
             };
@@ -2294,6 +2372,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                 if !changes.is_empty() {
                     store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
                 }
+                stage_update_oplog(store, session.key(), &namespace, &oplog_pairs);
                 return Ok(write_reply(0, Some(0), &[WriteError::validation(index, info)]));
             }
             if let Some(error) = parallel_array_error(&updated, &index_specs) {
@@ -2302,6 +2381,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                 if !changes.is_empty() {
                     store.replace(&namespace, &changes).map_err(|replace| CommandError::new(2, replace.to_string()))?;
                 }
+                stage_update_oplog(store, session.key(), &namespace, &oplog_pairs);
                 return Ok(write_reply(0, Some(0), &[WriteError::plain(index, error.code, error.message)]));
             }
             if !unique_indexes.is_empty() {
@@ -2311,6 +2391,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                     if !changes.is_empty() {
                         stage_replace(store, session.key(), &namespace, &changes)?;
                     }
+                    stage_update_oplog(store, session.key(), &namespace, &oplog_pairs);
                     return Ok(write_reply(
                         0,
                         Some(0),
@@ -2325,6 +2406,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             if payload != value {
                 modified += 1;
                 changes.push((key, payload));
+                oplog_pairs.push((document, updated));
             }
             if !multi {
                 break;
@@ -2333,6 +2415,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
         if !changes.is_empty() {
             stage_replace(store, session.key(), &namespace, &changes)?;
         }
+        stage_update_oplog(store, session.key(), &namespace, &oplog_pairs);
         if matched == 0 && upsert {
             let applied = if replacement {
                 let query_identifier = match filter.get("_id") {
@@ -2367,8 +2450,12 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             }
             let candidates = vec![(index, inserted, identifier.clone())];
             let mut write_errors = Vec::new();
-            let inserted_count = commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, true, &mut write_errors)?;
+            let (inserted_count, accepted) =
+                commit_insert(store, session.key(), &namespace, &candidates, &unique_indexes, true, &mut write_errors)?;
             if inserted_count == 1 {
+                if session.key().is_none() {
+                    stage_insert_oplog(store, &namespace, &accepted);
+                }
                 return Ok(upsert_reply(index, &identifier));
             }
             return Ok(write_reply(0, Some(0), &write_errors));
@@ -3423,29 +3510,41 @@ pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDoc
             entries.push(BsonValue::Document(entry));
             continue;
         }
+        let is_oplog = store.oplog_namespace().as_deref() == Some(namespace.as_str());
         let mut options = BsonDocument::new();
-        if let Some(validator) = collection_validator_value(store, &namespace) {
-            options.push("validator".to_string(), validator);
+        if is_oplog {
+            if let Some((_, size, _, _)) = store.oplog_status() {
+                options.push("capped".to_string(), BsonValue::Bool(true));
+                options.push("size".to_string(), BsonValue::Int64(size));
+                options.push("autoIndexId".to_string(), BsonValue::Bool(false));
+            }
         }
-        let stored = store.collection_options(&namespace);
-        if let Some(level) = &stored.validation_level {
-            options.push("validationLevel".to_string(), BsonValue::String(level.clone()));
-        }
-        if let Some(action) = &stored.validation_action {
-            options.push("validationAction".to_string(), BsonValue::String(action.clone()));
+        else {
+            if let Some(validator) = collection_validator_value(store, &namespace) {
+                options.push("validator".to_string(), validator);
+            }
+            let stored = store.collection_options(&namespace);
+            if let Some(level) = &stored.validation_level {
+                options.push("validationLevel".to_string(), BsonValue::String(level.clone()));
+            }
+            if let Some(action) = &stored.validation_action {
+                options.push("validationAction".to_string(), BsonValue::String(action.clone()));
+            }
         }
         entry.push("options".to_string(), BsonValue::Document(options));
         let mut info = BsonDocument::new();
         info.push("readOnly".to_string(), BsonValue::Bool(false));
         info.push("uuid".to_string(), collection_uuid(&namespace));
         entry.push("info".to_string(), BsonValue::Document(info));
-        let mut id_index = BsonDocument::new();
-        id_index.push("v".to_string(), BsonValue::Int32(2));
-        let mut key = BsonDocument::new();
-        key.push("_id".to_string(), BsonValue::Int32(1));
-        id_index.push("key".to_string(), BsonValue::Document(key));
-        id_index.push("name".to_string(), BsonValue::String("_id_".to_string()));
-        entry.push("idIndex".to_string(), BsonValue::Document(id_index));
+        if !is_oplog {
+            let mut id_index = BsonDocument::new();
+            id_index.push("v".to_string(), BsonValue::Int32(2));
+            let mut key = BsonDocument::new();
+            key.push("_id".to_string(), BsonValue::Int32(1));
+            id_index.push("key".to_string(), BsonValue::Document(key));
+            id_index.push("name".to_string(), BsonValue::String("_id_".to_string()));
+            entry.push("idIndex".to_string(), BsonValue::Document(id_index));
+        }
         if let Some(filter) = filter {
             if !document_matches(&entry, filter)? {
                 continue;
@@ -3777,7 +3876,125 @@ pub fn create(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
     store
         .create_collection(&namespace, options)
         .map_err(|error| CommandError::new(2, format!("create failed: {error}")))?;
+    if store.oplog_enabled() {
+        let mut object = BsonDocument::new();
+        object.push("create".to_string(), BsonValue::String(collection.clone()));
+        for (field, value) in &command.fields {
+            if field == "create" || is_control_field(field) {
+                continue;
+            }
+            object.push(field.clone(), value.clone());
+        }
+        let mut id_index = BsonDocument::new();
+        id_index.push("v".to_string(), BsonValue::Int32(2));
+        let mut id_key = BsonDocument::new();
+        id_key.push("_id".to_string(), BsonValue::Int32(1));
+        id_index.push("key".to_string(), BsonValue::Document(id_key));
+        id_index.push("name".to_string(), BsonValue::String("_id_".to_string()));
+        object.push("idIndex".to_string(), BsonValue::Document(id_index));
+        store.stage_oplog(OplogEntry::command(
+            &command_namespace(&namespace),
+            Some(collection_uuid(&namespace)),
+            object,
+            None,
+        ));
+    }
     let mut response = BsonDocument::new();
+    response.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(response)
+}
+
+/// Command fields that describe the request rather than the write.
+fn is_control_field(field: &str) -> bool {
+    matches!(
+        field,
+        "$db" | "lsid" | "writeConcern" | "$clusterTime" | "apiVersion" | "comment" | "txnNumber" | "$readPreference"
+    )
+}
+
+/// `<db>.$cmd` for a collection namespace, which is where `mongod` logs
+/// collection and index commands.
+fn command_namespace(namespace: &str) -> String {
+    match namespace.split_once('.') {
+        Some((database, _)) => format!("{database}.$cmd"),
+        None => format!("{namespace}.$cmd"),
+    }
+}
+
+/// Stages one `c` entry per index a `createIndexes` really built.
+fn stage_create_indexes_oplog(store: &Store, namespace: &str, collection: &str, created: &[IndexSpec]) {
+    if created.is_empty() || !store.oplog_enabled() {
+        return;
+    }
+    let uuid = collection_uuid(namespace);
+    for specification in created {
+        let mut object = BsonDocument::new();
+        object.push("createIndexes".to_string(), BsonValue::String(collection.to_string()));
+        object.push("v".to_string(), BsonValue::Int32(2));
+        object.push("key".to_string(), BsonValue::Document(specification.key.clone()));
+        object.push("name".to_string(), BsonValue::String(specification.name.clone()));
+        if specification.unique {
+            object.push("unique".to_string(), BsonValue::Bool(true));
+        }
+        if specification.sparse == Some(true) {
+            object.push("sparse".to_string(), BsonValue::Bool(true));
+        }
+        store.stage_oplog(OplogEntry::command(&command_namespace(namespace), Some(uuid.clone()), object, None));
+    }
+}
+
+/// `drop` removing one collection, its documents and its user indexes.
+///
+/// `mongod 8.0.9` answers `{nIndexesWas, ns, ok}` for an existing collection
+/// and `{ok}` for a missing one; a view reply has no `nIndexesWas`, but this
+/// server has no views, so that branch does not exist here.
+pub fn drop(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let database = command.database();
+    let collection = match command.get("drop") {
+        Some(BsonValue::String(name)) => name.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                14,
+                format!("collection name has invalid type {}", bson_type_name(other)),
+            ));
+        }
+        None => return Err(CommandError::new(14, "collection name has invalid type int")),
+    };
+    if collection.is_empty() {
+        return Err(CommandError::new(73, format!("Invalid namespace specified: {database}")));
+    }
+    let namespace = format!("{database}.{collection}");
+    if store.oplog_enabled() && store.oplog_namespace().as_deref() == Some(namespace.as_str()) {
+        return Err(CommandError::new(5255000, "can't drop live oplog while replicating"));
+    }
+    if matches!(database.as_str(), "admin" | "local" | "config") && collection.starts_with("system.") {
+        return Err(CommandError::new(20, format!("cannot drop system collection {namespace}")));
+    }
+    if !store.namespace_exists(&namespace) {
+        let mut response = BsonDocument::new();
+        response.push("ok".to_string(), BsonValue::Double(1.0));
+        return Ok(response);
+    }
+    let records = store.scan(&namespace).len() as i32;
+    let user_indexes = store.index_specs(&namespace).len() as i32;
+    if store.oplog_enabled() {
+        let mut object = BsonDocument::new();
+        object.push("drop".to_string(), BsonValue::String(collection.clone()));
+        let mut old = BsonDocument::new();
+        old.push("numRecords".to_string(), BsonValue::Int32(records));
+        store.stage_oplog(OplogEntry::command(
+            &command_namespace(&namespace),
+            Some(collection_uuid(&namespace)),
+            object,
+            Some(old),
+        ));
+    }
+    store
+        .drop_namespace(&namespace)
+        .map_err(|error| CommandError::new(2, format!("drop failed: {error}")))?;
+    let mut response = BsonDocument::new();
+    response.push("nIndexesWas".to_string(), BsonValue::Int32(1 + user_indexes));
+    response.push("ns".to_string(), BsonValue::String(namespace.clone()));
     response.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(response)
 }
@@ -3810,6 +4027,26 @@ pub fn coll_mod(command: &BsonDocument, store: &Store) -> Result<BsonDocument, C
     store
         .set_collection_options(&namespace, options)
         .map_err(|error| CommandError::new(2, format!("collMod failed: {error}")))?;
+    if store.oplog_enabled() {
+        let mut object = BsonDocument::new();
+        object.push("collMod".to_string(), BsonValue::String(collection.clone()));
+        for (field, value) in &command.fields {
+            if field == "collMod" || is_control_field(field) {
+                continue;
+            }
+            object.push(field.clone(), value.clone());
+        }
+        let mut old = BsonDocument::new();
+        let mut old_options = BsonDocument::new();
+        old_options.push("uuid".to_string(), collection_uuid(&namespace));
+        old.push("collectionOptions_old".to_string(), BsonValue::Document(old_options));
+        store.stage_oplog(OplogEntry::command(
+            &command_namespace(&namespace),
+            Some(collection_uuid(&namespace)),
+            object,
+            Some(old),
+        ));
+    }
     let mut response = BsonDocument::new();
     response.push("ok".to_string(), BsonValue::Double(1.0));
     Ok(response)
@@ -4108,6 +4345,9 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
             last_error.push("n".to_string(), BsonValue::Int32(1));
             if let Some(identifier) = document.get("_id") {
                 stage_delete(store, session.key(), &namespace, &[value_to_key(identifier)])?;
+                if session.key().is_none() && store.oplog_enabled() {
+                    store.stage_oplog(OplogEntry::delete(&namespace, collection_uuid(&namespace), identifier));
+                }
             }
             let value = find_projection(vec![document.clone()], command.get("fields"))?;
             return Ok(find_and_modify_reply(last_error, value.into_iter().next()));
@@ -4160,6 +4400,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         }
         let key = value_to_key(identifier_value.as_ref().unwrap_or(&BsonValue::Null));
         stage_replace(store, session.key(), &namespace, &[(key, encode_bson(&updated))])?;
+        stage_update_oplog(store, session.key(), &namespace, &[(document.clone(), updated.clone())]);
         let mut last_error = BsonDocument::new();
         last_error.push("n".to_string(), BsonValue::Int32(1));
         last_error.push("updatedExisting".to_string(), BsonValue::Bool(true));
@@ -4191,9 +4432,13 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         let identifier = inserted.get("_id").cloned().unwrap_or(BsonValue::Null);
         let candidates = vec![(0_usize, inserted.clone(), identifier.clone())];
         let mut write_errors = Vec::new();
-        commit_insert(store, session.key(), &namespace, &candidates, &Vec::new(), true, &mut write_errors)?;
+        let (inserted_count, accepted) =
+            commit_insert(store, session.key(), &namespace, &candidates, &Vec::new(), true, &mut write_errors)?;
         if let Some(error) = write_errors.first() {
             return Err(CommandError::new(error.code, error.message.clone()));
+        }
+        if inserted_count == 1 {
+            stage_insert_oplog(store, &namespace, &accepted);
         }
         let mut last_error = BsonDocument::new();
         last_error.push("n".to_string(), BsonValue::Int32(1));
@@ -4605,6 +4850,13 @@ pub fn drop_database(command: &BsonDocument, store: &Store) -> Result<BsonDocume
     let database = command.database();
     if database == "admin" {
         return Err(CommandError::new(20, "Dropping the 'admin' database is prohibited."));
+    }
+    let prefix = format!("{database}.");
+    let had_namespaces = store.namespaces().iter().any(|namespace| namespace.starts_with(&prefix));
+    if had_namespaces && store.oplog_enabled() {
+        let mut object = BsonDocument::new();
+        object.push("dropDatabase".to_string(), BsonValue::Int32(1));
+        store.stage_oplog(OplogEntry::database_command(&format!("{database}.$cmd"), object));
     }
     store.drop_database(&database).map_err(|error| CommandError::new(2, format!("dropDatabase failed: {error}")))?;
     let mut response = BsonDocument::new();
@@ -5348,6 +5600,9 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
         store
             .add_indexes(&namespace, &accepted)
             .map_err(|error| CommandError::new(2, format!("createIndexes failed: {error}")))?;
+        if let Some(BsonValue::String(collection)) = command.get("createIndexes") {
+            stage_create_indexes_oplog(store, &namespace, collection, &accepted);
+        }
     }
 
     let before = 1 + existing.len() as i64;
@@ -5549,7 +5804,32 @@ pub fn drop_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
         return Err(CommandError::new(27, format!("index not found with name [{name}]")));
     }
 
+    let dropped: Vec<IndexSpec> = if name == "*" {
+        existing.clone()
+    } else {
+        existing.iter().filter(|index| index.name == name).cloned().collect()
+    };
     store.drop_indexes(&namespace, &name).map_err(|error| CommandError::new(2, format!("dropIndexes failed: {error}")))?;
+    if store.oplog_enabled() {
+        let uuid = collection_uuid(&namespace);
+        for specification in &dropped {
+            let mut object = BsonDocument::new();
+            if let Some(BsonValue::String(collection)) = command.get("dropIndexes") {
+                object.push("dropIndexes".to_string(), BsonValue::String(collection.clone()));
+            }
+            object.push("index".to_string(), BsonValue::String(name.clone()));
+            let mut old = BsonDocument::new();
+            old.push("v".to_string(), BsonValue::Int32(2));
+            old.push("key".to_string(), BsonValue::Document(specification.key.clone()));
+            old.push("name".to_string(), BsonValue::String(specification.name.clone()));
+            store.stage_oplog(OplogEntry::command(
+                &command_namespace(&namespace),
+                Some(uuid.clone()),
+                object,
+                Some(old),
+            ));
+        }
+    }
 
     let mut reply = BsonDocument::new();
     reply.push("nIndexesWas".to_string(), count_value(before));

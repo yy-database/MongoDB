@@ -48,10 +48,19 @@ export function createReplicaState(name: string | null): ReplicaState {
     }
 }
 
-/** Records a write so `optime` advances with the activity this server really has. */
-export function noteWrite(state: ReplicaState): void {
+/**
+ * Records a write so `optime` advances with the activity this server really
+ * has. When the write produced oplog entries, their last timestamp is adopted
+ * verbatim so replies and `local.oplog.rs` cannot drift apart.
+ */
+export function noteWrite(state: ReplicaState, optime?: { t: number; i: number }): void {
     if (state.name === null || !state.initialized) return
     state.writes += 1
+    if (optime !== undefined) {
+        state.seconds = optime.t
+        state.increment = optime.i
+        return
+    }
     const seconds = Math.floor(Date.now() / 1000)
     if (seconds !== state.seconds) {
         state.seconds = seconds
@@ -60,6 +69,16 @@ export function noteWrite(state: ReplicaState): void {
     else {
         state.increment += 1
     }
+}
+
+/**
+ * The `electionId` and `opTime` a replica-set write reply carries, or `null`
+ * when the member is not an initiated primary (a standalone server, or a set
+ * that has not received its configuration yet).
+ */
+export function writeStamps(state: ReplicaState): { electionId: any; opTime: any } | null {
+    if (state.name === null || !state.initialized || state.electionId === null) return null
+    return { electionId: objectId(state.electionId), opTime: opTime(state) }
 }
 
 function objectId(hex: string | null): any {

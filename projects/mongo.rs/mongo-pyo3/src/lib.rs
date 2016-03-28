@@ -210,6 +210,12 @@ fn create(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
     Ok(command_reply(commands::create(&decode_command(command)?, &store.inner)))
 }
 
+/// `drop` reply.
+#[pyfunction]
+fn drop_collection(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::drop(&decode_command(command)?, &store.inner)))
+}
+
 /// `collMod` reply.
 #[pyfunction]
 fn coll_mod(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
@@ -284,6 +290,31 @@ fn ttl_monitor(store: PyRef<'_, MongoStore>, now_ms: Option<i64>) -> String {
     }
 }
 
+/// Configures the persistent replica-set oplog and its capped size.
+#[pyfunction]
+fn enable_oplog(store: PyRef<'_, MongoStore>, namespace: &str, max_bytes: i64) -> PyResult<()> {
+    store
+        .inner
+        .enable_oplog(namespace, max_bytes)
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+/// Persists staged oplog entries; returns the last `{t,i}` as JSON.
+#[pyfunction]
+fn commit_oplog(store: PyRef<'_, MongoStore>, wall_millis: i64) -> PyResult<Option<String>> {
+    let last = store
+        .inner
+        .commit_oplog(wall_millis)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    Ok(last.map(|(t, i)| format!("{{\"t\":{t},\"i\":{i}}}")))
+}
+
+/// Drops entries a failed write command staged.
+#[pyfunction]
+fn discard_oplog(store: PyRef<'_, MongoStore>) {
+    store.inner.discard_staged_oplog();
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[pyfunction]
 fn import_bson(store: PyRef<'_, MongoStore>, namespace: &str, bytes: &[u8]) -> PyResult<usize> {
@@ -328,6 +359,10 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(distinct, module)?)?;
     module.add_function(wrap_pyfunction!(bulk_write, module)?)?;
     module.add_function(wrap_pyfunction!(create, module)?)?;
+    module.add_function(wrap_pyfunction!(drop_collection, module)?)?;
+    module.add_function(wrap_pyfunction!(enable_oplog, module)?)?;
+    module.add_function(wrap_pyfunction!(commit_oplog, module)?)?;
+    module.add_function(wrap_pyfunction!(discard_oplog, module)?)?;
     module.add_function(wrap_pyfunction!(coll_mod, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
     module.add_function(wrap_pyfunction!(commit_transaction, module)?)?;

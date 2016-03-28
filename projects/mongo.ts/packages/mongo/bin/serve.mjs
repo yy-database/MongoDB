@@ -4,7 +4,7 @@
 //
 // usage: node bin/serve.mjs --data-dir <dir> [--port <n>] [--host <addr>]
 //                            [--compressors snappy,zlib,zstd] [--auth]
-//                            [--repl-set <name>]
+//                            [--repl-set <name>] [--oplog-size-mb <n>]
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,8 +33,9 @@ const host = option('host') ?? '127.0.0.1'
 const compressors = option('compressors')?.split(',').filter(Boolean)
 const auth = args.includes('--auth')
 const replSet = option('repl-set')
+const oplogSizeMB = Number(option('oplog-size-mb') ?? '990')
 
-const server = createServer({ dataDir, port, host, compressors, auth, replSet })
+const server = createServer({ dataDir, port, host, compressors, auth, replSet, oplogSizeMB })
 const address = await server.listening
 console.log(JSON.stringify({ ready: true, host: address.host, port: address.port }))
 

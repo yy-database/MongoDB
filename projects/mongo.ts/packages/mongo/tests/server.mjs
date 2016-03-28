@@ -977,6 +977,202 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     await replicaClient.close()
 }
 
+// --- replica set write concern, oplog and readPreference --------------------
+//
+// Every expected shape below was captured from `mongod 8.0.9` on a single-member
+// set: the reply field order, the `writeConcernError` codes and texts, the
+// `local.oplog.rs` entries, and the `$readPreference` validation errors.
+
+{
+    const db = 'rs_oplog'
+    const inserted = await command(replicaConnection, { insert: 'c', documents: [{ _id: 401, a: 1 }], $db: db })
+    equal(inserted.n, { $numberInt: '1' }, 'an acknowledged insert reports n')
+    ok(typeof inserted.electionId.$oid === 'string', 'the insert reply carries electionId')
+    equal(inserted.opTime.t, { $numberLong: '1' }, 'the insert reply carries the term')
+    ok(inserted.opTime.ts.$timestamp !== undefined, 'the insert reply carries the optime timestamp')
+
+    const updated = await command(replicaConnection, { update: 'c', updates: [{ q: { _id: 401 }, u: { $set: { a: 2 } } }], $db: db })
+    equal(updated.nModified, { $numberInt: '1' }, 'an acknowledged update reports nModified')
+    ok(updated.opTime.ts.$timestamp !== undefined, 'the update reply carries the optime')
+
+    const upserted = await command(replicaConnection, { update: 'c', updates: [{ q: { _id: 402 }, u: { $set: { a: 3 } }, upsert: true }], $db: db })
+    equal(upserted.upserted, [{ index: { $numberInt: '0' }, _id: { $numberInt: '402' } }], 'an upsert reply lists the inserted id')
+    equal(upserted.nModified, { $numberInt: '0' }, 'an upsert reports no modification')
+
+    const removed = await command(replicaConnection, { delete: 'c', deletes: [{ q: { _id: 402 }, limit: 1 }], $db: db })
+    equal(removed.n, { $numberInt: '1' }, 'an acknowledged delete reports n')
+
+    const unacknowledged = await command(replicaConnection, { insert: 'c', documents: [{ _id: 403 }], writeConcern: { w: 0 }, $db: db })
+    equal(unacknowledged, { n: { $numberInt: '0' }, ok: { $numberDouble: '1.0' } }, 'w: 0 withholds the counters')
+
+    const unsatisfiable = await command(replicaConnection, { insert: 'c', documents: [{ _id: 404 }], writeConcern: { w: 2 }, $db: db })
+    equal(unsatisfiable.ok, { $numberDouble: '1.0' }, 'an unsatisfiable w still applies the write')
+    equal(unsatisfiable.writeConcernError?.code, { $numberInt: '100' }, 'w: 2 on one member is UnsatisfiableWriteConcern')
+    equal(unsatisfiable.writeConcernError?.codeName, 'UnsatisfiableWriteConcern', 'the unsatisfiable code name matches mongod')
+    equal(unsatisfiable.writeConcernError?.errmsg, 'Not enough data-bearing nodes', 'the unsatisfiable text matches mongod')
+    equal(
+        unsatisfiable.writeConcernError?.errInfo.writeConcern,
+        { w: { $numberInt: '2' }, wtimeout: { $numberInt: '0' }, provenance: 'clientSupplied' },
+        'errInfo repeats the client supply'
+    )
+
+    const unknownTag = await command(replicaConnection, { insert: 'c', documents: [{ _id: 405 }], writeConcern: { w: 'tag', wtimeout: 100 }, $db: db })
+    equal(unknownTag.ok, { $numberDouble: '1.0' }, 'an unknown write concern still applies the write')
+    equal(unknownTag.writeConcernError?.code, { $numberInt: '79' }, 'an unknown tag is UnknownReplWriteConcern')
+    equal(
+        unknownTag.writeConcernError?.errmsg,
+        "No write concern mode named 'tag' found in replica set configuration",
+        'the unknown-tag text matches mongod'
+    )
+
+    const majority = await command(replicaConnection, { insert: 'c', documents: [{ _id: 406 }], writeConcern: { w: 'majority', j: true }, $db: db })
+    equal(majority.ok, { $numberDouble: '1.0' }, 'majority is satisfied by the one member')
+    equal(Object.hasOwn(majority, 'writeConcernError'), false, 'a satisfied write concern carries no error')
+
+    const many = await command(replicaConnection, { insert: 'c', documents: [{ _id: 407 }, { _id: 408 }], $db: db })
+    equal(many.n, { $numberInt: '2' }, 'a two-document insert reports n: 2')
+
+    await command(replicaConnection, { create: 'logged', $db: db })
+    await command(replicaConnection, { createIndexes: 'c', indexes: [{ key: { a: 1 }, name: 'a_1' }], $db: db })
+
+    // The oplog is a real collection, written before the acknowledgement.
+    const oplog = await command(replicaConnection, { find: 'oplog.rs', filter: { ns: `${db}.c` }, $db: 'local' })
+    const entries = oplog.cursor.firstBatch
+    ok(entries.length >= 7, 'every write above produced an oplog entry')
+
+    const insertEntry = entries[0]
+    equal(Object.keys(insertEntry), ['op', 'ns', 'ui', 'o', 'o2', 'ts', 't', 'v', 'wall'], 'an insert entry keeps mongod field order')
+    equal(insertEntry.op, 'i', 'an insert entry uses op i')
+    equal(insertEntry.ns, `${db}.c`, 'an insert entry names its namespace')
+    equal(insertEntry.o, { _id: { $numberInt: '401' }, a: { $numberInt: '1' } }, 'an insert entry stores the document')
+    equal(insertEntry.o2, { _id: { $numberInt: '401' } }, 'an insert entry carries the id in o2')
+    equal(insertEntry.t, { $numberLong: '1' }, 'the oplog entry carries the term')
+    equal(insertEntry.v, { $numberInt: '2' }, 'the oplog entry carries v: 2')
+    ok(insertEntry.ts.$timestamp !== undefined, 'the oplog entry carries a timestamp')
+    ok(insertEntry.wall.$date !== undefined, 'the oplog entry carries wall time')
+    equal(Object.hasOwn(insertEntry, 'h'), false, '8.0.9 no longer writes the h field')
+
+    const updateEntry = entries.find((entry) => entry.op === 'u')
+    equal(
+        updateEntry?.o,
+        { $v: { $numberInt: '2' }, diff: { u: { a: { $numberInt: '2' } } } },
+        'an update entry stores a $v: 2 diff'
+    )
+    equal(updateEntry?.o2, { _id: { $numberInt: '401' } }, 'an update entry carries the id in o2')
+
+    const upsertEntry = entries.find((entry) => entry.o?._id?.$numberInt === '402')
+    equal(upsertEntry?.op, 'i', 'an upsert is logged as an insert')
+    equal(upsertEntry?.o2, { _id: { $numberInt: '402' } }, 'the upsert entry carries the id in o2')
+
+    const deleteEntry = entries.find((entry) => entry.op === 'd' && entry.o?._id?.$numberInt === '402')
+    equal(Object.keys(deleteEntry), ['op', 'ns', 'ui', 'o', 'ts', 't', 'v', 'wall'], 'a delete entry has no o2')
+    equal(Object.hasOwn(deleteEntry, 'o2'), false, 'a delete entry omits o2')
+
+    const applyOps = (await command(replicaConnection, { find: 'oplog.rs', filter: { ns: 'admin.$cmd' }, $db: 'local' }))
+        .cursor.firstBatch.find((entry) => entry.o?.applyOps !== undefined)
+    equal(applyOps?.ns, 'admin.$cmd', 'a multi-document insert is logged on admin.$cmd')
+    equal(applyOps?.o.applyOps.length, 2, 'a multi-document insert folds both documents into applyOps')
+    equal(applyOps?.o.applyOps[0].op, 'i', 'each applyOps entry keeps its op')
+    equal(applyOps?.o.applyOps[0].o2, { _id: { $numberInt: '407' } }, 'each applyOps entry keeps its o2')
+
+    const newest = entries[entries.length - 1]
+    equal(newest.ts, majority.opTime.ts, 'the last acknowledged reply reported the oplog timestamp')
+
+    const createdEntry = (await command(replicaConnection, { find: 'oplog.rs', filter: { ns: `${db}.$cmd`, 'o.create': 'logged' }, $db: 'local' })).cursor.firstBatch[0]
+    equal(createdEntry.op, 'c', 'a create is logged as a command')
+    equal(createdEntry.o.idIndex, { v: { $numberInt: '2' }, key: { _id: { $numberInt: '1' } }, name: '_id_' }, 'a create logs the id index')
+
+    const indexEntry = (await command(replicaConnection, { find: 'oplog.rs', filter: { ns: `${db}.$cmd`, 'o.createIndexes': 'c' }, $db: 'local' })).cursor.firstBatch[0]
+    equal(indexEntry.o.name, 'a_1', 'a createIndexes logs the index name')
+    equal(indexEntry.o.key, { a: { $numberInt: '1' } }, 'a createIndexes logs the key')
+
+    const description = (await command(replicaConnection, { listCollections: 1, filter: { name: 'oplog.rs' }, $db: 'local' })).cursor.firstBatch[0]
+    equal(
+        description.options,
+        { capped: true, size: { $numberLong: '1038090240' }, autoIndexId: false },
+        'the oplog is described as a capped collection'
+    )
+    equal(Object.hasOwn(description, 'idIndex'), false, 'the oplog description carries no idIndex')
+
+    // Drop: counters, guards and texts.
+    const dropped = await command(replicaConnection, { drop: 'c', $db: db })
+    equal(dropped.nIndexesWas, { $numberInt: '2' }, 'drop counts the id index plus the user index')
+    equal(dropped.ns, `${db}.c`, 'drop names its namespace')
+    equal(dropped.ok, { $numberDouble: '1.0' }, 'drop is acknowledged')
+    equal(Object.hasOwn(dropped, 'electionId'), false, 'drop carries no electionId')
+
+    const droppedMissing = await command(replicaConnection, { drop: 'ghost', $db: db })
+    equal(droppedMissing, { ok: { $numberDouble: '1.0' } }, 'dropping a missing collection replies ok only')
+
+    const liveOplog = await command(replicaConnection, { drop: 'oplog.rs', $db: 'local' })
+    equal(liveOplog.code, { $numberInt: '5255000' }, 'the live oplog cannot be dropped')
+    equal(liveOplog.codeName, 'Location5255000', 'the oplog guard code name matches mongod')
+    equal(liveOplog.errmsg, "can't drop live oplog while replicating", 'the oplog guard text matches mongod')
+
+    const systemCollection = await command(replicaConnection, { drop: 'system.replset', $db: 'local' })
+    equal(systemCollection.code, { $numberInt: '20' }, 'local system collections cannot be dropped')
+    equal(systemCollection.errmsg, 'cannot drop system collection local.system.replset', 'the system guard text matches mongod')
+
+    const version = await command(replicaConnection, { drop: 'system.version', $db: 'admin' })
+    equal(version.code, { $numberInt: '20' }, 'admin system collections cannot be dropped')
+    equal(version.errmsg, 'cannot drop system collection admin.system.version', 'the admin guard names the namespace')
+
+    const wrongName = await command(replicaConnection, { drop: 1, $db: db })
+    equal(wrongName.code, { $numberInt: '14' }, 'a non-string drop name is a type mismatch')
+    equal(wrongName.errmsg, 'collection name has invalid type int', 'the drop type text matches mongod')
+
+    // `$readPreference` is validated and then ignored; routing is the client's job.
+    const bogus = await command(replicaConnection, { find: 'log', filter: {}, $readPreference: { mode: 'bogus' }, $db: db })
+    equal(bogus.code, { $numberInt: '2' }, 'an unknown read preference mode is BadValue')
+    equal(
+        bogus.errmsg,
+        "Enumeration value 'bogus' for field 'readPreference.mode' is not a valid value.",
+        'the mode text matches mongod'
+    )
+
+    const notObject = await command(replicaConnection, { find: 'log', filter: {}, $readPreference: 'secondary', $db: db })
+    equal(notObject.code, { $numberInt: '14' }, 'a non-document read preference is a type mismatch')
+    equal(notObject.errmsg, '$readPreference has incorrect type: expected object but got string', 'the type text matches mongod')
+
+    const noMode = await command(replicaConnection, { find: 'log', filter: {}, $readPreference: {}, $db: db })
+    equal(noMode.code, { $numberInt: '40414' }, 'a read preference without mode is an IDL failure')
+    equal(noMode.errmsg, "BSON field 'readPreference.mode' is missing but a required field", 'the missing-mode text matches mongod')
+
+    const secondary = await command(replicaConnection, { insert: 'rp', documents: [{ _id: 1 }], $db: db })
+    equal(secondary.ok, { $numberDouble: '1.0' }, 'the read preference fixture is written')
+    const secondaryRead = await command(replicaConnection, { find: 'rp', filter: {}, $readPreference: { mode: 'secondary' }, $db: db })
+    equal(secondaryRead.cursor.firstBatch.length, 1, 'secondary is answered by the only member, as the raw server does')
+}
+
+// A standalone server refuses `w` and named write concerns before writing.
+{
+    const standalone = await connect(address.port)
+    const replicated = await command(standalone, { insert: 'wc', documents: [{ _id: 1 }], writeConcern: { w: 2 }, $db: 'standalone_wc' })
+    equal(replicated.code, { $numberInt: '2' }, 'a standalone rejects w > 1')
+    equal(replicated.errmsg, "cannot use 'w' > 1 when a host is not replicated", 'the standalone w text matches mongod')
+    equal((await command(standalone, { find: 'wc', filter: {}, $db: 'standalone_wc' })).cursor.firstBatch.length, 0, 'the refused write never lands')
+
+    const tagged = await command(standalone, { insert: 'wc', documents: [{ _id: 2 }], writeConcern: { w: 'tag' }, $db: 'standalone_wc' })
+    equal(tagged.code, { $numberInt: '2' }, 'a standalone rejects a named write concern')
+    equal(
+        tagged.errmsg,
+        "cannot use non-majority 'w' mode \"tag\" when a host is not a member of a replica set",
+        'the standalone tag text matches mongod'
+    )
+
+    const boolW = await command(standalone, { insert: 'wc', documents: [{ _id: 3 }], writeConcern: { w: true }, $db: 'standalone_wc' })
+    equal(boolW.code, { $numberInt: '9' }, 'a boolean w is FailedToParse')
+    equal(boolW.errmsg, 'w has to be a number, string, or object; found: bool', 'the w type text matches mongod')
+
+    const wrongConcern = await command(standalone, { insert: 'wc', documents: [{ _id: 4 }], writeConcern: 5, $db: 'standalone_wc' })
+    equal(wrongConcern.code, { $numberInt: '14' }, 'a non-document writeConcern is a type mismatch')
+    equal(wrongConcern.errmsg, '"writeConcern" had the wrong type. Expected object, found int', 'the writeConcern type text matches mongod')
+
+    const majority = await command(standalone, { insert: 'wc', documents: [{ _id: 5 }], writeConcern: { w: 'majority', j: true }, $db: 'standalone_wc' })
+    equal(majority.ok, { $numberDouble: '1.0' }, 'majority works on a standalone server')
+    standalone.socket.destroy()
+}
+
 replicaConnection.socket.destroy()
 await replicaServer.close()
 

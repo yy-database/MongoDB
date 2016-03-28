@@ -30,8 +30,16 @@ import {
     numberValue,
     replicaCommand,
     topologyHandshake,
+    writeStamps,
     type ReplicaState
 } from './replica.ts'
+import {
+    evaluateWriteConcern,
+    readPreferenceError,
+    WRITE_CONCERN_COMMANDS,
+    writeConcernReply,
+    type WriteConcernDecision
+} from './write-concern.ts'
 import { authorizeCommand, clusterGrants, databaseInScope, privilegesForRoles } from './authorization.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
@@ -62,6 +70,12 @@ export interface ServerOptions {
     ttlMonitorSleepSecs?: number
     /** Replica set name, mirroring `mongod --replSet`. */
     replSet?: string
+    /**
+     * Capped size of `local.oplog.rs` in megabytes. Only used with `replSet`;
+     * defaults to 990, which is smaller than the 5.3 GB `mongod` reserves on
+     * this host but large enough for the writes an acceptance run produces.
+     */
+    oplogSizeMB?: number
     /**
      * Require authentication before non-handshake commands, like `mongod --auth`.
      * When off (the default) credentials are still validated, but no command is
@@ -110,27 +124,56 @@ interface ServerView {
     cursorTables: Set<any>
 }
 
+/** Per-request write-concern result, filled by `dispatch` and read by `settleWrite`. */
+interface WriteSlot {
+    decision: WriteConcernDecision | null
+}
+
 const OK = { $numberDouble: '1.0' }
 
 /** Commands that advance the replica-set `optime`, as `mongod`'s writes do. */
-const WRITE_COMMANDS = new Set([
-    'insert',
-    'update',
-    'delete',
-    'findAndModify',
-    'bulkWrite',
-    'create',
-    'collMod',
-    'createIndexes',
-    'dropIndexes',
-    'dropDatabase',
-    'createUser',
-    'dropUser',
-    'commitTransaction'
-])
+const WRITE_COMMANDS = WRITE_CONCERN_COMMANDS
 
 function replyOk(body: any): boolean {
     return body?.ok === 1 || body?.ok?.$numberDouble === '1.0' || body?.ok?.$numberInt === '1'
+}
+
+/**
+ * `true` for an `OP_MSG` carrying the `moreToCome` flag: drivers set it for
+ * unacknowledged writes (`w: 0`) and never read a reply, so answering would
+ * desynchronise the next command on that socket.
+ */
+function moreToCome(inbound: InboundFrame): boolean {
+    return inbound.opcode === OP_MSG && inbound.payload.length >= 4 && (inbound.payload.readInt32LE(0) & 2) !== 0
+}
+
+/**
+ * Commits the oplog entries a write staged, advances the replica-set optime
+ * with their timestamp and rewrites the reply in `mongod`'s field order.
+ *
+ * A failed write staged entries that must never reach the oplog, so they are
+ * discarded. A write that changed nothing stages nothing, and its `opTime` is
+ * the unchanged last timestamp, which is what `mongod` reports.
+ */
+function settleWrite(
+    store: any,
+    state: ReplicaState,
+    name: unknown,
+    body: any,
+    decision: WriteConcernDecision | null
+): any {
+    if (typeof name !== 'string' || !WRITE_CONCERN_COMMANDS.has(name)) return body
+    const ok = replyOk(body)
+    if (!ok) {
+        binding.discardOplog(store)
+        return body
+    }
+    const last = binding.commitOplog(store, Date.now())
+    if (typeof last === 'string') {
+        const optime = JSON.parse(last)
+        noteWrite(state, { t: optime.t, i: optime.i })
+    }
+    return writeConcernReply(name, body, decision, writeStamps(state), ok)
 }
 
 function hostPrefix(): string {
@@ -276,7 +319,15 @@ function helloReply(command: any, supported: string[], session: Session, view: S
     return result
 }
 
-function dispatch(session: Session, supported: string[], command: any, view: ServerView, authRequired: boolean, me: string): any {
+function dispatch(
+    session: Session,
+    supported: string[],
+    command: any,
+    view: ServerView,
+    authRequired: boolean,
+    me: string,
+    write: WriteSlot
+): any {
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') throw new WireError('command document is empty')
 
@@ -293,6 +344,19 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
     if (authRequired && session.auth.users.length > 0) {
         const denied = authorizeCommand(session, command)
         if (denied) return denied
+    }
+
+    // `$readPreference` is parsed and rejected like `mongod`; routing stays the
+    // client's job, so the value is then ignored.
+    const preference = readPreferenceError(command)
+    if (preference) return document(binding.errorReply(preference.code, preference.message))
+
+    // A rejected write concern must stop the write before it happens, exactly
+    // as `mongod` refuses `w: 2` on a standalone server.
+    if (WRITE_CONCERN_COMMANDS.has(name)) {
+        const decision = evaluateWriteConcern(command, view.replica.name)
+        if (decision.error) return document(binding.errorReply(decision.error.code, decision.error.message))
+        write.decision = decision
     }
 
     if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session, view)
@@ -359,6 +423,8 @@ function dispatch(session: Session, supported: string[], command: any, view: Ser
             return document(binding.bulkWrite(session.store, text))
         case 'create':
             return document(binding.create(session.store, text))
+        case 'drop':
+            return document(binding.dropCollection(session.store, text))
         case 'collMod':
             return document(binding.collMod(session.store, text))
         case 'listCollections':
@@ -448,6 +514,13 @@ export function createServer(options: ServerOptions): MongoServer {
     mkdirSync(options.dataDir, { recursive: true })
 
     const store = new binding.MongoStore(join(options.dataDir, 'mongo.yykv'))
+    // `mongod --replSet` creates the capped oplog at startup, before the set is
+    // initiated; this server registers the namespace and its retention budget
+    // the same way, so `local.oplog.rs` is readable from the first write.
+    if (options.replSet !== undefined) {
+        const megabytes = Math.max(1, options.oplogSizeMB ?? 990)
+        binding.enableOplog(store, 'local.oplog.rs', megabytes * 1024 * 1024)
+    }
     const authRequired = options.auth === true
     const replica = createReplicaState(options.replSet ?? null)
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
@@ -529,6 +602,7 @@ export function createServer(options: ServerOptions): MongoServer {
                     inbound.opcode === OP_QUERY
                         ? document(binding.decodeOpQuery(inbound.payload))
                         : document(binding.decodeOpMsg(inbound.payload))
+                const write: WriteSlot = { decision: null }
                 const body = dispatch(
                     session,
                     supported,
@@ -542,14 +616,17 @@ export function createServer(options: ServerOptions): MongoServer {
                         cursorTables
                     },
                     authRequired,
-                    `${socket.localAddress}:${socket.localPort}`
+                    `${socket.localAddress}:${socket.localPort}`,
+                    write
                 )
                 const commandName = Object.keys(command)[0]
-                if (WRITE_COMMANDS.has(commandName) && replyOk(body)) noteWrite(replica)
+                const settled = settleWrite(store, replica, commandName, body, write.decision)
                 stats.negotiated = session.negotiated
-                reply(inbound.header.requestId, inbound, body)
+                if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, settled)
             } catch (error) {
+                binding.discardOplog(store)
                 stats.negotiated = session.negotiated
+                if (moreToCome(inbound)) return
                 const message = (error as Error).message ?? String(error)
                 try {
                     reply(inbound.header.requestId, inbound, document(binding.errorReply(2, message)))

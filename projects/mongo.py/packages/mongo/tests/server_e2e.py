@@ -10,8 +10,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pymongo import MongoClient
-from pymongo.errors import OperationFailure
+from pymongo import MongoClient, ReadPreference, WriteConcern
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[5]
@@ -114,6 +114,83 @@ def authenticated_round_trip(base_uri):
         bad.close()
 
 
+def replica_set_round_trip():
+    """A real driver against a single-member set: write concern, oplog, reads."""
+    process, base_uri = spawn(("--repl-set", "probers"))
+    try:
+        direct = MongoClient(base_uri + "/?directConnection=true", serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+        try:
+            direct["admin"].command({"replSetInitiate": {}})
+            collection = direct["acceptance"]["python_rs"]
+            collection.insert_one({"_id": 1, "v": "a"})
+
+            satisfied = collection.with_options(
+                write_concern=WriteConcern(w="majority", j=True)
+            ).insert_one({"_id": 2})
+            check(satisfied.acknowledged, "majority is satisfied by the one member")
+
+            unsupported = direct["acceptance"].command(
+                {"insert": "python_rs", "documents": [{"_id": 3}], "writeConcern": {"w": 2}}
+            )
+            check(unsupported["ok"] == 1, "an unsatisfiable w still applies the write")
+            check(unsupported["writeConcernError"]["code"] == 100, "w: 2 reports UnsatisfiableWriteConcern")
+            check(
+                unsupported["writeConcernError"]["errmsg"] == "Not enough data-bearing nodes",
+                "the unsatisfiable text matches mongod",
+            )
+
+            unknown = direct["acceptance"].command(
+                {"insert": "python_rs", "documents": [{"_id": 4}], "writeConcern": {"w": "tag"}}
+            )
+            check(unknown["ok"] == 1, "an unknown tag still applies the write")
+            check(unknown["writeConcernError"]["code"] == 79, "an unknown tag is UnknownReplWriteConcern")
+
+            unacknowledged = collection.with_options(write_concern=WriteConcern(w=0)).insert_one({"_id": 5})
+            check(unacknowledged.acknowledged is False, "w: 0 is not acknowledged by the driver")
+            check(collection.count_documents({}) == 5, "the unacknowledged write still landed")
+
+            entry = direct["local"]["oplog.rs"].find_one({"ns": "acceptance.python_rs"})
+            check(entry is not None, "the insert produced an oplog entry")
+            check(entry["op"] == "i", "the insert entry uses op i")
+            check(entry["o"] == {"_id": 1, "v": "a"}, "the insert entry stores the document")
+            check(entry["o2"] == {"_id": 1}, "the insert entry carries the id in o2")
+            check(entry["v"] == 2, "the entry carries v: 2")
+            check("h" not in entry, "8.0.9 no longer writes the h field")
+
+            dropped = direct["acceptance"].command({"drop": "python_rs"})
+            check(dropped["nIndexesWas"] == 1, "drop counts the id index")
+            check(dropped["ns"] == "acceptance.python_rs", "drop names its namespace")
+
+            try:
+                direct["local"].drop_collection("oplog.rs")
+            except OperationFailure as error:
+                check(error.details.get("code") == 5255000, "the live oplog cannot be dropped")
+            else:
+                raise AssertionError("the live oplog was dropped")
+        finally:
+            direct.close()
+
+        client = MongoClient(base_uri + "/?replicaSet=probers", serverSelectionTimeoutMS=3000, connectTimeoutMS=3000)
+        try:
+            check(client["admin"].command({"ping": 1})["ok"] == 1, "the driver reaches the set")
+            check(
+                client.topology_description.topology_type_name == "ReplicaSetWithPrimary",
+                "the driver discovers a single-member replica set",
+            )
+            try:
+                client["acceptance"]["python_rs"].with_options(
+                    read_preference=ReadPreference.SECONDARY
+                ).find_one({})
+            except ServerSelectionTimeoutError:
+                pass
+            else:
+                raise AssertionError("a secondary read must not be answered by the primary")
+        finally:
+            client.close()
+    finally:
+        stop(process)
+
+
 def main():
     process, base_uri = spawn()
     try:
@@ -126,6 +203,8 @@ def main():
         authenticated_round_trip(base_uri)
     finally:
         stop(process)
+
+    replica_set_round_trip()
 
     print("python server acceptance: %d assertions" % assertions)
 

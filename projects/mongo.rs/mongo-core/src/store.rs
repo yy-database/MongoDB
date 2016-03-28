@@ -30,8 +30,9 @@ use database::{
 };
 
 use crate::{
-    bson::{BsonDocument, BsonValue},
+    bson::{BsonDocument, BsonValue, encode_bson, parse_bson, value_to_key},
     json,
+    oplog::OplogEntry,
 };
 
 /// One user-created index. `_id_` is implicit and is never stored here.
@@ -622,6 +623,22 @@ struct SessionRegistry {
     version: u64,
 }
 
+/// Oplog persistence and reclamation state.
+///
+/// The entries themselves live in the shard under the oplog namespace, keyed by
+/// their BSON timestamp so scans return them in the order `mongod` writes them.
+/// This struct only tracks the accounting needed for capped retention, plus the
+/// entries a write command staged but has not committed yet.
+#[derive(Debug, Default)]
+struct OplogState {
+    namespace: String,
+    max_bytes: i64,
+    bytes: i64,
+    count: i64,
+    last: Option<(u32, u32)>,
+    staged: Vec<crate::oplog::OplogEntry>,
+}
+
 /// Document store backed by one `.yyds` catalog and one `.yykv` shard.
 #[derive(Debug)]
 pub struct Store {
@@ -629,6 +646,7 @@ pub struct Store {
     catalog: Mutex<CatalogState>,
     sessions: Mutex<SessionRegistry>,
     ttl: Mutex<TtlMonitorState>,
+    oplog: Mutex<Option<OplogState>>,
 }
 
 impl Store {
@@ -680,6 +698,7 @@ impl Store {
             catalog: Mutex::new(catalog),
             sessions: Mutex::new(SessionRegistry::default()),
             ttl: Mutex::new(TtlMonitorState::default()),
+            oplog: Mutex::new(None),
         })
     }
 
@@ -699,6 +718,160 @@ impl Store {
     /// and always sleeps at least one, so `0` is clamped to `1`.
     pub fn set_ttl_monitor_sleep_seconds(&self, seconds: u32) {
         self.ttl_lock().sleep_seconds = seconds.max(1);
+    }
+
+    fn oplog_lock(&self) -> MutexGuard<'_, Option<OplogState>> {
+        match self.oplog.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    /// Turns on `local.oplog.rs` persistence with capped retention.
+    ///
+    /// Existing entries are read once so accounting survives a restart: the
+    /// byte total, the entry count and the newest timestamp all come from the
+    /// stored documents. Entries above `max_bytes` are reclaimed immediately,
+    /// oldest first, exactly like a capped collection created with that size.
+    pub fn enable_oplog(&self, namespace: &str, max_bytes: i64) -> Result<(), StoreError> {
+        self.register_namespace(namespace)?;
+        let records = self.scan(namespace);
+        let mut bytes = 0_i64;
+        let mut last = None;
+        for (_, payload) in &records {
+            bytes += payload.len() as i64;
+            let Ok(document) = parse_bson(payload)
+            else {
+                continue;
+            };
+            if let Some(BsonValue::Timestamp { t, i }) = document.get("ts") {
+                last = Some((*t, *i));
+            }
+        }
+        {
+            let mut guard = self.oplog_lock();
+            *guard = Some(OplogState {
+                namespace: namespace.to_string(),
+                max_bytes,
+                bytes,
+                count: records.len() as i64,
+                last,
+                staged: Vec::new(),
+            });
+        }
+        self.evict_oplog()
+    }
+
+    /// Whether a replica-set oplog is configured.
+    pub fn oplog_enabled(&self) -> bool {
+        self.oplog_lock().is_some()
+    }
+
+    /// Namespace of the configured oplog, when persistence is enabled.
+    pub fn oplog_namespace(&self) -> Option<String> {
+        self.oplog_lock().as_ref().map(|state| state.namespace.clone())
+    }
+
+    /// Capped retention figures: namespace, `max_bytes`, count and bytes.
+    pub fn oplog_status(&self) -> Option<(String, i64, i64, i64)> {
+        let guard = self.oplog_lock();
+        let state = guard.as_ref()?;
+        Some((state.namespace.clone(), state.max_bytes, state.count, state.bytes))
+    }
+
+    /// Queues one entry for the next [`Store::commit_oplog`]. A no-op when the
+    /// oplog is not enabled.
+    pub fn stage_oplog(&self, entry: OplogEntry) {
+        let mut guard = self.oplog_lock();
+        if let Some(state) = guard.as_mut() {
+            state.staged.push(entry);
+        }
+    }
+
+    /// Drops entries a failed command staged, so they can never leak into a
+    /// later commit.
+    pub fn discard_staged_oplog(&self) {
+        let mut guard = self.oplog_lock();
+        if let Some(state) = guard.as_mut() {
+            state.staged.clear();
+        }
+    }
+
+    /// Persists every staged entry with increasing timestamps.
+    ///
+    /// `wall_millis` is the host's clock. Timestamps follow `mongod`: within one
+    /// second the increment grows by one per entry, and a new second restarts at
+    /// one. Returns the timestamp of the last entry, or `None` when nothing was
+    /// staged.
+    pub fn commit_oplog(&self, wall_millis: i64) -> Result<Option<(u32, u32)>, StoreError> {
+        let mut guard = self.oplog_lock();
+        let Some(state) = guard.as_mut()
+        else {
+            return Ok(None);
+        };
+        if state.staged.is_empty() {
+            return Ok(None);
+        }
+        let staged = std::mem::take(&mut state.staged);
+        let seconds = (wall_millis.max(0) / 1000) as u32;
+        let mut last = state.last;
+        let mut writes = Vec::with_capacity(staged.len());
+        for entry in &staged {
+            let (t, i) = match last {
+                Some((last_t, last_i)) if last_t == seconds => (seconds, last_i.saturating_add(1)),
+                _ => (seconds, 1),
+            };
+            last = Some((t, i));
+            let document = entry.render(t, i, 1, wall_millis);
+            writes.push((value_to_key(&BsonValue::Timestamp { t, i }), encode_bson(&document)));
+        }
+        let namespace = state.namespace.clone();
+        let inserted = self.insert(&namespace, &writes, true)?.inserted;
+        state.count += inserted as i64;
+        state.bytes += writes.iter().map(|(_, payload)| payload.len() as i64).sum::<i64>();
+        state.last = last;
+        drop(guard);
+        self.evict_oplog()?;
+        Ok(last)
+    }
+
+    /// Reclaims the oldest entries until the capped size fits.
+    fn evict_oplog(&self) -> Result<(), StoreError> {
+        let guard = self.oplog_lock();
+        let Some(state) = guard.as_ref()
+        else {
+            return Ok(());
+        };
+        if state.bytes <= state.max_bytes {
+            return Ok(());
+        }
+        let namespace = state.namespace.clone();
+        let max_bytes = state.max_bytes;
+        let records = self.scan(&namespace);
+        drop(guard);
+
+        let total = records.len();
+        let mut doomed = Vec::new();
+        let mut remaining = records.iter().map(|(_, payload)| payload.len() as i64).sum::<i64>();
+        for (position, (key, payload)) in records.into_iter().enumerate() {
+            // A capped collection always keeps at least its newest document, so a
+            // single oversized entry is retained rather than deleted.
+            if remaining <= max_bytes || position + 1 == total {
+                break;
+            }
+            remaining -= payload.len() as i64;
+            doomed.push(key);
+        }
+        if doomed.is_empty() {
+            return Ok(());
+        }
+        let removed = self.delete(&namespace, &doomed)? as i64;
+        let mut guard = self.oplog_lock();
+        if let Some(state) = guard.as_mut() {
+            state.bytes = remaining;
+            state.count = (state.count - removed).max(0);
+        }
+        Ok(())
     }
 
     /// Claims one monitor pass when the sleep window has elapsed.
@@ -984,6 +1157,39 @@ impl Store {
             catalog.collections.insert(namespace.to_string(), options);
         }
         catalog.flush()
+    }
+
+    /// Drops one collection: its documents, user indexes and options.
+    ///
+    /// The catalog is rewritten first (it is the authority for namespace
+    /// existence), then every record of the namespace and its `!catalog` mirror
+    /// label are removed in one durable shard commit. Returns whether the
+    /// namespace existed, so `drop` can distinguish `nIndexesWas` from an
+    /// absent collection.
+    pub fn drop_namespace(&self, namespace: &str) -> Result<bool, StoreError> {
+        let mut catalog = self.catalog_lock();
+        let existed = catalog.namespaces.remove(namespace);
+        let removed_index = catalog.indexes.iter().any(|index| index.namespace == namespace);
+        catalog.indexes.retain(|index| index.namespace != namespace);
+        let removed_options = catalog.collections.remove(namespace).is_some();
+        if existed || removed_index || removed_options {
+            catalog.flush()?;
+        }
+
+        let mut shard = self.lock();
+        let mut changes = Vec::new();
+        match shard.scan(&Namespace(namespace.to_string()), b"", None, None, 0) {
+            Ok(records) => changes.extend(records.into_iter().map(|record| ShardChange::Delete { key: record.key })),
+            Err(error) => return Err(StoreError::Shard(error.to_string())),
+        }
+        match shard.scan(&Namespace(CATALOG_NAMESPACE.to_string()), namespace.as_bytes(), None, None, 0) {
+            Ok(records) => changes.extend(records.into_iter().map(|record| ShardChange::Delete { key: record.key })),
+            Err(error) => return Err(StoreError::Shard(error.to_string())),
+        }
+        if !changes.is_empty() {
+            shard.commit_changes(changes).map_err(|error| StoreError::Shard(error.to_string()))?;
+        }
+        Ok(existed)
     }
 
     /// Creates a collection. Returns `false` when the namespace already exists.

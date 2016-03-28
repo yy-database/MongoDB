@@ -20,7 +20,7 @@ if (!artifact) {
 
 execFileSync('cargo', ['build', '--release', '-p', 'mongo-pyo3'], { cwd: crateDir, stdio: 'inherit' })
 
-const source = join(crateDir, 'target', 'release', artifact.name)
+const source = join(resolve(crateDir, process.env.CARGO_TARGET_DIR ?? 'target'), 'release', artifact.name)
 if (!existsSync(source)) {
     throw new Error(`missing build artifact ${source}`)
 }

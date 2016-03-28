@@ -215,6 +215,12 @@ pub fn create(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::create(&decode_command(&command)?, store_of(store))))
 }
 
+/// `drop` reply.
+#[napi]
+pub fn drop_collection(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::drop(&decode_command(&command)?, store_of(store))))
+}
+
 /// `collMod` reply.
 #[napi]
 pub fn coll_mod(store: &MongoStore, command: String) -> Result<String> {
@@ -302,6 +308,30 @@ pub fn ttl_monitor(store: &MongoStore, now_ms: Option<i64>) -> String {
 fn wall_clock_millis() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_millis() as i64).unwrap_or(0)
+}
+
+/// Configures the persistent replica-set oplog and its capped size.
+#[napi]
+pub fn enable_oplog(store: &MongoStore, namespace: String, max_bytes: i64) -> Result<()> {
+    store_of(store)
+        .enable_oplog(&namespace, max_bytes)
+        .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))
+}
+
+/// Persists the entries a write command staged; returns the last `{t,i}` as
+/// JSON, or `null` when nothing was staged.
+#[napi]
+pub fn commit_oplog(store: &MongoStore, wall_millis: i64) -> Result<Option<String>> {
+    let last = store_of(store)
+        .commit_oplog(wall_millis)
+        .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?;
+    Ok(last.map(|(t, i)| format!("{{\"t\":{t},\"i\":{i}}}")))
+}
+
+/// Drops entries a failed write command staged.
+#[napi]
+pub fn discard_oplog(store: &MongoStore) {
+    store_of(store).discard_staged_oplog();
 }
 
 /// Imports a `mongodump` `.bson` document stream into one namespace.

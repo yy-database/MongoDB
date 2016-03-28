@@ -23,6 +23,8 @@ pub mod commands;
 #[cfg(feature = "storage")]
 pub mod cursor;
 #[cfg(feature = "storage")]
+pub mod oplog;
+#[cfg(feature = "storage")]
 pub mod store;
 
 #[cfg(feature = "storage")]
