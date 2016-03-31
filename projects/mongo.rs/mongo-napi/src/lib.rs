@@ -267,6 +267,12 @@ pub fn db_stats(store: &MongoStore, command: String, fs_used: Option<i64>, fs_to
     Ok(command_reply(commands::db_stats(&decode_command(&command)?, store_of(store), filesystem)))
 }
 
+/// `collStats` reply, the per-collection half of `dbStats`.
+#[napi]
+pub fn coll_stats(store: &MongoStore, command: String) -> Result<String> {
+    Ok(command_reply(commands::coll_stats(&decode_command(&command)?, store_of(store))))
+}
+
 /// `createIndexes` reply.
 #[napi]
 pub fn create_indexes(store: &MongoStore, command: String) -> Result<String> {

@@ -126,19 +126,54 @@ role expansion from the same table the dispatch layer enforces, and
 `inheritedAuthenticationRestrictions` is an empty array, which is what `mongod`
 reports for the six built-ins.
 
-## `dbStats`
+## `dbStats` / `collStats`
 
 `objects`, `dataSize` and `avgObjSize` are exact: a document counts its encoded
 BSON length, which is what `mongod` sums, and `system.*` collections are
-excluded.
+excluded. `collStats` truncates `avgObjSize` to an integer exactly as
+`mongod 8.0.9` does, while `dbStats` keeps the fraction.
 
-`storageSize` is an estimate. Indexes are not stored as separate structures, so
-`indexSize` is always 0 and `storageSize` sums document key and value bytes
-instead of the `.yykv` page layout `mongod` reports. `fsUsedSize` and
-`fsTotalSize` come from the volume that holds the data directory (the host
-filesystem, not a database-private quota), and `freeStorage` is not reported.
-`scale` follows `mongod`: zero or negative answers code 2, a fractional value
-counts as 1, and a non-numeric value answers code 14.
+`storageSize` is the byte count of the `.yykv` records, keys included, not a
+page allocation.
+
+`indexSize` / `indexSizes` / `totalIndexSize` are **logical index bytes**, not
+`mongod`'s page allocation. Each index contributes the `listIndexes` definition
+plus, for every entry the index really holds, the length-prefixed key tuple and
+an 8-byte record id. `_id_` is always first, TTL and compound indexes follow the
+`createIndexes` order, and multikey values expand exactly like the write path.
+`dbStats.indexSize` is the sum of `collStats.totalIndexSize` over the database,
+so `dbStats`, `collStats` and `collection.stats()` (which sends `collStats`)
+cannot drift. An empty collection reports its definition bytes, never 0.
+
+Measured against `mongod 8.0.9` on the same fixture (standalone, WiredTiger):
+
+| case | `mongod` | here |
+|------|----------|------|
+| empty collection, `_id_` only | 4096 | 46 |
+| 1000 docs, `_id_` only | 4096 | 21046 |
+| 1000 docs, `_id_` + `name_1` | 4096 + 28672 | 21046 + 20939 |
+| 1000 docs, + compound `tag_1_name_-1` | 28672 | 30955 |
+| 1000 docs, + TTL `at_1` | 24576 | 21069 |
+| 1000 docs, `totalIndexSize` | 86016 | 94009 |
+| 100 docs, unique `email_1` | 20480 | 2350 |
+| database `indexSize` (all of the above) | 118784 | 98618 |
+
+`mongod` minimums and compression dominate small indexes, so tiny collections
+differ by one to two orders of magnitude; collections with substantive index
+data land within a few tens of percent, and the database total is within 20%.
+The number is a real accounting of the index keys this engine holds, but it is
+**not interchangeable** with `mongod`'s `indexSize` for capacity planning:
+`mongod`'s value includes WiredTiger leaf, internal and metadata pages at a
+4096-byte granularity, which `.yykv` does not allocate. Callers that need
+`mongod`-equivalent capacity must not use this field directly. Reporting 0 was
+retired because it silently understated every index.
+
+`fsUsedSize` and `fsTotalSize` come from the volume that holds the data
+directory (the host filesystem, not a database-private quota), and
+`freeStorage` is not reported. `scale` follows `mongod`: zero or negative
+answers code 2, a fractional value counts as 1, and a non-numeric value answers
+code 14. `mongod`'s engine-specific fields (`wiredTiger`, `indexDetails`,
+`indexBuilds`) have no `.yykv` equivalent and are omitted.
 
 ## `usersInfo` / `show users`
 

@@ -4864,15 +4864,61 @@ pub fn drop_database(command: &BsonDocument, store: &Store) -> Result<BsonDocume
     Ok(response)
 }
 
+/// Bytes one index entry occupies in the catalog and in the key material it
+/// owns: the `listIndexes` definition plus the length-prefixed key tuple and the
+/// 8-byte record id every entry stores next to its key.
+const INDEX_RECORD_ID_BYTES: i64 = 8;
+
+/// Key bytes one document contributes to one index.
+fn index_record_bytes(values: &[BsonValue]) -> i64 {
+    index_tuple(values).len() as i64 + INDEX_RECORD_ID_BYTES
+}
+
+/// Per-index footprint in `listIndexes` order, `_id_` first.
+///
+/// The definition bytes come from the same document `listIndexes` reports, and
+/// the entry bytes come from the key material every stored document really
+/// contributes (`index_entries` expands multikey values exactly like the write
+/// path does). The oplog is a capped collection without an `_id` index, so it
+/// reports no indexes.
+///
+/// The values are logical key bytes, not `mongod`'s WiredTiger page allocation;
+/// `KNOWN-DIFFERENCES.md` records the measured difference.
+pub fn collection_index_sizes(store: &Store, namespace: &str) -> Vec<(String, i64)> {
+    if store.oplog_namespace().as_deref() == Some(namespace) {
+        return Vec::new();
+    }
+    let specifications = store.index_specs(namespace);
+    let mut sizes: Vec<(String, i64)> = Vec::with_capacity(1 + specifications.len());
+    sizes.push(("_id_".to_string(), encode_bson(&id_index_listing()).len() as i64));
+    for specification in &specifications {
+        sizes.push((specification.name.clone(), encode_bson(&stored_index_listing(specification)).len() as i64));
+    }
+    for (_, payload) in store.scan(namespace) {
+        let Ok(document) = parse_bson(&payload)
+        else {
+            continue;
+        };
+        if let Some(identifier) = document.get("_id") {
+            sizes[0].1 += index_record_bytes(std::slice::from_ref(identifier));
+        }
+        for (position, specification) in specifications.iter().enumerate() {
+            for values in index_entries(&document, specification) {
+                sizes[position + 1].1 += index_record_bytes(&values);
+            }
+        }
+    }
+    sizes
+}
+
 /// `dbStats` reply, computed from the documents and keys the shard really holds.
 ///
 /// `objects` counts the stored documents, `dataSize` sums their encoded BSON
 /// lengths and `avgObjSize` is `dataSize / objects`; all three are exact.
 /// `storageSize` is the byte count of the records this database owns in the
-/// `.yykv` shard (key plus payload), which is the logical size of its data and
-/// not the storage engine's allocation unit. `indexSize` is zero because
-/// indexes are catalog specifications here: nothing materialises them on disk.
-/// Both deviations are recorded in `KNOWN-DIFFERENCES.md`.
+/// `.yykv` shard (key plus payload). `indexSize` sums the per-index footprints
+/// `collStats` reports (definitions plus key material), so the two commands and
+/// `collection.stats()` cannot disagree.
 ///
 /// `filesystem` carries host-measured `(used, total)` bytes for the data
 /// directory; `None` means the database does not exist, which is the case where
@@ -4886,6 +4932,7 @@ pub fn db_stats(command: &BsonDocument, store: &Store, filesystem: Option<(i64, 
     let mut objects = 0_i64;
     let mut data_size = 0_i64;
     let mut storage_size = 0_i64;
+    let mut index_size = 0_i64;
     let mut indexes = 0_i64;
     for namespace in store.namespaces() {
         let Some(collection) = namespace.strip_prefix(&prefix) else { continue };
@@ -4894,8 +4941,9 @@ pub fn db_stats(command: &BsonDocument, store: &Store, filesystem: Option<(i64, 
             continue;
         }
         collections += 1;
-        // Every collection carries the implicit `_id_` index.
-        indexes += 1 + store.index_specs(&namespace).len() as i64;
+        let sizes = collection_index_sizes(store, &namespace);
+        indexes += sizes.len() as i64;
+        index_size += sizes.iter().map(|(_, bytes)| *bytes).sum::<i64>();
         for (key, value) in store.scan(&namespace) {
             objects += 1;
             data_size += value.len() as i64;
@@ -4929,9 +4977,8 @@ pub fn db_stats(command: &BsonDocument, store: &Store, filesystem: Option<(i64, 
     );
     document.push("storageSize".to_string(), scaled(storage_size));
     document.push("indexes".to_string(), count_value(indexes));
-    // No index structure is written: the catalog holds specifications only.
-    document.push("indexSize".to_string(), scaled(0));
-    document.push("totalSize".to_string(), scaled(storage_size));
+    document.push("indexSize".to_string(), scaled(index_size));
+    document.push("totalSize".to_string(), scaled(storage_size + index_size));
     document.push("scaleFactor".to_string(), count_value(scale));
     let (used, total) = filesystem.unwrap_or((0, 0));
     document.push("fsUsedSize".to_string(), filesystem_value(used, scale));
@@ -4971,6 +5018,109 @@ fn db_stats_scale(command: &BsonDocument) -> Result<i64, CommandError> {
 /// Filesystem bytes keep `mongod`'s `long` type at factor 1 and shrink with it otherwise.
 fn filesystem_value(bytes: i64, scale: i64) -> BsonValue {
     if scale == 1 { BsonValue::Int64(bytes) } else { count_value(bytes / scale) }
+}
+
+/// `collStats`, the per-collection half of `dbStats`.
+///
+/// The counts and bytes come from the same walk `dbStats` does, and
+/// `indexSizes` comes from `collection_index_sizes`, so `dbStats.indexSize` is
+/// exactly the sum of the `totalIndexSize` values this command reports.
+///
+/// `mongod 8.0.9` reports a missing collection with zero counts and empty
+/// `indexSizes`; the storage-engine fields (`wiredTiger`, `indexDetails`,
+/// `indexBuilds`) do not exist for `.yykv` and are omitted.
+pub fn coll_stats(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
+    let scale = coll_stats_scale(command)?;
+    let collection = match command.get("collStats") {
+        Some(BsonValue::String(name)) => name.clone(),
+        Some(other) => {
+            return Err(CommandError::new(
+                14,
+                format!("collection name has invalid type {}", bson_type_name(other)),
+            ));
+        }
+        None => return Err(CommandError::new(14, "collection name has invalid type int")),
+    };
+    let namespace = format!("{}.{collection}", command.database());
+    let scaled = |bytes: i64| -> BsonValue {
+        if scale == 1 { count_value(bytes) } else { count_value(bytes / scale) }
+    };
+
+    let mut document = BsonDocument::new();
+    document.push("ns".to_string(), BsonValue::String(namespace.clone()));
+    if !store.namespace_exists(&namespace) {
+        document.push("size".to_string(), count_value(0));
+        document.push("count".to_string(), count_value(0));
+        document.push("numOrphanDocs".to_string(), count_value(0));
+        document.push("storageSize".to_string(), count_value(0));
+        document.push("totalSize".to_string(), count_value(0));
+        document.push("nindexes".to_string(), count_value(0));
+        document.push("totalIndexSize".to_string(), count_value(0));
+        document.push("indexSizes".to_string(), BsonValue::Document(BsonDocument::new()));
+        document.push("scaleFactor".to_string(), count_value(scale));
+        document.push("ok".to_string(), BsonValue::Double(1.0));
+        return Ok(document);
+    }
+
+    let mut count = 0_i64;
+    let mut data_size = 0_i64;
+    let mut storage_size = 0_i64;
+    for (key, value) in store.scan(&namespace) {
+        count += 1;
+        data_size += value.len() as i64;
+        storage_size += (key.len() + value.len()) as i64;
+    }
+    let sizes = collection_index_sizes(store, &namespace);
+    let total_index_size: i64 = sizes.iter().map(|(_, bytes)| *bytes).sum();
+
+    document.push("size".to_string(), scaled(data_size));
+    document.push("count".to_string(), count_value(count));
+    if count > 0 {
+        // `mongod 8.0.9` truncates this one to an integer, unlike `dbStats`.
+        document.push("avgObjSize".to_string(), count_value(data_size / count));
+    }
+    document.push("numOrphanDocs".to_string(), count_value(0));
+    document.push("storageSize".to_string(), scaled(storage_size));
+    document.push("freeStorageSize".to_string(), scaled(0));
+    document.push("capped".to_string(), BsonValue::Bool(false));
+    document.push("nindexes".to_string(), count_value(sizes.len() as i64));
+    document.push("totalIndexSize".to_string(), scaled(total_index_size));
+    let mut index_sizes = BsonDocument::new();
+    for (name, bytes) in &sizes {
+        index_sizes.push(name.clone(), scaled(*bytes));
+    }
+    document.push("indexSizes".to_string(), BsonValue::Document(index_sizes));
+    document.push("totalSize".to_string(), scaled(storage_size + total_index_size));
+    document.push("scaleFactor".to_string(), count_value(scale));
+    document.push("ok".to_string(), BsonValue::Double(1.0));
+    Ok(document)
+}
+
+/// `collStats` scale, with the wording `mongod 8.0.9` uses for this command.
+///
+/// A missing field means factor 1, a fractional double is ignored, a factor
+/// below 1 is `BadValue` and a non-numeric value is `TypeMismatch`.
+fn coll_stats_scale(command: &BsonDocument) -> Result<i64, CommandError> {
+    let Some(value) = command.get("scale") else { return Ok(1) };
+    let scale = match value {
+        BsonValue::Int32(number) => i64::from(*number),
+        BsonValue::Int64(number) => *number,
+        BsonValue::Double(number) => integral_value(*number).unwrap_or(1),
+        BsonValue::Decimal128(number) => number.as_str().parse::<f64>().ok().and_then(integral_value).unwrap_or(1),
+        other => {
+            return Err(CommandError::new(
+                14,
+                format!(
+                    "BSON field 'collStats.scale' is the wrong type '{}', expected types '[decimal, double, int, long']",
+                    bson_type_name(other)
+                ),
+            ));
+        }
+    };
+    if scale < 1 {
+        return Err(CommandError::new(2, format!("BSON field 'scale' value must be >= 1, actual value '{scale}'")));
+    }
+    Ok(scale)
 }
 
 /// Index options read from one `createIndexes` specification, already validated.
@@ -5702,6 +5852,48 @@ fn duplicate_message(namespace: &str, specification: &IndexSpec, values: &[BsonV
     )
 }
 
+/// `listIndexes` document for the implicit `_id_` index, which `mongod` reports
+/// first and never stores in the catalog.
+fn id_index_listing() -> BsonDocument {
+    let mut identifier = BsonDocument::new();
+    identifier.push("_id".to_string(), BsonValue::Int32(1));
+    let mut entry = BsonDocument::new();
+    entry.push("v".to_string(), BsonValue::Int32(2));
+    entry.push("key".to_string(), BsonValue::Document(identifier));
+    entry.push("name".to_string(), BsonValue::String("_id_".to_string()));
+    entry
+}
+
+/// `listIndexes` document for one stored index, options included.
+fn stored_index_listing(specification: &IndexSpec) -> BsonDocument {
+    let mut entry = BsonDocument::new();
+    entry.push("v".to_string(), BsonValue::Int32(2));
+    entry.push("key".to_string(), BsonValue::Document(specification.key.clone()));
+    entry.push("name".to_string(), BsonValue::String(specification.name.clone()));
+    if let Some(projection) = &specification.wildcard_projection {
+        entry.push("wildcardProjection".to_string(), BsonValue::Document(projection.clone()));
+    }
+    if specification.unique {
+        entry.push("unique".to_string(), BsonValue::Bool(true));
+    }
+    if specification.hidden {
+        entry.push("hidden".to_string(), BsonValue::Bool(true));
+    }
+    if let Some(sparse) = specification.sparse {
+        entry.push("sparse".to_string(), BsonValue::Bool(sparse));
+    }
+    if let Some(collation) = &specification.collation {
+        entry.push("collation".to_string(), BsonValue::Document(collation.clone()));
+    }
+    if let Some(filter) = &specification.partial_filter_expression {
+        entry.push("partialFilterExpression".to_string(), BsonValue::Document(filter.clone()));
+    }
+    if let Some(seconds) = specification.expire_after_seconds {
+        entry.push("expireAfterSeconds".to_string(), BsonValue::Int32(seconds));
+    }
+    entry
+}
+
 /// `listIndexes`: `_id_` first, then user indexes in creation order.
 pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocument, CommandError> {
     let namespace = namespace_from_command(command, "listIndexes")
@@ -5711,41 +5903,9 @@ pub fn list_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocumen
     }
 
     let mut first_batch: Vec<BsonValue> = Vec::new();
-    let mut identifier = BsonDocument::new();
-    identifier.push("_id".to_string(), BsonValue::Int32(1));
-    let mut entry = BsonDocument::new();
-    entry.push("v".to_string(), BsonValue::Int32(2));
-    entry.push("key".to_string(), BsonValue::Document(identifier));
-    entry.push("name".to_string(), BsonValue::String("_id_".to_string()));
-    first_batch.push(BsonValue::Document(entry));
-
+    first_batch.push(BsonValue::Document(id_index_listing()));
     for specification in store.index_specs(&namespace) {
-        let mut entry = BsonDocument::new();
-        entry.push("v".to_string(), BsonValue::Int32(2));
-        entry.push("key".to_string(), BsonValue::Document(specification.key.clone()));
-        entry.push("name".to_string(), BsonValue::String(specification.name.clone()));
-        if let Some(projection) = &specification.wildcard_projection {
-            entry.push("wildcardProjection".to_string(), BsonValue::Document(projection.clone()));
-        }
-        if specification.unique {
-            entry.push("unique".to_string(), BsonValue::Bool(true));
-        }
-        if specification.hidden {
-            entry.push("hidden".to_string(), BsonValue::Bool(true));
-        }
-        if let Some(sparse) = specification.sparse {
-            entry.push("sparse".to_string(), BsonValue::Bool(sparse));
-        }
-        if let Some(collation) = &specification.collation {
-            entry.push("collation".to_string(), BsonValue::Document(collation.clone()));
-        }
-        if let Some(filter) = &specification.partial_filter_expression {
-            entry.push("partialFilterExpression".to_string(), BsonValue::Document(filter.clone()));
-        }
-        if let Some(seconds) = specification.expire_after_seconds {
-            entry.push("expireAfterSeconds".to_string(), BsonValue::Int32(seconds));
-        }
-        first_batch.push(BsonValue::Document(entry));
+        first_batch.push(BsonValue::Document(stored_index_listing(&specification)));
     }
 
     let mut cursor = BsonDocument::new();

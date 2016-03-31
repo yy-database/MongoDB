@@ -437,6 +437,8 @@ function dispatch(
             return listDatabasesCommand(session, command, authRequired)
         case 'dbStats':
             return databaseStatsReply(session, command, view.dataDir)
+        case 'collStats':
+            return document(binding.collStats(session.store, text))
         case 'dropDatabase':
             return dropDatabaseCommand(session, command, view)
         case 'createIndexes':

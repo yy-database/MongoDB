@@ -781,7 +781,7 @@ async function driverLogin(user, password, db) {
     equal(Number(stats.dataSize.$numberInt ?? stats.dataSize.$numberLong), expectedSize, 'dbStats sums the encoded document bytes')
     equal(Number(stats.avgObjSize.$numberInt ?? stats.avgObjSize.$numberDouble), expectedSize / 2, 'avgObjSize divides dataSize by objects')
     equal(stats.indexes, { $numberInt: '1' }, 'dbStats counts the implicit _id index')
-    equal(stats.indexSize, { $numberInt: '0' }, 'indexSize is zero because indexes are not materialised')
+    ok(Number(stats.indexSize.$numberInt) > 0, 'indexSize counts the key material the _id index holds')
     ok(Number(stats.storageSize.$numberInt) > expectedSize, 'storageSize counts the shard records, keys included')
     ok(Number(stats.fsTotalSize.$numberLong) > 0, 'filesystem sizes come from the host volume')
 
@@ -797,6 +797,31 @@ async function driverLogin(user, password, db) {
     const invalid = await command(connection, { dbStats: 1, scale: 0, $db: 'acceptance' })
     equal(invalid.code, { $numberInt: '2' }, 'a zero scale is a bad value')
     equal(invalid.errmsg, 'Scale factor must be greater than zero', 'the scale text matches mongod')
+
+    // `collection.stats()` sends exactly `collStats`, so the three surfaces
+    // must report one set of numbers.
+    const collection = await command(connection, { collStats: 'compressed', $db: 'acceptance' })
+    equal(collection.ns, 'acceptance.compressed', 'collStats names the namespace')
+    equal(collection.count, { $numberInt: '2' }, 'collStats counts the stored documents')
+    equal(collection.size, stats.dataSize, 'collStats size matches dbStats dataSize')
+    equal(collection.nindexes, stats.indexes, 'collStats nindexes matches dbStats indexes')
+    equal(collection.totalIndexSize, stats.indexSize, 'collStats totalIndexSize matches dbStats indexSize')
+    equal(collection.indexSizes, { _id_: stats.indexSize }, 'the implicit _id index is the only index')
+    equal(collection.avgObjSize, stats.avgObjSize, 'collStats truncates avgObjSize like mongod')
+    const totalSize = Number(collection.totalSize.$numberInt ?? collection.totalSize.$numberLong)
+    const storageSize = Number(collection.storageSize.$numberInt ?? collection.storageSize.$numberLong)
+    const indexSize = Number(collection.totalIndexSize.$numberInt ?? collection.totalIndexSize.$numberLong)
+    equal(totalSize, storageSize + indexSize, 'totalSize adds the index bytes to the storage bytes')
+    const absentCollection = await command(connection, { collStats: 'no_such', $db: 'acceptance' })
+    equal(absentCollection.nindexes, { $numberInt: '0' }, 'a missing collection has no indexes')
+    equal(absentCollection.indexSizes, {}, 'a missing collection reports no index sizes')
+    equal(absentCollection.totalIndexSize, { $numberInt: '0' }, 'a missing collection reports zero index bytes')
+    const badScale = await command(connection, { collStats: 'compressed', scale: 0, $db: 'acceptance' })
+    equal(badScale.code, { $numberInt: '2' }, 'collStats rejects a zero scale')
+    equal(badScale.errmsg, "BSON field 'scale' value must be >= 1, actual value '0'", 'the collStats scale text matches mongod')
+    const badName = await command(connection, { collStats: 5, $db: 'acceptance' })
+    equal(badName.code, { $numberInt: '14' }, 'collStats rejects a non-string collection name')
+    equal(badName.errmsg, 'collection name has invalid type int', 'the collStats name text matches mongod')
     connection.socket.destroy()
 }
 

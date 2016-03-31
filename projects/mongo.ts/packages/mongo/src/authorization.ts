@@ -1028,6 +1028,8 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             return [{ action: 'listCollections', db: database, collection: '' }]
         case 'dbStats':
             return [{ action: 'dbStats', db: database, collection: '' }]
+        case 'collStats':
+            return [{ action: 'collStats', db: database, collection: typeof command.collStats === 'string' ? command.collStats : '' }]
         case 'dropDatabase':
             return [{ action: 'dropDatabase', db: database, collection: '' }]
         case 'createUser':
