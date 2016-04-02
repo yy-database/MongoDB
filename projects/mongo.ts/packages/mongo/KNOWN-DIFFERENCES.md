@@ -279,6 +279,9 @@ exactly the timestamps the acknowledgements reported. The budget itself is a
 difference: `mongod` reserves 5.3 GB on this host, while this server defaults to
 990 MB.
 
+The phased plan for what a second member, initial sync and rollback would need
+is in [REPLICATION-PLAN.md](./REPLICATION-PLAN.md). None of it is implemented.
+
 ## Write concern
 
 `w`, `wtimeout` and `j` are parsed with `mongod`'s validation rules, and the
