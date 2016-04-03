@@ -1,0 +1,50 @@
+name: Check Python
+
+# Wheel build and Python suites. TypeScript: check-typescript.yml
+# Rust workspace: check-rust.yml. Publish: publish-npm.yml on v* tags.
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  python:
+    name: mongo-pyo3 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: projects/mongo.rs
+      - name: Install tooling
+        run: |
+          pnpm install --no-frozen-lockfile
+          python -m pip install --quiet "maturin>=1.7,<2.0"
+      - name: Build pyo3 wheel
+        run: node scripts/build-pyo3.mjs
+      - name: Python suite
+        run: pnpm run test:py
+      - name: Python wire server suite
+        run: pnpm run test:server:py

@@ -1,0 +1,137 @@
+name: Publish npm
+
+# Runs only after Check Rust, Check TypeScript and Check Python all succeed
+# on this tag (re-run via workflow_call). Packages stay private until the
+# product shell flips that flag; the gate still must pass before this job.
+#
+# Trigger: git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without v prefix (workflow_dispatch only)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check-rust:
+    name: Gate rust
+    uses: ./.github/workflows/check-rust.yml
+
+  check-typescript:
+    name: Gate typescript
+    uses: ./.github/workflows/check-typescript.yml
+
+  check-python:
+    name: Gate python
+    uses: ./.github/workflows/check-python.yml
+
+  build-native:
+    name: Native ${{ matrix.short }}
+    needs: [check-rust, check-typescript, check-python]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            short: win32-x64
+          - os: ubuntu-latest
+            short: linux-x64
+          - os: macos-15-intel
+            short: darwin-x64
+          - os: macos-latest
+            short: darwin-arm64
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-20
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --no-frozen-lockfile
+      - name: Build N-API
+        run: node scripts/build-napi.mjs
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.short }}
+          path: projects/mongo.ts/platforms/mongo-${{ matrix.short }}/lib/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish packages
+    needs: [check-rust, check-typescript, check-python, build-native]
+    runs-on: ubuntu-latest
+    environment: NPM_PUBLISH
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-20
+      - run: pnpm install --no-frozen-lockfile
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: _natives
+          merge-multiple: false
+      - name: Stage native bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in _natives/native-*; do
+            short="${dir##*/native-}"
+            dest="projects/mongo.ts/platforms/mongo-${short}/lib"
+            mkdir -p "$dest"
+            cp -R "$dir"/. "$dest"/
+            ls -la "$dest"
+          done
+      - run: pnpm run build:ts
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            version="${{ inputs.version }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+              echo "expected semver tag like v1.2.3, got: $tag" >&2
+              exit 1
+            fi
+            version="${tag#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publishing version $version"
+      - name: Gate private packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          private="$(node -p "require('./projects/mongo.ts/packages/mongo/package.json').private === true")"
+          if [[ "$private" == "true" ]]; then
+            echo "packages are still private — check gates passed, npm publish skipped"
+            exit 0
+          fi
+          echo "packages are public — add a Trusted Publisher publish step before flipping private"
+          exit 1

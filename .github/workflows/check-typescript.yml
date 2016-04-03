@@ -1,0 +1,78 @@
+name: Check TypeScript
+
+# pnpm install, native binding, TypeScript suites and differential corpus.
+# Python: check-python.yml. Rust workspace: check-rust.yml.
+# Publish: publish-npm.yml on v* tags.
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+  workflow_call:
+
+jobs:
+  typescript:
+    name: pnpm packages
+    runs-on: ubuntu-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: projects/mongo.rs
+      - name: Install workspace dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Build the native binding
+        run: node scripts/build-napi.mjs
+      - name: Build TypeScript
+        run: pnpm run build:ts
+      - name: TypeScript suite
+        run: pnpm run test:ts
+      - name: Wire server suite
+        run: pnpm run test:server
+      - name: Assertion count gate
+        run: pnpm run gate:test-count
+
+  corpus:
+    name: differential corpus
+    runs-on: ubuntu-latest
+    services:
+      mongod:
+        image: mongo:8.0.9
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-20
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: projects/mongo.rs
+      - name: Install workspace dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Build the native binding
+        run: node scripts/build-napi.mjs
+      - name: Differential corpus gate
+        run: pnpm corpus --host 127.0.0.1 --port 27017 --seed 20261106 --count 291 --check
