@@ -1,0 +1,520 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "stress.insert_2000",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 500,
+                        "offset": 0
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 500,
+                        "offset": 500
+                    },
+                    "as": "r2"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 500,
+                        "offset": 1000
+                    },
+                    "as": "r3"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 500,
+                        "offset": 1500
+                    },
+                    "as": "r4"
+                },
+                {
+                    "op": "count",
+                    "collection": "items",
+                    "query": {},
+                    "as": "r5"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": 1
+                    },
+                    "limit": 1,
+                    "as": "r6"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": -1
+                    },
+                    "limit": 1,
+                    "as": "r7"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": 1
+                    },
+                    "as": "r8"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r1/n",
+                    "equals": {
+                        "$numberLong": "500"
+                    }
+                },
+                {
+                    "at": "/r2/n",
+                    "equals": {
+                        "$numberLong": "500"
+                    }
+                },
+                {
+                    "at": "/r3/n",
+                    "equals": {
+                        "$numberLong": "500"
+                    }
+                },
+                {
+                    "at": "/r4/n",
+                    "equals": {
+                        "$numberLong": "500"
+                    }
+                },
+                {
+                    "at": "/r5/n",
+                    "equals": {
+                        "$numberLong": "2000"
+                    }
+                },
+                {
+                    "at": "/r6/cursor/firstBatch/0/_id",
+                    "equals": {
+                        "$numberInt": "0"
+                    }
+                },
+                {
+                    "at": "/r7/cursor/firstBatch/0/_id",
+                    "equals": {
+                        "$numberInt": "1999"
+                    }
+                },
+                {
+                    "at": "/r8/cursor/firstBatch/#",
+                    "equals": 2000
+                },
+                {
+                    "elapsedLt": 60000
+                }
+            ]
+        },
+        {
+            "id": "stress.page_through_2000",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 2000,
+                        "offset": 0
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": 1
+                    },
+                    "batchSize": 500,
+                    "as": "r2"
+                },
+                {
+                    "op": "getMore",
+                    "id": {
+                        "$numberLong": "1"
+                    },
+                    "collection": "items",
+                    "batchSize": 500,
+                    "as": "r3"
+                },
+                {
+                    "op": "getMore",
+                    "id": {
+                        "$numberLong": "1"
+                    },
+                    "collection": "items",
+                    "batchSize": 500,
+                    "as": "r4"
+                },
+                {
+                    "op": "getMore",
+                    "id": {
+                        "$numberLong": "1"
+                    },
+                    "collection": "items",
+                    "batchSize": 500,
+                    "as": "r5"
+                },
+                {
+                    "op": "cursorsLen",
+                    "as": "r6"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r2/cursor/firstBatch/#",
+                    "equals": 500
+                },
+                {
+                    "at": "/r2/cursor/id/$numberLong",
+                    "matches": "^[1-9][0-9]*$"
+                },
+                {
+                    "at": "/r3/cursor/nextBatch/#",
+                    "equals": 500
+                },
+                {
+                    "at": "/r4/cursor/nextBatch/#",
+                    "equals": 500
+                },
+                {
+                    "at": "/r5/cursor/nextBatch/#",
+                    "equals": 500
+                },
+                {
+                    "at": "/r5/cursor/id",
+                    "equals": {
+                        "$numberLong": "0"
+                    }
+                },
+                {
+                    "at": "/r6",
+                    "equals": 0
+                },
+                {
+                    "elapsedLt": 60000
+                }
+            ]
+        },
+        {
+            "id": "stress.large_document",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "large",
+                        "bytes": 1048576,
+                        "fields": 5
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "as": "r2"
+                },
+                {
+                    "op": "count",
+                    "collection": "items",
+                    "query": {},
+                    "as": "r3"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r1/n",
+                    "equals": {
+                        "$numberLong": "1"
+                    }
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/#",
+                    "equals": 1
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/pad/#",
+                    "equals": 1048576
+                },
+                {
+                    "at": "/r3/n",
+                    "equals": {
+                        "$numberLong": "1"
+                    }
+                },
+                {
+                    "elapsedLt": 30000
+                }
+            ]
+        },
+        {
+            "id": "stress.deep_nesting",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "deep",
+                        "depth": 50
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "as": "r2"
+                },
+                {
+                    "op": "count",
+                    "collection": "items",
+                    "query": {},
+                    "as": "r3"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r1/n",
+                    "equals": {
+                        "$numberLong": "1"
+                    }
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/#",
+                    "equals": 1
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/deep/#",
+                    "equals": 1
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/deep/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/child/v",
+                    "equals": {
+                        "$numberInt": "1"
+                    }
+                },
+                {
+                    "at": "/r3/n",
+                    "equals": {
+                        "$numberLong": "1"
+                    }
+                },
+                {
+                    "elapsedLt": 30000
+                }
+            ]
+        },
+        {
+            "id": "stress.wide_document",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "wide",
+                        "fields": 200
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r1/n",
+                    "equals": {
+                        "$numberLong": "1"
+                    }
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/#",
+                    "equals": 201
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/f0199",
+                    "equals": {
+                        "$numberInt": "199"
+                    }
+                },
+                {
+                    "elapsedLt": 30000
+                }
+            ]
+        },
+        {
+            "id": "stress.sort_2000",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 2000,
+                        "offset": 0
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": -1
+                    },
+                    "limit": 1,
+                    "as": "r2"
+                },
+                {
+                    "op": "find",
+                    "collection": "items",
+                    "filter": {},
+                    "sort": {
+                        "_id": 1
+                    },
+                    "as": "r3"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r2/cursor/firstBatch/0/v",
+                    "equals": "v1999"
+                },
+                {
+                    "at": "/r2/cursor/firstBatch/0/_id",
+                    "equals": {
+                        "$numberInt": "1999"
+                    }
+                },
+                {
+                    "at": "/r3/cursor/firstBatch/#",
+                    "equals": 2000
+                },
+                {
+                    "at": "/r3/cursor/firstBatch/0/_id",
+                    "equals": {
+                        "$numberInt": "0"
+                    }
+                },
+                {
+                    "elapsedLt": 60000
+                }
+            ]
+        },
+        {
+            "id": "stress.delete_all_2000",
+            "surface": "stress",
+            "program": [
+                {
+                    "op": "open",
+                    "store": "s"
+                },
+                {
+                    "op": "insert",
+                    "collection": "items",
+                    "synthetic": {
+                        "kind": "series",
+                        "count": 2000,
+                        "offset": 0
+                    },
+                    "as": "r1"
+                },
+                {
+                    "op": "delete",
+                    "collection": "items",
+                    "deletes": [
+                        {
+                            "q": {},
+                            "limit": 0
+                        }
+                    ],
+                    "as": "r2"
+                },
+                {
+                    "op": "count",
+                    "collection": "items",
+                    "query": {},
+                    "as": "r3"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r2/n",
+                    "equals": {
+                        "$numberLong": "2000"
+                    }
+                },
+                {
+                    "at": "/r3/n",
+                    "equals": {
+                        "$numberLong": "0"
+                    }
+                },
+                {
+                    "elapsedLt": 60000
+                }
+            ]
+        }
+    ]
+}

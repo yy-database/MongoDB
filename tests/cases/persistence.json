@@ -1,0 +1,219 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "persist.reopen.keeps_documents",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "a" }, { "_id": 2, "v": "b" }], "as": "r1" },
+                { "op": "reopen", "store": "s" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/v", "equals": ["a", "b"] },
+                { "at": "/r2/cursor/ns", "equals": "app.items" }
+            ]
+        },
+        {
+            "id": "persist.reopen.keeps_collections",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1 }], "as": "r2" },
+                { "op": "reopen", "store": "s" },
+                { "op": "listCollections", "as": "r3" }
+            ],
+            "checks": [{ "at": "/r3/cursor/firstBatch/#", "equals": 2 }]
+        },
+        {
+            "id": "persist.reopen.after_delete",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "_id": 2 }, "limit": 1 }], "as": "r2" },
+                { "op": "reopen", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r3" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r4/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "persist.reopen.namespace_isolation",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "db": "app", "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "other", "as": "r2" },
+                { "op": "reopen", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "db": "app", "as": "r3" },
+                { "op": "count", "collection": "items", "query": {}, "db": "other", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "persist.reopen.after_import",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "importBson",
+                    "namespace": "app.items",
+                    "hex": "1f000000075f69640000000000000000000000000102760002000000610000",
+                    "as": "r1"
+                },
+                { "op": "reopen", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r2" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1", "equals": 1 },
+                { "at": "/r2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "a" },
+                { "at": "/r3/cursor/firstBatch/0/_id", "equals": { "$oid": "000000000000000000000001" } }
+            ]
+        },
+        {
+            "id": "persist.import.file_and_reopen",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                {
+                    "op": "importBsonFile",
+                    "namespace": "app.items",
+                    "file": "dump",
+                    "hex": "1f000000075f69640000000000000000000000000202760002000000610000",
+                    "as": "r1"
+                },
+                { "op": "reopen", "store": "s" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$oid": "000000000000000000000002" } }
+            ]
+        },
+        {
+            "id": "persist.import.replaces_existing",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$oid": "000000000000000000000001" }, "v": "first" }], "as": "r1" },
+                {
+                    "op": "importBson",
+                    "namespace": "app.items",
+                    "hex": "24000000075f696400000000000000000000000001027600070000007365636f6e640000",
+                    "as": "r2"
+                },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r3" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/v", "equals": "second" },
+                { "at": "/r4/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "persist.empty_store",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r1" },
+                { "op": "listCollections", "as": "r2" },
+                { "op": "listDatabases", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r3/databases/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "persist.file_layout",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "dataFiles", "as": "r2" },
+                { "op": "fileSize", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2", "equals": ["s.yykv"] },
+                { "at": "/r3", "gte": 1 },
+                { "at": "/r2/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "persist.file_grows_with_many_records",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "synthetic": { "kind": "series", "count": 100, "offset": 0 }, "as": "r1" },
+                { "op": "dataFiles", "as": "r2" },
+                { "op": "fileSize", "as": "r3" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "100" } },
+                { "at": "/r2/#", "equals": 1 },
+                { "at": "/r3", "gte": 100 },
+                { "at": "/r4/n", "equals": { "$numberLong": "100" } }
+            ]
+        },
+        {
+            "id": "persist.corrupt_import_then_readable",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "app.items", "hex": "05000000", "as": "r1" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r2" },
+                { "op": "listCollections", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "persist.import_bad_namespace_then_readable",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "importBson", "namespace": "items", "hex": "0500000000", "as": "r1" },
+                { "op": "listCollections", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "persist.reopen.twice",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "x" }], "as": "r1" },
+                { "op": "reopen", "store": "s" },
+                { "op": "reopen", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "1" } }]
+        }
+    ]
+}

@@ -1,0 +1,290 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "cmd.hello.shape",
+            "surface": "command",
+            "program": [{ "op": "hello", "as": "r1" }],
+            "checks": [
+                { "at": "/r1/isWritablePrimary", "equals": true },
+                { "at": "/r1/maxWireVersion", "equals": { "$numberInt": "17" } },
+                { "at": "/r1/minWireVersion", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/#", "equals": 4 }
+            ]
+        },
+        {
+            "id": "cmd.ping.shape",
+            "surface": "command",
+            "program": [{ "op": "ping", "as": "r1" }],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "cmd.error_reply.shape",
+            "surface": "command",
+            "program": [{ "op": "errorReply", "code": 11000, "message": "duplicate key", "as": "r1" }],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r1/errmsg", "equals": "duplicate key" },
+                { "at": "/r1/#", "equals": 3 }
+            ]
+        },
+        {
+            "id": "cmd.error_reply.cursor_not_found",
+            "surface": "command",
+            "program": [{ "op": "errorReply", "code": 43, "message": "cursor not found", "as": "r1" }],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "43" } }
+            ]
+        },
+        {
+            "id": "cmd.command_name.single_key",
+            "surface": "command",
+            "program": [{ "op": "commandName", "document": { "ping": 1 }, "as": "r1" }],
+            "checks": [{ "at": "/r1", "equals": "ping" }]
+        },
+        {
+            "id": "cmd.command_name.find",
+            "surface": "command",
+            "program": [{ "op": "commandName", "document": { "find": "items" }, "as": "r1" }],
+            "checks": [{ "at": "/r1", "equals": "find" }]
+        },
+        {
+            "id": "cmd.list_collections.empty",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "listCollections", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r1/cursor/ns", "equals": "app.$cmd.listCollections" },
+                { "at": "/r1/cursor/id", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "cmd.list_collections.after_insert",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1 }], "as": "r2" },
+                { "op": "listCollections", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r3/cursor/firstBatch/0/type", "equals": "collection" },
+                { "at": "/r3/cursor/firstBatch/0/options", "equals": {} }
+            ]
+        },
+        {
+            "id": "cmd.list_collections.filter_name",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1 }], "as": "r2" },
+                { "op": "listCollections", "filter": { "name": "others" }, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/name", "equals": "others" },
+                { "at": "/r3/cursor/firstBatch/0/type", "equals": "collection" },
+                { "at": "/r3/cursor/firstBatch/0/options", "equals": {} }
+            ]
+        },
+        {
+            "id": "cmd.list_collections.database_scope",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "app", "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "other", "as": "r2" },
+                { "op": "listCollections", "db": "app", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r3/cursor/firstBatch/0/name", "equals": "items" }
+            ]
+        },
+        {
+            "id": "cmd.list_databases.one",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "app", "as": "r1" },
+                { "op": "listDatabases", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/databases/#", "equals": 1 },
+                { "at": "/r2/databases/0/name", "equals": "app" },
+                { "at": "/r2/databases/0/empty", "equals": false },
+                { "at": "/r2/ok", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "cmd.list_databases.two",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "app", "as": "r1" },
+                { "op": "insert", "collection": "things", "documents": [{ "_id": 1 }], "db": "other", "as": "r2" },
+                { "op": "listDatabases", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/databases/#", "equals": 2 },
+                { "at": "/r3/databases/0/name", "equals": "app" },
+                { "at": "/r3/databases/1/name", "equals": "other" },
+                { "at": "/r3/totalSize", "equals": { "$numberLong": "0" } },
+                { "at": "/r3/totalSizeMb", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.empty_pipeline",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/cursor/ns", "equals": "app.items" }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.match",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "kind": "a" }, { "_id": 2, "kind": "b" }, { "_id": 3, "kind": "b" }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$match": { "kind": "b" } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.group_total",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": 1 } } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": null },
+                { "at": "/r2/cursor/firstBatch/0/total", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.group_two_accumulators",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": 1 }, "cnt": { "$sum": 1 } } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/0/total", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/cursor/firstBatch/0/cnt", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.group_then_project",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }], "as": "r1" },
+                {
+                    "op": "aggregate",
+                    "collection": "items",
+                    "pipeline": [{ "$group": { "_id": null, "total": { "$sum": 1 } } }, { "$project": { "_id": 0, "total": 1 } }],
+                    "as": "r2"
+                }
+            ],
+            "checks": [
+                { "at": "/r2/cursor/firstBatch/0/total", "equals": { "$numberInt": "3" } },
+                { "at": "/r2/cursor/firstBatch/0/_id", "absent": true }
+            ]
+        },
+        {
+            "id": "cmd.aggregate.group_then_match",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                {
+                    "op": "aggregate",
+                    "collection": "items",
+                    "pipeline": [{ "$group": { "_id": null, "total": { "$sum": 1 } } }, { "$match": { "total": 2 } }],
+                    "as": "r2"
+                }
+            ],
+            "checks": [{ "at": "/r2/cursor/firstBatch/#", "equals": 1 }]
+        },
+        {
+            "id": "cmd.aggregate.empty_input",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "app", "as": "r1" },
+                { "op": "aggregate", "collection": "nothing", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": 1 } } }], "as": "r2" }
+            ],
+            "checks": [{ "at": "/r2/cursor/firstBatch/#", "equals": 0 }]
+        },
+        {
+            "id": "cmd.kill_cursors.shape",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "killCursors", "collection": "items", "ids": [{ "$numberLong": "5" }, { "$numberLong": "6" }], "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/cursorsKilled/#", "equals": 0 },
+                { "at": "/r1/cursorsNotFound/#", "equals": 2 },
+                { "at": "/r1/cursorsAlive/#", "equals": 0 },
+                { "at": "/r1/cursorsUnknown/#", "equals": 0 },
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "cmd.cursors.tracked_after_find",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }, { "_id": 6 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 2, "as": "r2" },
+                { "op": "cursorsLen", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "cmd.cursors.released_after_drain",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }, { "_id": 5 }, { "_id": 6 }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 2, "as": "r2" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "batchSize": 4, "as": "r3" },
+                { "op": "cursorsLen", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/cursor/nextBatch/#", "equals": 4 },
+                { "at": "/r3/cursor/id", "equals": { "$numberLong": "0" } },
+                { "at": "/r4", "equals": 0 }
+            ]
+        }
+    ]
+}
