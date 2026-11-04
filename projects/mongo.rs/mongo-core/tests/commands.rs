@@ -305,6 +305,12 @@ fn find_batch_leaves_a_get_more_cursor() {
     get_more.push("batchSize", BsonValue::Int32(2));
     let next = commands::get_more(&get_more, &mut cursors).expect("getMore");
     assert_eq!(batch(&next, "nextBatch").len(), 2);
+    assert_eq!(cursor_id(&next), id);
+
+    // The third batch drains what is left, so the reply must close the cursor.
+    let last = commands::get_more(&get_more, &mut cursors).expect("getMore");
+    assert_eq!(batch(&last, "nextBatch").len(), 2);
+    assert_eq!(cursor_id(&last), 0);
 }
 
 #[test]

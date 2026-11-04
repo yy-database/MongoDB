@@ -336,7 +336,7 @@ pub fn get_more(command: &BsonDocument, cursors: &mut CursorStore) -> Result<Bso
     let batch_size = parse_count(command.get("batchSize"));
     let (batch, namespace) =
         cursors.get_more(cursor_id, batch_size).map_err(|id| CommandError::new(43, format!("cursor id {id} not found")))?;
-    let remaining = if cursors.len() == 0 { 0 } else { cursor_id };
+    let remaining = if cursors.contains(cursor_id) { cursor_id } else { 0 };
     Ok(cursor_reply(&namespace, "nextBatch", batch, remaining))
 }
 

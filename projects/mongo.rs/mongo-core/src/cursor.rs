@@ -59,6 +59,11 @@ impl CursorStore {
         self.cursors.is_empty()
     }
 
+    /// Whether one cursor id is still live.
+    pub fn contains(&self, id: i64) -> bool {
+        self.cursors.contains_key(&id)
+    }
+
     /// Reclaim window currently in use.
     pub fn idle_timeout(&self) -> Duration {
         self.idle_timeout
