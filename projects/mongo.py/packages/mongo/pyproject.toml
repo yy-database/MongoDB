@@ -1,0 +1,14 @@
+[project]
+name = "yydb-mongo"
+version = "0.0.0"
+description = "MongoDB protocol primitives assembled from the Rust mongo-pyo3 bindings"
+license = { text = "MPL-2.0" }
+private = true
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mongo*"]

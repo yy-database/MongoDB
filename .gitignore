@@ -29,6 +29,9 @@ projects/mongo.ts/homepage/site/
 # Python
 projects/mongo.py/packages/mongo/.venv/
 projects/mongo.py/packages/mongo/build/
+projects/mongo.py/packages/mongo/mongo/*.pyd
+projects/mongo.py/packages/mongo/mongo/*.so
+projects/mongo.py/packages/mongo/mongo/*.dll
 **/__pycache__/
 **/*.pyc
 *.egg-info/

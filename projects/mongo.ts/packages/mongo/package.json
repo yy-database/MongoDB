@@ -1,0 +1,34 @@
+{
+    "name": "@yydb/mongo",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "MongoDB wire-protocol server assembled from the Rust primitives",
+    "license": "MPL-2.0",
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "bin": {
+        "mongo-mongod": "./bin/mongod.mjs"
+    },
+    "files": [
+        "dist",
+        "bin",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "test": "node tests/run.mjs"
+    },
+    "optionalDependencies": {
+        "@yydb/mongo-darwin-arm64": "0.0.0",
+        "@yydb/mongo-darwin-x64": "0.0.0",
+        "@yydb/mongo-linux-x64": "0.0.0",
+        "@yydb/mongo-unknown-wasm32": "0.0.0",
+        "@yydb/mongo-win32-x64": "0.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.15.0",
+        "typescript": "^5.9.2"
+    }
+}
