@@ -192,7 +192,7 @@
         {
             "id": "pipe.unwind.preserve_and_index",
             "surface": "command",
-            "source": "MongoDB manual, $unwind: \"If true, if path is missing or is an empty array, $unwind omits the output field ... If the value is null, the field remains null\"; \"the index is 0 for array inputs and null for non-array inputs\" / \"When includeArrayIndex is specified and the document is preserved, the index is null\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, preserve+index matched except includeArrayIndex is returned as int64 by mongod while this repo returns int32 (see README)",
+            "source": "MongoDB manual, $unwind: \"If true, if path is missing or is an empty array, $unwind omits the output field ... If the value is null, the field remains null\"; \"the index is 0 for array inputs and null for non-array inputs\" / \"When includeArrayIndex is specified and the document is preserved, the index is null\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, matched including includeArrayIndex being int64",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": ["S", "M"] }, { "_id": 2, "sizes": [] }, { "_id": 3, "sizes": null }, { "_id": 4 }] },
@@ -200,8 +200,8 @@
             ],
             "checks": [
                 { "at": "/r/cursor/firstBatch/#", "equals": 5 },
-                { "at": "/r/cursor/firstBatch/0/i", "equals": { "$numberInt": "0" } },
-                { "at": "/r/cursor/firstBatch/1/i", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/i", "equals": { "$numberLong": "0" } },
+                { "at": "/r/cursor/firstBatch/1/i", "equals": { "$numberLong": "1" } },
                 { "at": "/r/cursor/firstBatch/2/_id", "equals": { "$numberInt": "2" } },
                 { "at": "/r/cursor/firstBatch/2/sizes", "absent": true },
                 { "at": "/r/cursor/firstBatch/2/i", "equals": null },
@@ -227,7 +227,7 @@
         {
             "id": "pipe.unwind.non_array_kept",
             "surface": "command",
-            "source": "MongoDB manual, $unwind: \"If the value is not missing, not null, and not an empty array, $unwind outputs a single document using the value as-is\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, scalar value kept as-is",
+            "source": "MongoDB manual, $unwind: \"If the value is not missing, not null, and not an empty array, $unwind outputs a single document using the value as-is\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, scalar value kept as-is and includeArrayIndex is null",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": "S" }, { "_id": 2, "sizes": null }, { "_id": 3 }] },
@@ -424,7 +424,7 @@
         {
             "id": "pipe.project.mixing_rejected",
             "surface": "error",
-            "source": "MongoDB manual, $project: \"if you exclude fields, you cannot also specify the inclusion of fields, reset the value of existing fields, or add new fields\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/)",
+            "source": "MongoDB manual, $project: \"if you exclude fields, you cannot also specify the inclusion of fields, reset the value of existing fields, or add new fields\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, real mongod rejects with code 31254 while this repo uses the generic code 2 - same semantics, different error-code granularity (see README)",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "a": 1, "b": 0 } }], "as": "r" }

@@ -296,10 +296,15 @@ impl Store {
         {
             let mut shard = self.lock();
             let mut changes = Vec::with_capacity(documents.len());
+            let mut staged: BTreeSet<Vec<u8>> = BTreeSet::new();
 
             for (index, (key_bytes, payload)) in documents.iter().enumerate() {
                 let key = Key::new(namespace, key_bytes.clone());
-                let exists = matches!(shard.get(&key), Ok(Some(_)));
+                // `staged.insert` is the same key encoding used for single-document
+                // lookups, so intra-batch duplicates share the numeric equivalence
+                // rules (int32/int64/integral double) without a second comparator.
+                let already_staged = !staged.insert(key_bytes.clone());
+                let exists = already_staged || matches!(shard.get(&key), Ok(Some(_)));
                 if exists {
                     report.duplicates.push(index);
                     if ordered {

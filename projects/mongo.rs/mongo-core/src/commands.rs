@@ -1107,7 +1107,7 @@ fn unwind_stage(documents: &[BsonDocument], body: &BsonValue) -> Result<Vec<Bson
                     let mut expanded = document.clone();
                     set_field_path(&mut expanded, &path, item);
                     if let Some(field) = &index_field {
-                        expanded.push(field.clone(), BsonValue::Int32(index as i32));
+                        expanded.push(field.clone(), BsonValue::Int64(index as i64));
                     }
                     output.push(expanded);
                 }

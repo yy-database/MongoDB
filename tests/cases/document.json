@@ -526,6 +526,88 @@
             ]
         },
         {
+            "id": "doc.id.batch_duplicate_numeric",
+            "surface": "document",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, one insert command with _id 1 and 1.0 returned n=1 and a 11000 write error at index 1, keeping the first document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tag": "int" }, { "_id": { "$numberDouble": "1.0" }, "tag": "double" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.id.batch_duplicate_long",
+            "surface": "document",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, one insert command with _id 1 and NumberLong(1) returned n=1 and a 11000 write error at index 1",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tag": "int" }, { "_id": { "$numberLong": "1" }, "tag": "long" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "doc.id.batch_duplicate_string_allowed",
+            "surface": "document",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, one insert command with numeric _id 1 and string _id \"1\" accepted both documents",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tag": "int" }, { "_id": "1", "tag": "string" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/writeErrors", "absent": true },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "doc.id.batch_duplicate_third_keeps_earlier",
+            "surface": "document",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, batch [1, 2, 1] returned n=2, a 11000 error at index 2, and kept the first two documents",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 1, "tag": "again" }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "doc.id.batch_duplicate_unordered",
+            "surface": "document",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, ordered: false batch [1, 1.0, 3] returned n=2, a 11000 error at index 1, and kept _id 1 and 3",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": { "$numberDouble": "1.0" } }, { "_id": 3 }], "ordered": false, "as": "r1" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/writeErrors/0/index", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/writeErrors/0/code", "equals": { "$numberInt": "11000" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
             "id": "doc.id.numeric_large_int_exact",
             "surface": "document",
             "source": "MongoDB manual, _id field / numeric comparison is exact for int64 vs double; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, NumberLong(9007199254740993) did not match 9007199254740992.0",
