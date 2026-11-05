@@ -210,7 +210,7 @@
         {
             "id": "op.exists.missing_vs_present",
             "surface": "query",
-            "source": "MongoDB manual, $exists / Behavior: \"$exists matches the documents that contain the field, including documents where the field value is null\" and \"$exists: false ... returns only those documents that do not contain the field\" (https://www.mongodb.com/docs/manual/reference/operator/query/exists/)",
+            "source": "MongoDB manual, $exists / Behavior: \"$exists matches the documents that contain the field, including documents where the field value is null\" and \"$exists: false ... returns only those documents that do not contain the field\" (https://www.mongodb.com/docs/manual/reference/operator/query/exists/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {a: {$exists: false}} matched",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3 }] },
@@ -226,7 +226,7 @@
         {
             "id": "op.null.matches_missing_and_explicit",
             "surface": "query",
-            "source": "MongoDB manual, Query for Null or Missing Fields / Equality Filter: \"{ item: null } query matches documents that either contain the item field whose value is null or that do not contain the item field\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "source": "MongoDB manual, Query for Null or Missing Fields / Equality Filter: \"{ item: null } query matches documents that either contain the item field whose value is null or that do not contain the item field\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {a: null} matched",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3 }] },
@@ -240,7 +240,7 @@
         {
             "id": "op.null.array_with_null",
             "surface": "query",
-            "source": "MongoDB manual, Query for Null or Missing Fields / $type: \"{ item: null } query matches ... an array that contains a null element\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "source": "MongoDB manual, Query for Null or Missing Fields / $type: \"{ item: null } query matches ... an array that contains a null element\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {a: null} on [null] matched and [] did not",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [null, 1] }, { "_id": 2, "a": [] }, { "_id": 3, "a": 1 }] },
@@ -254,7 +254,7 @@
         {
             "id": "op.ne.null_complement",
             "surface": "query",
-            "source": "MongoDB manual, Query for Null or Missing Fields / $ne: \"{ item: { $ne: null } } ... matches documents where the item field contains a value that is not null or ... an empty array\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/)",
+            "source": "MongoDB manual, Query for Null or Missing Fields / $ne: \"{ item: { $ne: null } } ... matches documents where the item field contains a value that is not null or ... an empty array\" (https://www.mongodb.com/docs/manual/tutorial/query-for-null-fields/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {a: {$ne: null}} matched",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": null }, { "_id": 2, "a": 1 }, { "_id": 3, "a": [] }, { "_id": 4 }] },
@@ -395,7 +395,7 @@
         {
             "id": "op.all.empty_matches_nothing",
             "surface": "query",
-            "source": "MongoDB manual, $all / Behavior: \"When passed an empty array, $all matches no documents\" (https://www.mongodb.com/docs/manual/reference/operator/query/all/)",
+            "source": "MongoDB manual, $all / Behavior: \"When passed an empty array, $all matches no documents\" (https://www.mongodb.com/docs/manual/reference/operator/query/all/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {tags: {$all: []}} matched",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "tags": ["a"] }, { "_id": 2, "tags": [] }, { "_id": 3 }] },
@@ -422,7 +422,7 @@
         {
             "id": "op.elem_match.operator_form",
             "surface": "query",
-            "source": "MongoDB manual, $elemMatch / \"Use the $elemMatch operator to specify multiple criteria on the elements of an array such that at least one array element satisfies all the specified criteria\" (https://www.mongodb.com/docs/manual/reference/operator/query/elemMatch/)",
+            "source": "MongoDB manual, $elemMatch / \"Use the $elemMatch operator to specify multiple criteria on the elements of an array such that at least one array element satisfies all the specified criteria\" (https://www.mongodb.com/docs/manual/reference/operator/query/elemMatch/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {result: {$elemMatch: {$gte: 80, $lt: 85}}} matched",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "result": [82, 85, 90] }, { "_id": 2, "result": [75, 88] }, { "_id": 3, "result": [82] }] },
@@ -436,7 +436,7 @@
         {
             "id": "op.elem_match.document_form",
             "surface": "query",
-            "source": "MongoDB manual, $elemMatch / \"The $elemMatch operator matches documents that contain an array field with at least one element that matches all the specified query criteria\" (document form) (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/)",
+            "source": "MongoDB manual, $elemMatch / \"The $elemMatch operator matches documents that contain an array field with at least one element that matches all the specified query criteria\" (document form) (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {instock: {$elemMatch: {qty: {$gt: 3}, warehouse: 'a'}}} matched only the same-element document",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "instock": [{ "warehouse": "A", "qty": 5 }, { "warehouse": "C", "qty": 15 }] }, { "_id": 2, "instock": [{ "warehouse": "A", "qty": 15 }] }, { "_id": 3, "instock": [{ "warehouse": "B", "qty": 5 }] }] },
@@ -450,7 +450,7 @@
         {
             "id": "op.dotarray.any_combination",
             "surface": "query",
-            "source": "MongoDB manual, Query an Array of Embedded Documents / \"the query ... does not specify ... $elemMatch, so MongoDB returns documents where any combination of elements satisfies the conditions\" (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/)",
+            "source": "MongoDB manual, Query an Array of Embedded Documents / \"the query ... does not specify ... $elemMatch, so MongoDB returns documents where any combination of elements satisfies the conditions\" (https://www.mongodb.com/docs/manual/tutorial/query-array-of-documents/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {'instock.qty': {$gt: 3}, 'instock.warehouse': 'a'} matched across different elements",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "instock": [{ "warehouse": "A", "qty": 5 }, { "warehouse": "C", "qty": 15 }] }, { "_id": 2, "instock": [{ "warehouse": "A", "qty": 15 }] }, { "_id": 3, "instock": [{ "warehouse": "B", "qty": 5 }] }] },

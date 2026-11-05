@@ -167,7 +167,13 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。本机也没有 `mongod` 或 `mongodb-memory-server`，本轮新增的查询算子与聚合管道期望值**全部来自官方手册（case 的 `source` 字段指向具体页面/小节），仅文档依据、未在真实 `mongod` 上实机验证**；无法从手册确定语义的空数组形态、累加器与表达式直接拒绝，而不是猜一个恒真/恒假。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9`（Windows 社区版 zip 解压到 `%TEMP%`，`--dbpath` 临时目录、`--port 28017`、`--bind_ip 127.0.0.1`、不注册服务）上跑了 26 个高风险探针：**22 个一致、4 个不一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`；不一致项见“能力边界”。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 939 条断言。
+
+```bash
+node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
+```
+
+其余新增期望值仍**只有官方手册依据**（case 的 `source` 字段指向具体页面/小节）：探针只挑高风险语义，没有复跑全部 case；无法从手册确定语义的空数组形态、累加器与表达式直接拒绝，而不是猜一个恒真/恒假。
 
 ## 命令行（最小面）
 
@@ -207,11 +213,15 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 
 ## 能力边界
 
-- `_id` 数值判等：按 MongoDB 官方文档“所有数值类型在比较时等价”实现（整型走精确 `i128` 比较，避免 `2^53` 以上被 double 折叠），**仅文档依据、未在真实 `mongod` 上实机验证**。
+- `_id` 数值判等：按 MongoDB 官方文档“所有数值类型在比较时等价”实现（整型走精确 `i128` 比较，避免 `2^53` 以上被 double 折叠）；已在 `mongod 8.0.9` 上对拍一致（`1` / `1.0` / `NumberLong(1)`、`9007199254740993` 与 `9007199254740992.0`、跨命令重复键）。
+- `$unwind` 的 `includeArrayIndex`：真实 `mongod 8.0.9` 返回 **int64**，本仓返回 **int32**，值一致、类型不一致（尚未改动）。
+- **同一个 `insert` 命令的批内重复 `_id`**：真实 `mongod 8.0.9` 拒绝第二条（`11000`）；本仓批内不判重，`n` 计为 2，提交时后写覆盖前写。跨命令的重复 `_id` 两侧一致。
+- `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；都拒绝，错误码不同。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
 - 聚合管道只覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$group` / `$project`；`$lookup`、`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式也回 `59`（清单见“聚合管道”一节）。
+- `$count` 空输入不输出文档、`$unwind` 默认丢弃空数组/`null`/缺失、`$sort` 不假设稳定次序、`null`/`$exists`/`$type`/`$all`/`$elemMatch`/点路径数组匹配、`$group` 的 `$avg`/`$min`/`$max`、数组升/降序取最小/最大元素：均在 `mongod 8.0.9` 上对拍一致（探针与 case 见上）。
 - `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
 - `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 

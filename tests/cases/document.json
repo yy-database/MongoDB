@@ -443,6 +443,7 @@
         {
             "id": "doc.id.numeric_int_found_by_long",
             "surface": "document",
+            "source": "MongoDB manual, _id field / numeric values of different BSON types compare by value (https://www.mongodb.com/docs/manual/reference/method/db.collection.insert/); oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find _id NumberLong(1) matched _id 1",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "one" }] },
@@ -456,6 +457,7 @@
         {
             "id": "doc.id.numeric_int_found_by_double",
             "surface": "document",
+            "source": "MongoDB manual, _id field / numeric values of different BSON types compare by value; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find _id 1.0 matched _id 1",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "one" }] },
@@ -469,6 +471,7 @@
         {
             "id": "doc.id.numeric_double_found_by_int",
             "surface": "document",
+            "source": "MongoDB manual, _id field / numeric values of different BSON types compare by value; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find _id 2 matched _id 2.0",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberDouble": "2.0" }, "v": "two" }] },
@@ -495,6 +498,7 @@
         {
             "id": "doc.id.numeric_duplicate_double",
             "surface": "document",
+            "source": "MongoDB manual, _id field / duplicate key errors on equal values; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, a second insert of _id 1.0 after _id 1 was rejected with 11000",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "first" }], "as": "r1" },
@@ -509,6 +513,7 @@
         {
             "id": "doc.id.numeric_duplicate_long",
             "surface": "document",
+            "source": "MongoDB manual, _id field / duplicate key errors on equal values; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, a second insert of NumberLong(1) after _id 1 was rejected with 11000",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
@@ -523,6 +528,7 @@
         {
             "id": "doc.id.numeric_large_int_exact",
             "surface": "document",
+            "source": "MongoDB manual, _id field / numeric comparison is exact for int64 vs double; oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, NumberLong(9007199254740993) did not match 9007199254740992.0",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberLong": "9007199254740993" } }] },
