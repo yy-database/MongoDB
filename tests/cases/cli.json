@@ -454,6 +454,28 @@
                 { "at": "/out/lines/4/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } },
                 { "at": "/out/lines/5/cursor/firstBatch/#", "equals": 0 }
             ]
+        },
+        {
+            "id": "cli.aggregate_pipeline",
+            "surface": "cli",
+            "source": "MongoDB manual, Aggregation Pipeline: stages run in order (https://www.mongodb.com/docs/manual/core/aggregation-pipeline/); the CLI composes the same aggregate primitive as napi/pyo3",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 3}, {\"_id\": 2, \"n\": 1}, {\"_id\": 3, \"n\": 2}])",
+                        "aggregate(items, [{\"$sort\": {\"n\": -1}}, {\"$limit\": 2}])",
+                        "aggregate(items, [{\"$count\": \"n\"}])"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/out/lines/2/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }] },
+                { "at": "/out/lines/3/cursor/firstBatch/0/n", "equals": { "$numberInt": "3" } }
+            ]
         }
     ]
 }

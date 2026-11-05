@@ -221,71 +221,96 @@
             "checks": [{ "at": "/r/code", "equals": { "$numberInt": "73" } }]
         },
         {
-            "id": "err.cmd.unknown_stage_limit",
+            "id": "err.cmd.unknown_stage_lookup",
             "surface": "error",
+            "source": "MongoDB manual, Aggregation Pipeline Stages (https://www.mongodb.com/docs/manual/reference/operator/aggregation-pipeline/); $lookup is a documented stage this gateway does not implement",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$limit": 1 }], "as": "r2" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$lookup": { "from": "other", "localField": "a", "foreignField": "b", "as": "joined" } }], "as": "r2" }
             ],
             "checks": [
                 { "at": "/r2/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r2/errmsg", "equals": "$limit" }
+                { "at": "/r2/errmsg", "equals": "unknown aggregation stage: $lookup (supported: $match, $sort, $limit, $skip, $count, $unwind, $group, $project)" }
             ]
         },
         {
-            "id": "err.cmd.unknown_stage_sort",
+            "id": "err.cmd.unknown_stage_out",
             "surface": "error",
+            "source": "MongoDB manual, Aggregation Pipeline Stages: $out is a documented stage that writes a collection; not implemented here (https://www.mongodb.com/docs/manual/reference/operator/aggregation/out/)",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "a": 1 } }], "as": "r1" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$out": "archive" }], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r1/errmsg", "matches": "unknown aggregation stage: \\$out" }
+            ]
         },
         {
             "id": "err.cmd.group_missing_id",
             "surface": "error",
+            "source": "MongoDB manual, $group: \"The _id field is mandatory\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "total": { "$sum": 1 } } }], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/errmsg", "equals": "$group requires an `_id` expression" }
+            ]
         },
         {
-            "id": "err.cmd.group_id_must_be_constant",
+            "id": "err.cmd.group_id_document_unsupported",
             "surface": "error",
+            "source": "MongoDB manual, $group: the group key may be an expression document (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/); document _id expressions are not implemented",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": { "k": 1 }, "total": { "$sum": 1 } } }], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r1/errmsg", "matches": "\\$group `_id` document expressions are not implemented" }
+            ]
         },
         {
-            "id": "err.cmd.group_accumulator_only_sum_one",
+            "id": "err.cmd.group_two_accumulators",
             "surface": "error",
+            "source": "MongoDB manual, $group: each output field holds one accumulator (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": "$a" } } }], "as": "r1" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": "$a", "$avg": "$a" } } }], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/errmsg", "equals": "$group field `total` must contain exactly one accumulator" }
+            ]
         },
         {
-            "id": "err.cmd.group_no_accumulator",
+            "id": "err.cmd.group_unknown_accumulator",
             "surface": "error",
+            "source": "MongoDB manual, $group / Accumulators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/); $median is documented but not implemented here",
             "program": [
                 { "op": "open", "store": "s" },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null } }], "as": "r1" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "median": { "$median": "$a" } } }], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r1/errmsg", "equals": "unknown accumulator: $median (supported: $sum, $avg, $min, $max, $push, $addToSet, $first, $last)" }
+            ]
         },
         {
             "id": "err.cmd.group_empty_stage",
             "surface": "error",
+            "source": "MongoDB manual, Aggregation Pipeline: a stage is a document with one stage operator (https://www.mongodb.com/docs/manual/core/aggregation-pipeline/)",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "aggregate", "collection": "items", "pipeline": [{}], "as": "r1" }
             ],
-            "checks": [{ "at": "/r1/code", "equals": { "$numberInt": "59" } }]
+            "checks": [
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/errmsg", "equals": "aggregate stage must contain exactly one field" }
+            ]
         },
         {
             "id": "err.cmd.pipeline_not_array",

@@ -1,0 +1,510 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "pipe.sort.multi_key",
+            "surface": "command",
+            "source": "MongoDB manual, $sort (aggregation) / Behavior: \"When sorting on multiple fields, $sort evaluates sort order from left to right\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/sort/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }, { "_id": 2, "a": 1, "b": 1 }, { "_id": 3, "a": 2, "b": 1 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "a": 1, "b": -1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }, { "$numberInt": "3" }] },
+                { "at": "/r/cursor/firstBatch/1/b", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "pipe.sort.array_lowest_ascending",
+            "surface": "command",
+            "source": "MongoDB manual, $sort (aggregation) / Arrays: \"In an ascending sort, the sort key is the lowest value in the array\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/sort/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [5, 1, 9] }, { "_id": 2, "a": [10] }, { "_id": 3, "a": [2, 8] }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "a": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "pipe.sort.array_highest_descending",
+            "surface": "command",
+            "source": "MongoDB manual, $sort (aggregation) / Arrays: \"In a descending sort, the sort key is the highest value in the array\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/sort/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": [5, 1, 9] }, { "_id": 2, "a": [10] }, { "_id": 3, "a": [2, 8] }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "a": -1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "pipe.sort.nested_field_path",
+            "surface": "command",
+            "source": "MongoDB manual, $project / Path: field paths such as \"contact.address.country\" address embedded fields (https://www.mongodb.com/docs/manual/reference/operator/aggregation/project/); $sort sorts on a field path (https://www.mongodb.com/docs/manual/reference/operator/aggregation/sort/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "m": { "x": 2 } }, { "_id": 2, "m": { "x": 1 } }, { "_id": 3, "m": { "x": 3 } }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "m.x": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }, { "$numberInt": "3" }] }
+            ]
+        },
+        {
+            "id": "pipe.skip_then_limit",
+            "surface": "command",
+            "source": "MongoDB manual, Aggregation Pipeline: \"The documents that a stage outputs are then passed to the next stage\" (https://www.mongodb.com/docs/manual/core/aggregation-pipeline/); $skip and $limit semantics (https://www.mongodb.com/docs/manual/reference/operator/aggregation/skip/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$skip": 2 }, { "$limit": 2 }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "4" }] }
+            ]
+        },
+        {
+            "id": "pipe.limit_then_skip",
+            "surface": "command",
+            "source": "MongoDB manual, Aggregation Pipeline: stages run in sequence (https://www.mongodb.com/docs/manual/core/aggregation-pipeline/); $limit (https://www.mongodb.com/docs/manual/reference/operator/aggregation/limit/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$limit": 3 }, { "$skip": 2 }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "pipe.skip_then_sort",
+            "surface": "command",
+            "source": "MongoDB manual, Aggregation Pipeline: the stage sequence decides what each stage sees (https://www.mongodb.com/docs/manual/core/aggregation-pipeline/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$skip": 1 }, { "$sort": { "n": -1 } }], "as": "after_skip" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "n": -1 } }, { "$skip": 1 }], "as": "before_skip" }
+            ],
+            "checks": [
+                { "at": "/after_skip/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "2" }] },
+                { "at": "/before_skip/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "1" }] }
+            ]
+        },
+        {
+            "id": "pipe.limit.zero_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $limit: \"$limit takes a positive integer\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/limit/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$limit": 0 }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$limit requires a positive integer" }
+            ]
+        },
+        {
+            "id": "pipe.skip.negative_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $skip: \"$skip takes a positive integer that specifies the maximum number of documents to skip\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/skip/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$skip": -1 }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$skip requires a positive integer" }
+            ]
+        },
+        {
+            "id": "pipe.count.nonempty",
+            "surface": "command",
+            "source": "MongoDB manual, $count: \"Passes a document to the next stage that contains a count of the number of documents input to the stage\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/count/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$count": "n" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/n", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "pipe.count.empty_input",
+            "surface": "command",
+            "source": "MongoDB manual, $count / Behavior: \"If the input dataset is empty, $count doesn't return a result\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/count/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$count": "n" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.count.after_empty_match",
+            "surface": "command",
+            "source": "MongoDB manual, $count: counts \"the number of documents input to the stage\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/count/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$match": { "n": 999 } }, { "$count": "n" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.count.bad_field_name",
+            "surface": "error",
+            "source": "MongoDB manual, $count: \"<string> must be a non-empty string, must not start with $ and must not contain the . character\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/count/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$count": "a.b" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "matches": "\\$count output field name" }
+            ]
+        },
+        {
+            "id": "pipe.unwind.string_form",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind / Syntax: \"When using this syntax, $unwind does not output a document if the field value is null, missing, or an empty array\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": ["S", "M"] }, { "_id": 2, "sizes": [] }, { "_id": 3, "sizes": null }, { "_id": 4 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": "$sizes" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "1" }] },
+                { "at": "/r/cursor/firstBatch/*/sizes", "equals": ["S", "M"] }
+            ]
+        },
+        {
+            "id": "pipe.unwind.preserve_and_index",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind: \"If true, if path is missing or is an empty array, $unwind omits the output field ... If the value is null, the field remains null\"; \"the index is 0 for array inputs and null for non-array inputs\" / \"When includeArrayIndex is specified and the document is preserved, the index is null\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": ["S", "M"] }, { "_id": 2, "sizes": [] }, { "_id": 3, "sizes": null }, { "_id": 4 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": { "path": "$sizes", "preserveNullAndEmptyArrays": true, "includeArrayIndex": "i" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 5 },
+                { "at": "/r/cursor/firstBatch/0/i", "equals": { "$numberInt": "0" } },
+                { "at": "/r/cursor/firstBatch/1/i", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/2/_id", "equals": { "$numberInt": "2" } },
+                { "at": "/r/cursor/firstBatch/2/sizes", "absent": true },
+                { "at": "/r/cursor/firstBatch/2/i", "equals": null },
+                { "at": "/r/cursor/firstBatch/3/sizes", "equals": null },
+                { "at": "/r/cursor/firstBatch/4/sizes", "absent": true },
+                { "at": "/r/cursor/firstBatch/4/i", "equals": null }
+            ]
+        },
+        {
+            "id": "pipe.unwind.document_form_default_drops",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind: \"If false, if path is null, missing, or an empty array, $unwind does not output a document. The default value is false\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": ["S", "M"] }, { "_id": 2, "sizes": [] }, { "_id": 3, "sizes": null }, { "_id": 4 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": { "path": "$sizes" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/sizes", "equals": ["S", "M"] }
+            ]
+        },
+        {
+            "id": "pipe.unwind.non_array_kept",
+            "surface": "command",
+            "source": "MongoDB manual, $unwind: \"If the value is not missing, not null, and not an empty array, $unwind outputs a single document using the value as-is\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "sizes": "S" }, { "_id": 2, "sizes": null }, { "_id": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": { "path": "$sizes", "preserveNullAndEmptyArrays": true, "includeArrayIndex": "i" } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r/cursor/firstBatch/0/sizes", "equals": "S" },
+                { "at": "/r/cursor/firstBatch/0/i", "equals": null },
+                { "at": "/r/cursor/firstBatch/1/sizes", "equals": null },
+                { "at": "/r/cursor/firstBatch/2/sizes", "absent": true }
+            ]
+        },
+        {
+            "id": "pipe.unwind.path_without_dollar",
+            "surface": "error",
+            "source": "MongoDB manual, $unwind / Syntax: the path is given as \"$field\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/unwind/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$unwind": "sizes" }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "$unwind path must start with `$`" }
+            ]
+        },
+        {
+            "id": "pipe.group.by_field",
+            "surface": "command",
+            "source": "MongoDB manual, $group: the group key may be an expression such as a field path (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "k": "a", "n": 1 }, { "_id": 2, "k": "b", "n": 2 }, { "_id": 3, "k": "a", "n": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": "$k", "total": { "$sum": "$n" } } }, { "$sort": { "_id": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": "a" },
+                { "at": "/r/cursor/firstBatch/0/total", "equals": { "$numberInt": "4" } },
+                { "at": "/r/cursor/firstBatch/1/_id", "equals": "b" },
+                { "at": "/r/cursor/firstBatch/1/total", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "pipe.group.id_null_all",
+            "surface": "command",
+            "source": "MongoDB manual, $group: \"If you specify an _id value of null, or any other constant value, the $group stage returns a single document that aggregates values across all of the input documents\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "count": { "$sum": 1 }, "avg": { "$avg": "$n" }, "min": { "$min": "$n" }, "max": { "$max": "$n" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": null },
+                { "at": "/r/cursor/firstBatch/0/count", "equals": { "$numberInt": "3" } },
+                { "at": "/r/cursor/firstBatch/0/avg", "equals": { "$numberDouble": "2.0" } },
+                { "at": "/r/cursor/firstBatch/0/min", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/max", "equals": { "$numberInt": "3" } }
+            ]
+        },
+        {
+            "id": "pipe.group.id_constant",
+            "surface": "command",
+            "source": "MongoDB manual, $group: \"null, or any other constant value\" aggregates across all input documents (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": "all", "count": { "$sum": 1 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": "all" },
+                { "at": "/r/cursor/firstBatch/0/count", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "pipe.group.avg_ignores_non_numeric",
+            "surface": "command",
+            "source": "MongoDB manual, $avg: \"$avg ignores non-numeric values, including missing values. If all input values are non-numeric, $avg returns null\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/avg/); $sum ignores non-numeric values (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/sum/); $min/$max ignore null and missing values but compare all other values by BSON order, so a string sorts above a number (https://www.mongodb.com/docs/manual/reference/operator/aggregation/min/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": 1 }, { "_id": 2, "v": "x" }, { "_id": 3, "v": 2 }, { "_id": 4, "v": null }, { "_id": 5 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": "$v" }, "avg": { "$avg": "$v" }, "min": { "$min": "$v" }, "max": { "$max": "$v" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/total", "equals": { "$numberInt": "3" } },
+                { "at": "/r/cursor/firstBatch/0/avg", "equals": { "$numberDouble": "1.5" } },
+                { "at": "/r/cursor/firstBatch/0/min", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/max", "equals": "x" }
+            ]
+        },
+        {
+            "id": "pipe.group.no_numeric_values",
+            "surface": "command",
+            "source": "MongoDB manual, $avg: all non-numeric returns null (https://www.mongodb.com/docs/manual/reference/operator/aggregation/avg/); $sum returns 0 when no numeric values remain (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/sum/); $min/$max return null only when all values are null or missing (https://www.mongodb.com/docs/manual/reference/operator/aggregation/min/), so a lone string is returned as-is",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "x" }, { "_id": 2, "v": null }, { "_id": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "total": { "$sum": "$v" }, "avg": { "$avg": "$v" }, "min": { "$min": "$v" }, "max": { "$max": "$v" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/total", "equals": { "$numberInt": "0" } },
+                { "at": "/r/cursor/firstBatch/0/avg", "equals": null },
+                { "at": "/r/cursor/firstBatch/0/min", "equals": "x" },
+                { "at": "/r/cursor/firstBatch/0/max", "equals": "x" }
+            ]
+        },
+        {
+            "id": "pipe.group.push_and_add_to_set",
+            "surface": "command",
+            "source": "MongoDB manual, $push: \"Returns an array of all values that result from applying an expression to each document in a group\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/push/); $addToSet: \"Returns an array of unique values ... The order of elements in the array is unspecified\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/addToSet/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "k": "a", "v": 1 }, { "_id": 2, "k": "a", "v": 1 }, { "_id": 3, "k": "a", "v": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": "$k", "pushed": { "$push": "$v" }, "unique": { "$addToSet": "$v" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/pushed", "equals": [{ "$numberInt": "1" }, { "$numberInt": "1" }, { "$numberInt": "2" }] },
+                { "at": "/r/cursor/firstBatch/0/unique/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "pipe.group.first_last_after_sort",
+            "surface": "command",
+            "source": "MongoDB manual, $push: \"To guarantee a defined order, place a $sort stage before the $group stage\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/push/); $first returns null for a missing field (https://www.mongodb.com/docs/manual/reference/operator/aggregation/first/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2, "v": 5 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$sort": { "_id": 1 } }, { "$group": { "_id": "all", "first": { "$first": "$v" }, "last": { "$last": "$v" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/first", "equals": null },
+                { "at": "/r/cursor/firstBatch/0/last", "equals": { "$numberInt": "5" } }
+            ]
+        },
+        {
+            "id": "pipe.group.empty_input",
+            "surface": "command",
+            "source": "MongoDB manual, $group: \"If there are no documents from the prior pipeline stage, the $group stage returns nothing\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": null, "count": { "$sum": 1 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "pipe.group.then_match",
+            "surface": "command",
+            "source": "MongoDB manual, $match: \"$match selects the documents ... using the same query syntax as find\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/match/) applied to a $group output (https://www.mongodb.com/docs/manual/reference/operator/aggregation/group/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "k": "a" }, { "_id": 2, "k": "a" }, { "_id": 3, "k": "b" }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$group": { "_id": "$k", "count": { "$sum": 1 } } }, { "$match": { "count": { "$gte": 2 } } }, { "$sort": { "_id": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": "a" },
+                { "at": "/r/cursor/firstBatch/0/count", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "pipe.project.inclusion",
+            "surface": "command",
+            "source": "MongoDB manual, $project: \"<field>: <1 or true> — Specifies the inclusion of a field\"; \"To exclude the _id field ... explicitly specify the suppression\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 0, "a": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/_id", "absent": true },
+                { "at": "/r/cursor/firstBatch/0/b", "absent": true }
+            ]
+        },
+        {
+            "id": "pipe.project.exclusion_with_id_exception",
+            "surface": "command",
+            "source": "MongoDB manual, $project: \"If you specify the exclusion of a field other than _id, you cannot employ any other $project specification forms\"; `_id: 0` is the documented exception (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "b": 0, "_id": 0 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/b", "absent": true },
+                { "at": "/r/cursor/firstBatch/0/_id", "absent": true }
+            ]
+        },
+        {
+            "id": "pipe.project.mixing_rejected",
+            "surface": "error",
+            "source": "MongoDB manual, $project: \"if you exclude fields, you cannot also specify the inclusion of fields, reset the value of existing fields, or add new fields\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "a": 1, "b": 0 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "cannot mix exclusion with inclusion or computed fields in $project (except _id: 0)" }
+            ]
+        },
+        {
+            "id": "pipe.project.inclusion_missing_field",
+            "surface": "command",
+            "source": "MongoDB manual, $project: \"If you specify an inclusion of a field that does not exist in the document, $project ignores that field inclusion and does not add the field\" (https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/project/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 0, "a": 1, "missing": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } },
+                { "at": "/r/cursor/firstBatch/0/missing", "absent": true }
+            ]
+        },
+        {
+            "id": "pipe.project.expression_add",
+            "surface": "command",
+            "source": "MongoDB manual, $add: \"Adds numbers together ... The arguments can be any valid expression as long as they resolve to either all numbers or to numbers and a date\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/add/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 2, "b": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 0, "total": { "$add": ["$a", "$b"] } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/total", "equals": { "$numberInt": "5" } },
+                { "at": "/r/cursor/firstBatch/0/_id", "absent": true }
+            ]
+        },
+        {
+            "id": "pipe.project.expression_concat_null",
+            "surface": "command",
+            "source": "MongoDB manual, $concat: \"If the argument resolves to a value of null or refers to a field that is missing, $concat returns null\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/concat/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "first": "Ada" }, { "_id": 2, "first": null }, { "_id": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 1, "name": { "$concat": ["$first", "!"] } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/name", "equals": "Ada!" },
+                { "at": "/r/cursor/firstBatch/1/name", "equals": null },
+                { "at": "/r/cursor/firstBatch/2/name", "equals": null }
+            ]
+        },
+        {
+            "id": "pipe.project.expression_ifnull",
+            "surface": "command",
+            "source": "MongoDB manual, $ifNull: \"The first non-null input expression value found\" ... \"$ifNull treats undefined values and missing fields as null\" (https://www.mongodb.com/docs/manual/reference/operator/aggregation/ifnull/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "nick": "x" }, { "_id": 2, "nick": null }, { "_id": 3 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "_id": 0, "name": { "$ifNull": ["$nick", "anon"] } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/name", "equals": "x" },
+                { "at": "/r/cursor/firstBatch/1/name", "equals": "anon" },
+                { "at": "/r/cursor/firstBatch/2/name", "equals": "anon" }
+            ]
+        },
+        {
+            "id": "pipe.project.unknown_expression",
+            "surface": "error",
+            "source": "MongoDB manual, Aggregation Pipeline Operators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/); $literal is documented but not implemented here",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "x": { "$literal": 1 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "unknown $project expression: $literal (supported: $add, $concat, $ifNull)" }
+            ]
+        }
+    ]
+}

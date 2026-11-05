@@ -63,7 +63,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 | `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档；`ordered: false` 继续写入后续合法文档 |
 | `find` | 已支持 | 过滤算子见“查询算子”一节；`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
 | `count` | 已支持 | 读 `query` 过滤，遵守 `skip` / `limit`；未知算子同上拒绝 |
-| `aggregate` | 部分支持 | 仅 `$match`、常量 `_id` 的 `$sum: 1` `$group`、`$project`（含/排除）；其他阶段回 `59`；`$match` 的未知算子回 `2` |
+| `aggregate` | 部分支持 | 顺序执行 `$match`、`$sort`、`$limit`、`$skip`、`$count`、`$unwind`、`$group`、`$project`，详见“聚合管道”一节；其他阶段回 `59` 并列出支持清单 |
 | `delete` | 已支持 | `deletes[].q` 与 `limit`（`0` 表示全部）；未知算子回 `2` |
 | `update` | 部分支持 | `$set` / `$unset` / `$inc`，`multi` 决定 updateMany；`upsert` 与替换式更新回 `59`，未知修饰符回 `9`，`$inc` 非数值回 `14`，改 `_id` 回 `66`，路径冲突回 `40` |
 | `getMore` / `killCursors` | 已支持 | `find` 未取走的批次保存在进程内游标表 |
@@ -99,6 +99,46 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 
 未实现（保持 `unknown operator` 报错并带算子名/操作/字段路径，不静默空结果）：`$mod`、`$where`、`$text`、`$expr`、`$geoWithin` 等其余算子；`$in`/`$nin` 中的正则字面量（解析器没有 BSON regex 值类型）；`$regex` 的 PCRE 特性（回引用、环视），Rust `regex` 只覆盖 RE2 子集；存储容纳不了的 BSON 类型（`date`/`decimal`/`timestamp` 等）在 `$type` 中合法但恒不命中，不算静默错误。数字下标点路径已实现但未纳入 case：手册 `core/dot-notation` 页面本轮未取得，不作无来源断言。
 
+### 聚合管道（aggregate）
+
+管道**逐阶段顺序执行**：每个阶段接收上一阶段的输出文档列表，产出的列表作为下一阶段输入；不是先收集所有阶段再一次性匹配。每个阶段文档必须恰好一个字段，否则回 `2`。未知阶段回 `59`，`errmsg` 点名阶段并列出支持清单（`$match, $sort, $limit, $skip, $count, $unwind, $group, $project`），即使前面的 `$match` 已经把文档过滤为空也照样拒绝。
+
+| 阶段 | 行为 | 依据 |
+|------|------|------|
+| `$match` | 与查询算子共用 `validate_filter` + `document_matches`（同“查询算子”一节） | — |
+| `$sort` | 多键从左到右比较；嵌套字段按点路径；数组升序取最小元素、降序取最大元素；缺失字段按 `null` 比较；最多 32 个键；重复键拒绝；方向只能是 `1` / `-1` | `reference/operator/aggregation/sort/` |
+| `$limit` | 取前 N 个文档，参数必须是正整数 | `.../limit/` |
+| `$skip` | 跳过前 N 个文档，参数必须是正整数；与 `$limit` 顺序敏感（`$skip` 在 `$limit` 前/后结果不同，`tests/cases/pipeline.json` 有对拍） | `.../skip/` |
+| `$count` | 输出单文档 `{<name>: n}`；**空输入不输出任何文档**；字段名不能为空、不能以 `$` 开头、不能含 `.` | `.../count/` |
+| `$unwind` | 字符串形态与 `{path, preserveNullAndEmptyArrays, includeArrayIndex}` 三种选项，见下 | `.../unwind/` |
+| `$group` | `_id` 支持 `null`（聚合全部）、常量、`"$field"`；累加器 `$sum` / `$avg` / `$min` / `$max` / `$push` / `$addToSet` / `$first` / `$last`；空输入不输出文档；输出顺序未定义 | `.../group/` 及各累加器页 |
+| `$project` | 包含/排除/表达式投影，见下 | `reference/operator/aggregation/project/` |
+
+`$unwind` 的真实行为（全部来自 `unwind` 页）：
+
+- **字符串形态** `{$unwind: "$path"}` 等价于 `{path: "$path"}` 且默认选项：`null`、缺失字段、**空数组**的文档被**丢弃**。
+- `preserveNullAndEmptyArrays: true`：缺失字段与空数组的文档保留但**不输出该路径**；值为 `null` 的文档保留且路径**仍为 `null`**。
+- `includeArrayIndex`：数组展开后给出 **0 基下标**；非数组或保留的缺失/空数组文档给出 `null`。
+- 默认（不保留）时非数组标量按单元素展开，不改值。
+
+累加器语义（来源为各累加器页面）：`$sum` 忽略非数值，全无数值时回 `0`；`$avg` 忽略非数值，全无数值时回 `null`，结果按 double；`$min` / `$max` 只忽略 `null` 与缺失，其余值按 BSON 排序比较（所以字符串会参与比较并可能成为 `min`/`max`）；`$push` 保持输入顺序；`$addToSet` 去重但顺序未定义；`$first` / `$last` 按输入顺序取，缺失字段回 `null`，要在 `$group` 前定义顺序需显式 `$sort`。
+
+`$project` 的混用规则（`project` 页）：
+
+- 排除（如 `x: 0`）**不能**与包含（`x: 1`）或表达式投影混用，混用回 `2`；`_id: 0` 是**唯一例外**，可与包含/表达式一起出现。
+- 包含模式下引用缺失字段被忽略（不报错、不输出该字段）；默认保留 `_id`，除非显式 `_id: 0`。
+- 表达式最小集：`$add`、`$concat`、`$ifNull`。`$concat` 任一参数为 `null` 或缺失即回 `null`；`$ifNull` 把缺失与 `null` 都当 `null`，回第一个非空值。
+
+聚合部分的缺口（一律结构化拒绝或明确不实现，不猜）：
+
+- `$group` 的 `_id` 为**文档/数组表达式**（如 `{$field: "$a"}`）回 `59`，未做。
+- 其他累加器（`$accumulator`、`$median`、`$percentile`、`$firstN`、`$lastN`、`$maxN`、`$minN`、`$stdDev*`、`$mergeObjects` 等）回 `59`，`errmsg` 列出已支持累加器。
+- `$project` 的其他表达式/投影算子（`$literal`、`$slice`、`$filter`、`$map`、`$cond`、`$switch` 等）回 `59`，`errmsg` 列出 `$add, $concat, $ifNull`。
+- `$push` 对**缺失字段**的处理手册未写明确结论，实现按 `null` 推入但**不纳入断言**（`refusing to guess` 记缺口）。
+- `$avg` 输出类型按手册示例取 double，属文档依据。
+- 点路径 `$unwind`（如 `"$a.b"`）已实现但**未纳入 case**，因为手册该页未给出嵌套路径的确定表述。
+- `$sort` 手册明确**不保证稳定排序**，因此 case 不比较相同键的文档次序，也不把它当作稳定排序输出。
+
 
 ## 目录
 
@@ -127,7 +167,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。本机也没有 `mongod` 或 `mongodb-memory-server`，本轮新增的查询算子期望值**全部来自官方手册（case 的 `source` 字段指向具体页面/小节），仅文档依据、未在真实 `mongod` 上实机验证**；无法从手册确定语义的空数组形态直接拒绝，而不是猜一个恒真/恒假。
+当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。本机也没有 `mongod` 或 `mongodb-memory-server`，本轮新增的查询算子与聚合管道期望值**全部来自官方手册（case 的 `source` 字段指向具体页面/小节），仅文档依据、未在真实 `mongod` 上实机验证**；无法从手册确定语义的空数组形态、累加器与表达式直接拒绝，而不是猜一个恒真/恒假。
 
 ## 命令行（最小面）
 
@@ -149,6 +189,7 @@ printf 'use app\ninsertMany(items, [{"_id":1},{"_id":2}])\nfind(items, {}).sort(
 | `updateOne` / `updateMany`(`<coll>, <filter>, <update>`) | 仅 `$set` / `$unset` / `$inc` |
 | `deleteOne` / `deleteMany`(`<coll>, <filter>`) | `limit` 1 / 0 |
 | `countDocuments(<coll>, [filter])` | 走 `count` |
+| `aggregate(<coll>, <pipeline>)` | 管道为 JSON 数组，阶段与 `aggregate` 命令完全一致（同一份 Rust 实现） |
 | `exit` / `quit` | 停止读后续行 |
 
 `find` / `updateOne` / `updateMany` / `deleteOne` / `deleteMany` / `countDocuments` 的过滤参数走同一条白名单（与上面的“查询算子”完全一致，`--help` 逐项列出）：
@@ -162,7 +203,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 
 管道模式每条命令输出一行 Extended JSON；被拒绝的输入也输出一行 `{"ok":{"$numberInt":"0"},"code":...,"errmsg":...}` 并继续处理后续行，进程退出码为 `0`。未知命令回 `59` 且 `errmsg` 含 `unknown command:` 与支持清单；参数形态错误回 `2`；命令语义错误沿用原语错误码（`14` / `66` 等）。存储固定为 `<data-dir>/mongo.yykv`，不监听端口。
 
-测试覆盖性质不同：TypeScript 侧真实启动该进程（`cli` 面 24 个 case）；Python 侧没有同一入口，用同一份 case 把命令行语法映射到 pyo3 原语后比对终态，属于**语义等价**验证，不等同于“同一个入口两侧都跑”。
+测试覆盖性质不同：TypeScript 侧真实启动该进程（`cli` 面 25 个 case）；Python 侧没有同一入口，用同一份 case 把命令行语法映射到 pyo3 原语后比对终态，属于**语义等价**验证，不等同于“同一个入口两侧都跑”。
 
 ## 能力边界
 
@@ -170,6 +211,7 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
+- 聚合管道只覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$group` / `$project`；`$lookup`、`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式也回 `59`（清单见“聚合管道”一节）。
 - `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
 - `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 
