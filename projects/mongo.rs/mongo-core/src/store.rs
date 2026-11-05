@@ -9,6 +9,13 @@
 //! The shard keeps a legacy `!catalog` mirror of the namespace labels; it is
 //! only used to seed a catalog that is missing and is merged back into the
 //! catalog on every open, so deleting `.yyds` never hides existing collections.
+//!
+//! Write order is shard first, catalog second, and the catalog is replaced
+//! atomically (synced temporary file + rename). A crash between the two writes
+//! therefore leaves only the `.yykv`, which the next open repairs by seeding a
+//! catalog from the shard's mirror. The opposite residue (catalog but no shard)
+//! is never produced by this crate, is rejected by `open`, and is repaired only
+//! through the explicit `repair_shard` entry point.
 
 use std::{
     collections::BTreeSet,
@@ -86,9 +93,26 @@ impl CatalogState {
         let schema = CatalogSchema { version: CATALOG_DOCUMENT_VERSION, document: self.document() };
         let bytes = catalog::encode(Some(&schema), None, &[ShardId(self.shard_id.clone())], None, &[])
             .map_err(|error| StoreError::Catalog(format!("cannot encode catalog `{}`: {error}", self.path.display())))?;
-        std::fs::write(&self.path, bytes)
-            .map_err(|error| StoreError::Catalog(format!("cannot write catalog `{}`: {error}", self.path.display())))
+        write_catalog(&self.path, &bytes)
     }
+}
+
+/// Writes catalog bytes through a synced temporary file and an atomic rename.
+///
+/// A partially written catalog would be rejected on the next open with no way
+/// back, so the catalog never becomes visible in a torn state.
+fn write_catalog(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+    use std::io::Write;
+
+    let temporary = path.with_extension("tmp");
+    let write = (|| -> std::io::Result<()> {
+        let mut file = std::fs::File::create(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, path)
+    })();
+    write.map_err(|error| StoreError::Catalog(format!("cannot write catalog `{}`: {error}", path.display())))
 }
 
 fn parse_namespaces(document: &str) -> Result<BTreeSet<String>, StoreError> {
@@ -127,6 +151,56 @@ fn valid_shard_id(shard_id: &str) -> bool {
     !shard_id.is_empty() && shard_id != "." && shard_id != ".." && !shard_id.contains(['/', '\\', '\0'])
 }
 
+fn catalog_path_for(requested: &Path) -> PathBuf {
+    requested.with_extension(CATALOG_SUFFIX)
+}
+
+fn shard_path_for(catalog_path: &Path, shard_id: &str) -> PathBuf {
+    let directory = catalog_path.parent().unwrap_or_else(|| Path::new("."));
+    directory.join(format!("{shard_id}.yykv"))
+}
+
+fn load_catalog(catalog_path: &Path) -> Result<CatalogState, StoreError> {
+    let bytes = std::fs::read(catalog_path)
+        .map_err(|error| StoreError::Catalog(format!("cannot read catalog `{}`: {error}", catalog_path.display())))?;
+    let (schema, _routing, shards, _contract, _owners) = catalog::decode(&bytes)
+        .map_err(|error| StoreError::Catalog(format!("catalog `{}` is invalid: {error}", catalog_path.display())))?;
+    if shards.len() != 1 {
+        return Err(StoreError::Catalog(format!(
+            "catalog `{}` registers {} shards, expected 1",
+            catalog_path.display(),
+            shards.len()
+        )));
+    }
+    let shard_id = shards[0].0.clone();
+    if !valid_shard_id(&shard_id) {
+        return Err(StoreError::Catalog(format!("catalog `{}` has an unusable shard id", catalog_path.display())));
+    }
+    let namespaces = match schema {
+        Some(schema) => {
+            if schema.version != CATALOG_DOCUMENT_VERSION {
+                return Err(StoreError::Catalog(format!(
+                    "catalog `{}` schema version {}, expected {CATALOG_DOCUMENT_VERSION}",
+                    catalog_path.display(),
+                    schema.version
+                )));
+            }
+            parse_namespaces(&schema.document)?
+        }
+        None => BTreeSet::new(),
+    };
+    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id, namespaces })
+}
+
+fn new_catalog(requested: &Path, catalog_path: &Path) -> Result<CatalogState, StoreError> {
+    let stem = requested
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .ok_or_else(|| StoreError::Catalog(format!("shard path `{}` has no file stem", requested.display())))?;
+    Ok(CatalogState { path: catalog_path.to_path_buf(), shard_id: stem.to_string(), namespaces: BTreeSet::new() })
+}
+
 /// Document store backed by one `.yyds` catalog and one `.yykv` shard.
 #[derive(Debug)]
 pub struct Store {
@@ -142,53 +216,19 @@ impl Store {
     ///   schema document, or a missing shard are structured rejections.
     /// - Catalog missing: it is created, seeded from the shard's `!catalog`
     ///   mirror, and the shard is created when absent.
+    ///
+    /// The shard is opened (and created) before the catalog is written, so a
+    /// crash in between leaves a self-healing directory instead of a catalog
+    /// that can never be opened.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let requested = path.as_ref().to_path_buf();
-        let catalog_path = requested.with_extension(CATALOG_SUFFIX);
+        let catalog_path = catalog_path_for(&requested);
         let catalog_exists = catalog_path.exists();
 
-        let mut catalog = if catalog_exists {
-            let bytes = std::fs::read(&catalog_path)
-                .map_err(|error| StoreError::Catalog(format!("cannot read catalog `{}`: {error}", catalog_path.display())))?;
-            let (schema, _routing, shards, _contract, _owners) = catalog::decode(&bytes)
-                .map_err(|error| StoreError::Catalog(format!("catalog `{}` is invalid: {error}", catalog_path.display())))?;
-            if shards.len() != 1 {
-                return Err(StoreError::Catalog(format!(
-                    "catalog `{}` registers {} shards, expected 1",
-                    catalog_path.display(),
-                    shards.len()
-                )));
-            }
-            let shard_id = shards[0].0.clone();
-            if !valid_shard_id(&shard_id) {
-                return Err(StoreError::Catalog(format!("catalog `{}` has an unusable shard id", catalog_path.display())));
-            }
-            let namespaces = match schema {
-                Some(schema) => {
-                    if schema.version != CATALOG_DOCUMENT_VERSION {
-                        return Err(StoreError::Catalog(format!(
-                            "catalog `{}` schema version {}, expected {CATALOG_DOCUMENT_VERSION}",
-                            catalog_path.display(),
-                            schema.version
-                        )));
-                    }
-                    parse_namespaces(&schema.document)?
-                }
-                None => BTreeSet::new(),
-            };
-            CatalogState { path: catalog_path.clone(), shard_id, namespaces }
-        } else {
-            let stem = requested
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .filter(|stem| !stem.is_empty())
-                .ok_or_else(|| StoreError::Catalog(format!("shard path `{}` has no file stem", requested.display())))?;
-            CatalogState { path: catalog_path.clone(), shard_id: stem.to_string(), namespaces: BTreeSet::new() }
-        };
+        let mut catalog = if catalog_exists { load_catalog(&catalog_path)? } else { new_catalog(&requested, &catalog_path)? };
 
         let shard_path = if catalog_exists {
-            let directory = catalog_path.parent().unwrap_or_else(|| Path::new("."));
-            directory.join(format!("{}.yykv", catalog.shard_id))
+            shard_path_for(&catalog_path, &catalog.shard_id)
         } else {
             requested
         };
@@ -359,5 +399,45 @@ impl Store {
     /// Namespaces registered in the `.yyds` catalog, sorted.
     pub fn namespaces(&self) -> Vec<String> {
         self.catalog_lock().namespaces.iter().cloned().collect()
+    }
+
+    /// Creates the shard named by the catalog when only the catalog survived.
+    ///
+    /// Deliberately narrow: it never invents a catalog, never overwrites an
+    /// existing shard (even an unreadable one), never touches the catalog
+    /// bytes, and is a no-op on a healthy directory. `open` never calls this;
+    /// the host has to ask for it explicitly.
+    pub fn repair_shard(path: impl AsRef<Path>) -> Result<RepairReport, StoreError> {
+        let requested = path.as_ref().to_path_buf();
+        let catalog_path = catalog_path_for(&requested);
+        if !catalog_path.exists() {
+            return Err(StoreError::Catalog(format!(
+                "catalog `{}` is missing; repair only rebuilds a shard named by an existing catalog",
+                catalog_path.display()
+            )));
+        }
+        let catalog = load_catalog(&catalog_path)?;
+        let shard_path = shard_path_for(&catalog_path, &catalog.shard_id);
+        if shard_path.exists() {
+            return Ok(RepairReport { created: false, shard: catalog.shard_id });
+        }
+        FileShard::open(&shard_path).map_err(|error| StoreError::Shard(error.to_string()))?;
+        Ok(RepairReport { created: true, shard: catalog.shard_id })
+    }
+}
+
+/// Outcome of an explicit [`Store::repair_shard`].
+#[derive(Debug)]
+pub struct RepairReport {
+    /// Whether an empty shard was written.
+    pub created: bool,
+    /// Shard id named by the catalog.
+    pub shard: String,
+}
+
+impl RepairReport {
+    /// JSON description exchanged with the language bindings.
+    pub fn to_json(&self) -> String {
+        serde_json::json!({ "created": self.created, "shard": self.shard }).to_string()
     }
 }
