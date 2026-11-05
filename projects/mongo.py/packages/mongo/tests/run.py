@@ -120,6 +120,7 @@ CLI_NAMES = [
     "deleteOne",
     "deleteMany",
     "countDocuments",
+    "aggregate",
     "exit",
     "quit",
 ]
@@ -355,6 +356,14 @@ class CliSession:
             query = cli_document_arg(args, 1, name, "filter") if len(args) > 1 else {}
             command = {"count": collection, "query": query, "$db": database}
             return json.loads(mongo.count(self.store, json.dumps(command)))
+        if name == "aggregate":
+            cli_no_chain(call)
+            cli_count(args, 2, 2, name)
+            collection = cli_collection(args, 0, name)
+            if not isinstance(args[1], list):
+                raise CliError(2, "aggregate expects a pipeline array as argument 2")
+            command = {"aggregate": collection, "pipeline": args[1], "cursor": {}, "$db": database}
+            return json.loads(mongo.aggregate(self.store, json.dumps(command)))
         raise CliError(59, cli_unknown(name))
 
     def find(self, call):

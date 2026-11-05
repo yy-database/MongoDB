@@ -376,15 +376,17 @@ pub fn find(command: &BsonDocument, store: &Store, cursors: &mut CursorStore) ->
 
     let start = skip.min(documents.len());
     let end = if limit > 0 { (start + limit).min(documents.len()) } else { documents.len() };
-    let window: Vec<BsonValue> = documents
-        .into_iter()
-        .skip(start)
-        .take(end - start)
-        .map(|document| match &projection {
-            Some(projection) => BsonValue::Document(project_document(&document, projection)),
-            None => BsonValue::Document(document),
-        })
-        .collect();
+    let mut window: Vec<BsonValue> = Vec::new();
+    for document in documents.into_iter().skip(start).take(end - start) {
+        match &projection {
+            Some(projection) => {
+                if let Some(projected) = project_stage(&[document], projection)?.into_iter().next() {
+                    window.push(BsonValue::Document(projected));
+                }
+            }
+            None => window.push(BsonValue::Document(document)),
+        }
+    }
 
     let (cursor_id, first_batch) = cursors.open(&namespace, window, batch_size);
     Ok(cursor_reply(&namespace, "firstBatch", first_batch, cursor_id))
@@ -430,17 +432,22 @@ pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, 
     for stage in stages {
         let BsonValue::Document(stage_document) = stage
         else {
-            return Err(CommandError::unsupported("aggregate stage must be a document"));
+            return Err(CommandError::new(2, "aggregate stage must be a document"));
         };
+        if stage_document.fields.len() != 1 {
+            return Err(CommandError::new(2, "aggregate stage must contain exactly one field"));
+        }
         let Some((name, body)) = stage_document.fields.first()
         else {
-            return Err(CommandError::unsupported("aggregate stage is empty"));
+            return Err(CommandError::new(2, "aggregate stage is empty"));
         };
+        // Each stage consumes the previous stage's output: the pipeline is applied
+        // in order, never collected and matched in one pass.
         match name.as_str() {
             "$match" => {
                 let BsonValue::Document(filter) = body
                 else {
-                    return Err(CommandError::unsupported("$match requires a document"));
+                    return Err(CommandError::new(2, "$match requires a document"));
                 };
                 validate_filter(filter, "aggregate $match")?;
                 let mut kept = Vec::new();
@@ -451,24 +458,53 @@ pub fn aggregate(command: &BsonDocument, store: &Store) -> Result<BsonDocument, 
                 }
                 documents = kept;
             }
+            "$sort" => {
+                let BsonValue::Document(specification) = body
+                else {
+                    return Err(CommandError::new(2, "$sort requires a document"));
+                };
+                let sort = parse_sort_stage(specification)?;
+                sort_documents(&mut documents, &sort);
+            }
+            "$limit" => {
+                let limit = positive_stage_integer("$limit", body)?;
+                documents.truncate(limit);
+            }
+            "$skip" => {
+                let skip = positive_stage_integer("$skip", body)?;
+                documents = documents.into_iter().skip(skip).collect();
+            }
+            "$count" => {
+                let BsonValue::String(name) = body
+                else {
+                    return Err(CommandError::new(2, "$count requires a field name string"));
+                };
+                validate_count_name(name)?;
+                // "If the input dataset is empty, $count doesn't return a result."
+                if documents.is_empty() {
+                    documents.clear();
+                } else {
+                    let mut counted = BsonDocument::new();
+                    counted.push(name.clone(), count_value(documents.len() as i64));
+                    documents = vec![counted];
+                }
+            }
+            "$unwind" => documents = unwind_stage(&documents, body)?,
             "$group" => {
                 let BsonValue::Document(specification) = body
                 else {
-                    return Err(CommandError::unsupported("$group requires a document"));
+                    return Err(CommandError::new(2, "$group requires a document"));
                 };
-                match group_documents(&documents, specification) {
-                    Ok(grouped) => documents = grouped,
-                    Err(message) => return Err(CommandError::unsupported(&message)),
-                }
+                documents = group_stage(&documents, specification)?;
             }
             "$project" => {
                 let BsonValue::Document(specification) = body
                 else {
-                    return Err(CommandError::unsupported("$project requires a document"));
+                    return Err(CommandError::new(2, "$project requires a document"));
                 };
-                documents = documents.iter().map(|candidate| project_document(candidate, specification)).collect();
+                documents = project_stage(&documents, specification)?;
             }
-            other => return Err(CommandError::unsupported(other)),
+            other => return Err(unsupported_stage(other)),
         }
     }
 
@@ -956,62 +992,539 @@ fn single_id_lookup(filter: &BsonDocument) -> Option<&BsonValue> {
     }
 }
 
-fn group_documents(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, String> {
-    let Some(identifier) = specification.get("_id")
-    else {
-        return Err("$group requires an `_id` expression".to_string());
-    };
-    if matches!(identifier, BsonValue::Document(_) | BsonValue::Array(_)) {
-        return Err("$group only supports a constant `_id`".to_string());
-    }
+/// Thrown for a pipeline stage this gateway does not implement, naming both the
+/// stage and the supported surface.
+fn unsupported_stage(stage: &str) -> CommandError {
+    CommandError::new(
+        59,
+        format!(
+            "unknown aggregation stage: {stage} (supported: $match, $sort, $limit, $skip, $count, $unwind, $group, $project)"
+        ),
+    )
+}
 
-    let mut counters: Vec<String> = Vec::new();
-    for (field, accumulator) in specification.fields.iter().filter(|(field, _)| field != "_id") {
-        let BsonValue::Document(accumulator) = accumulator
-        else {
-            return Err(format!("$group field `{field}` is not a `$sum` accumulator"));
-        };
-        match accumulator.get("$sum") {
-            Some(BsonValue::Int32(1) | BsonValue::Int64(1)) => counters.push(field.clone()),
-            Some(_) => return Err(format!("$group field `{field}` only supports `$sum: 1`")),
-            None => return Err(format!("$group field `{field}` is not a `$sum` accumulator")),
+/// `$limit` / `$skip` take a positive integer.
+fn positive_stage_integer(stage: &str, value: &BsonValue) -> Result<usize, CommandError> {
+    match int_value(value) {
+        Some(number) if number > 0 => Ok(number as usize),
+        _ => Err(CommandError::new(2, format!("{stage} requires a positive integer"))),
+    }
+}
+
+/// `$count` output field name: non-empty, no leading `$`, no `.`.
+fn validate_count_name(name: &str) -> Result<(), CommandError> {
+    if name.is_empty() || name.starts_with('$') || name.contains('.') {
+        return Err(CommandError::new(
+            2,
+            format!("$count output field name `{name}` must be non-empty, must not start with `$` and must not contain `.`"),
+        ));
+    }
+    Ok(())
+}
+
+/// `$sort` accepts 1/-1 directions, rejects duplicates and caps the key count at 32.
+fn parse_sort_stage(specification: &BsonDocument) -> Result<Vec<(String, i32)>, CommandError> {
+    if specification.fields.is_empty() {
+        return Err(CommandError::new(2, "$sort requires at least one field"));
+    }
+    if specification.fields.len() > 32 {
+        return Err(CommandError::new(2, "$sort accepts at most 32 keys"));
+    }
+    let mut sort: Vec<(String, i32)> = Vec::new();
+    for (field, direction) in specification.fields.iter() {
+        if sort.iter().any(|(existing, _)| existing == field) {
+            return Err(CommandError::new(2, format!("$sort field `{field}` appears more than once")));
+        }
+        match int_value(direction) {
+            Some(value) if value == 1 || value == -1 => sort.push((field.clone(), value as i32)),
+            _ => return Err(CommandError::new(2, format!("$sort direction for `{field}` must be 1 or -1"))),
         }
     }
-    if counters.is_empty() {
-        return Err("$group requires at least one `$sum` accumulator".to_string());
+    Ok(sort)
+}
+
+/// Sorts one stage input. Array fields use the lowest element ascending and the
+/// highest element descending, as the `$sort` page specifies.
+fn sort_key(document: &BsonDocument, path: &str, direction: i32) -> BsonValue {
+    let value = lookup_field(document, path);
+    let Some(value) = value else {
+        // Missing fields compare like null; the manual states two documents that
+        // both lack the field sort on "the same" value.
+        return BsonValue::Null;
+    };
+    match value {
+        BsonValue::Array(items) if !items.is_empty() => {
+            let mut keys = items.iter();
+            let mut chosen = keys.next().unwrap().clone();
+            for item in keys {
+                let ordering = compare_values(&chosen, item);
+                if (direction >= 0 && ordering == Ordering::Greater) || (direction < 0 && ordering == Ordering::Less) {
+                    chosen = item.clone();
+                }
+            }
+            chosen
+        }
+        other => other.clone(),
     }
+}
+
+/// `$unwind`: string form drops null/missing/empty-array documents; the document
+/// form adds `preserveNullAndEmptyArrays` and `includeArrayIndex`.
+fn unwind_stage(documents: &[BsonDocument], body: &BsonValue) -> Result<Vec<BsonDocument>, CommandError> {
+    let (path, preserve, index_field) = match body {
+        BsonValue::String(path) => (unwind_path(path)?, false, None),
+        BsonValue::Document(specification) => {
+            let BsonValue::String(path) = specification.get("path").unwrap_or(&BsonValue::Null) else {
+                return Err(CommandError::new(2, "$unwind requires a `path` string"));
+            };
+            let path = unwind_path(path)?;
+            let preserve = match specification.get("preserveNullAndEmptyArrays") {
+                None => false,
+                Some(BsonValue::Bool(flag)) => *flag,
+                Some(_) => return Err(CommandError::new(2, "$unwind `preserveNullAndEmptyArrays` must be a boolean")),
+            };
+            let index_field = match specification.get("includeArrayIndex") {
+                None => None,
+                Some(BsonValue::String(field)) if !field.is_empty() && !field.starts_with('$') => Some(field.clone()),
+                Some(_) => {
+                    return Err(CommandError::new(
+                        2,
+                        "$unwind `includeArrayIndex` must be a non-empty string that does not start with `$`",
+                    ));
+                }
+            };
+            (path, preserve, index_field)
+        }
+        _ => return Err(CommandError::new(2, "$unwind requires a path string or a document")),
+    };
+
+    let mut output = Vec::new();
+    for document in documents {
+        let value = lookup_field(document, &path).cloned();
+        match value {
+            Some(BsonValue::Array(items)) if !items.is_empty() => {
+                for (index, item) in items.into_iter().enumerate() {
+                    let mut expanded = document.clone();
+                    set_field_path(&mut expanded, &path, item);
+                    if let Some(field) = &index_field {
+                        expanded.push(field.clone(), BsonValue::Int32(index as i32));
+                    }
+                    output.push(expanded);
+                }
+            }
+            Some(BsonValue::Array(_)) => {
+                // Empty array: preserved only with the flag, and then the path is omitted.
+                if preserve {
+                    let mut expanded = document.clone();
+                    remove_field_path(&mut expanded, &path);
+                    if let Some(field) = &index_field {
+                        expanded.push(field.clone(), BsonValue::Null);
+                    }
+                    output.push(expanded);
+                }
+            }
+            Some(BsonValue::Null) => {
+                if preserve {
+                    let mut expanded = document.clone();
+                    if let Some(field) = &index_field {
+                        expanded.push(field.clone(), BsonValue::Null);
+                    }
+                    output.push(expanded);
+                }
+            }
+            None => {
+                if preserve {
+                    let mut expanded = document.clone();
+                    if let Some(field) = &index_field {
+                        expanded.push(field.clone(), BsonValue::Null);
+                    }
+                    output.push(expanded);
+                }
+            }
+            Some(scalar) => {
+                let mut expanded = document.clone();
+                set_field_path(&mut expanded, &path, scalar);
+                if let Some(field) = &index_field {
+                    expanded.push(field.clone(), BsonValue::Null);
+                }
+                output.push(expanded);
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn unwind_path(path: &str) -> Result<String, CommandError> {
+    match path.strip_prefix('$') {
+        Some(rest) if !rest.is_empty() => Ok(rest.to_string()),
+        _ => Err(CommandError::new(2, "$unwind path must start with `$`")),
+    }
+}
+
+/// Accumulator kinds backed by a documented behavior sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccumulatorKind {
+    Sum,
+    Avg,
+    Min,
+    Max,
+    Push,
+    AddToSet,
+    First,
+    Last,
+}
+
+impl AccumulatorKind {
+    fn parse(operator: &str) -> Option<Self> {
+        match operator {
+            "$sum" => Some(Self::Sum),
+            "$avg" => Some(Self::Avg),
+            "$min" => Some(Self::Min),
+            "$max" => Some(Self::Max),
+            "$push" => Some(Self::Push),
+            "$addToSet" => Some(Self::AddToSet),
+            "$first" => Some(Self::First),
+            "$last" => Some(Self::Last),
+            _ => None,
+        }
+    }
+}
+
+struct Accumulator {
+    field: String,
+    kind: AccumulatorKind,
+    argument: BsonValue,
+}
+
+/// `$group` groups by `_id` (null, constant, or `"$field"`) and applies the
+/// supported accumulators to each group. Output order is unspecified by the
+/// manual, so callers must sort if they need one.
+fn group_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, CommandError> {
+    let Some(identifier) = specification.get("_id") else {
+        return Err(CommandError::new(2, "$group requires an `_id` expression"));
+    };
+    match identifier {
+        BsonValue::Document(_) => {
+            return Err(CommandError::new(
+                59,
+                "$group `_id` document expressions are not implemented; use null, a constant, or a \"$field\" path",
+            ));
+        }
+        BsonValue::Array(_) => {
+            return Err(CommandError::new(
+                59,
+                "$group `_id` array expressions are not implemented; use null, a constant, or a \"$field\" path",
+            ));
+        }
+        _ => {}
+    }
+
+    let mut accumulators: Vec<Accumulator> = Vec::new();
+    for (field, accumulator) in specification.fields.iter().filter(|(field, _)| field != "_id") {
+        let BsonValue::Document(operator_document) = accumulator
+        else {
+            return Err(CommandError::new(2, format!("$group field `{field}` must be an accumulator document")));
+        };
+        if operator_document.fields.len() != 1 {
+            return Err(CommandError::new(2, format!("$group field `{field}` must contain exactly one accumulator")));
+        }
+        let (operator, argument) = &operator_document.fields[0];
+        let Some(kind) = AccumulatorKind::parse(operator) else {
+            return Err(CommandError::new(
+                59,
+                format!(
+                    "unknown accumulator: {operator} (supported: $sum, $avg, $min, $max, $push, $addToSet, $first, $last)"
+                ),
+            ));
+        };
+        accumulators.push(Accumulator { field: field.clone(), kind, argument: argument.clone() });
+    }
+
+    // "If there are no documents from the prior pipeline stage, the $group stage
+    // returns nothing."
     if documents.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut grouped = BsonDocument::new();
-    grouped.push("_id".to_string(), identifier.clone());
-    for field in counters {
-        grouped.push(field, count_value(documents.len() as i64));
-    }
-    Ok(vec![grouped])
-}
-
-fn count_value(count: i64) -> BsonValue {
-    i32::try_from(count).map(BsonValue::Int32).unwrap_or(BsonValue::Int64(count))
-}
-
-fn project_document(document: &BsonDocument, specification: &BsonDocument) -> BsonDocument {
-    let inclusion_only = specification.fields.iter().any(|(field, rule)| field != "_id" && rule_is_inclusion(rule));
-    let id_excluded = specification.get("_id").map(rule_is_exclusion).unwrap_or(false);
-    let mut projected = BsonDocument::new();
-    for (field, value) in document.fields.iter() {
-        let keep = match specification.get(field) {
-            Some(rule) if rule_is_inclusion(rule) => true,
-            Some(_) => false,
-            None if field == "_id" => !id_excluded,
-            None => !inclusion_only,
-        };
-        if keep {
-            projected.push(field.clone(), value.clone());
+    let mut groups: Vec<(BsonValue, Vec<usize>)> = Vec::new();
+    for (index, document) in documents.iter().enumerate() {
+        let key = evaluate_group_id(document, identifier);
+        match groups.iter_mut().find(|(existing, _)| values_equal(Some(existing), &key)) {
+            Some((_, members)) => members.push(index),
+            None => groups.push((key, vec![index])),
         }
     }
-    projected
+
+    let mut output = Vec::new();
+    for (key, members) in groups {
+        let mut grouped = BsonDocument::new();
+        grouped.push("_id".to_string(), key);
+        for accumulator in &accumulators {
+            grouped.push(accumulator.field.clone(), accumulate(accumulator, documents, &members)?);
+        }
+        output.push(grouped);
+    }
+    Ok(output)
+}
+
+fn evaluate_group_id(document: &BsonDocument, identifier: &BsonValue) -> BsonValue {
+    match identifier {
+        BsonValue::String(path) if path.starts_with('$') => {
+            lookup_field(document, &path[1..]).cloned().unwrap_or(BsonValue::Null)
+        }
+        other => other.clone(),
+    }
+}
+
+fn accumulate(accumulator: &Accumulator, documents: &[BsonDocument], members: &[usize]) -> Result<BsonValue, CommandError> {
+    let values: Vec<BsonValue> = members
+        .iter()
+        .map(|index| evaluate_expression(&documents[*index], &accumulator.argument))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    match accumulator.kind {
+        AccumulatorKind::Sum => {
+            let mut total: i128 = 0;
+            let mut double_total: Option<f64> = None;
+            for value in values {
+                match value {
+                    BsonValue::Int32(number) => total += i128::from(number),
+                    BsonValue::Int64(number) => total += i128::from(number),
+                    BsonValue::Double(number) => *double_total.get_or_insert(0.0) += number,
+                    // "$sum ignores the non-numeric values"
+                    _ => {}
+                }
+            }
+            Ok(match double_total {
+                Some(double) => BsonValue::Double(double + total as f64),
+                None => match i64::try_from(total) {
+                    Ok(exact) => count_value(exact),
+                    Err(_) => BsonValue::Double(total as f64),
+                },
+            })
+        }
+        AccumulatorKind::Avg => {
+            let mut total = 0.0_f64;
+            let mut count = 0_u64;
+            for value in values {
+                if let Some(number) = number_of(&value) {
+                    total += number;
+                    count += 1;
+                }
+            }
+            // "$avg returns null if all input values are non-numeric"
+            Ok(if count == 0 { BsonValue::Null } else { BsonValue::Double(total / count as f64) })
+        }
+        AccumulatorKind::Min | AccumulatorKind::Max => {
+            let wanted = if accumulator.kind == AccumulatorKind::Min { Ordering::Less } else { Ordering::Greater };
+            let mut chosen: Option<BsonValue> = None;
+            for value in values {
+                // "$min/$max ignore null or missing values"
+                if matches!(value, BsonValue::Null) {
+                    continue;
+                }
+                chosen = Some(match chosen {
+                    None => value,
+                    Some(current) => {
+                        if compare_values(&value, &current) == wanted {
+                            value
+                        } else {
+                            current
+                        }
+                    }
+                });
+            }
+            Ok(chosen.unwrap_or(BsonValue::Null))
+        }
+        AccumulatorKind::Push => Ok(BsonValue::Array(values)),
+        AccumulatorKind::AddToSet => {
+            let mut unique: Vec<BsonValue> = Vec::new();
+            for value in values {
+                if !unique.iter().any(|existing| values_equal(Some(existing), &value)) {
+                    unique.push(value);
+                }
+            }
+            Ok(BsonValue::Array(unique))
+        }
+        AccumulatorKind::First => Ok(values.first().cloned().unwrap_or(BsonValue::Null)),
+        AccumulatorKind::Last => Ok(values.last().cloned().unwrap_or(BsonValue::Null)),
+    }
+}
+
+fn project_stage(documents: &[BsonDocument], specification: &BsonDocument) -> Result<Vec<BsonDocument>, CommandError> {
+    let mut has_exclusion = false;
+    let mut has_non_exclusion = false;
+    for (field, rule) in specification.fields.iter() {
+        if field == "_id" && rule_is_exclusion(rule) {
+            continue;
+        }
+        if rule_is_exclusion(rule) {
+            has_exclusion = true;
+        } else {
+            has_non_exclusion = true;
+        }
+    }
+    if has_exclusion && has_non_exclusion {
+        return Err(CommandError::new(
+            2,
+            "cannot mix exclusion with inclusion or computed fields in $project (except _id: 0)",
+        ));
+    }
+    if has_exclusion {
+        let mut projected = Vec::new();
+        for document in documents {
+            let mut kept = document.clone();
+            for (field, rule) in specification.fields.iter() {
+                if rule_is_exclusion(rule) {
+                    remove_field_path(&mut kept, field);
+                }
+            }
+            projected.push(kept);
+        }
+        return Ok(projected);
+    }
+
+    let id_excluded = specification.get("_id").map(rule_is_exclusion).unwrap_or(false);
+    let mut projected = Vec::new();
+    for document in documents {
+        let mut result = BsonDocument::new();
+        if !id_excluded {
+            if let Some(identifier) = document.get("_id") {
+                result.push("_id".to_string(), identifier.clone());
+            }
+        }
+        for (field, rule) in specification.fields.iter() {
+            if field == "_id" {
+                continue;
+            }
+            if rule_is_inclusion(rule) {
+                if let Some(value) = lookup_field(document, field) {
+                    set_field_path(&mut result, field, value.clone());
+                }
+                continue;
+            }
+            if rule_is_exclusion(rule) {
+                continue;
+            }
+            let value = evaluate_expression(document, rule)?;
+            set_field_path(&mut result, field, value);
+        }
+        projected.push(result);
+    }
+    Ok(projected)
+}
+
+/// Minimal fixpoint helpers used by `$project`, `$unwind` and `$sort`.
+fn set_field_path(document: &mut BsonDocument, path: &str, value: BsonValue) {
+    let (head, tail) = match path.split_once('.') {
+        Some((head, tail)) => (head, tail),
+        None => {
+            if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == path) {
+                entry.1 = value;
+            } else {
+                document.push(path.to_string(), value);
+            }
+            return;
+        }
+    };
+    if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head) {
+        if let BsonValue::Document(inner) = &mut entry.1 {
+            set_field_path(inner, tail, value);
+            return;
+        }
+    }
+    let mut nested = BsonDocument::new();
+    set_field_path(&mut nested, tail, value);
+    document.push(head.to_string(), BsonValue::Document(nested));
+}
+
+fn remove_field_path(document: &mut BsonDocument, path: &str) {
+    match path.split_once('.') {
+        None => document.fields.retain(|(key, _)| key != path),
+        Some((head, tail)) => {
+            if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head) {
+                if let BsonValue::Document(inner) = &mut entry.1 {
+                    remove_field_path(inner, tail);
+                }
+            }
+        }
+    }
+}
+
+fn evaluate_expression(document: &BsonDocument, expression: &BsonValue) -> Result<BsonValue, CommandError> {
+    match expression {
+        BsonValue::String(path) if path.starts_with('$') => {
+            Ok(lookup_field(document, &path[1..]).cloned().unwrap_or(BsonValue::Null))
+        }
+        BsonValue::Document(operator_document)
+            if operator_document.fields.len() == 1 && operator_document.fields[0].0.starts_with('$') =>
+        {
+            let (operator, argument) = &operator_document.fields[0];
+            match operator.as_str() {
+                "$add" => {
+                    let BsonValue::Array(arguments) = argument else {
+                        return Err(CommandError::new(2, "$add requires an array of expressions"));
+                    };
+                    let mut total: i128 = 0;
+                    let mut double_total: Option<f64> = None;
+                    for expression in arguments {
+                        match evaluate_expression(document, expression)? {
+                            BsonValue::Int32(number) => total += i128::from(number),
+                            BsonValue::Int64(number) => total += i128::from(number),
+                            BsonValue::Double(number) => *double_total.get_or_insert(0.0) += number,
+                            other => {
+                                return Err(CommandError::new(2, format!("$add requires numeric arguments, got {other:?}")));
+                            }
+                        }
+                    }
+                    Ok(match double_total {
+                        Some(double) => BsonValue::Double(double + total as f64),
+                        None => match i64::try_from(total) {
+                            Ok(exact) => count_value(exact),
+                            Err(_) => BsonValue::Double(total as f64),
+                        },
+                    })
+                }
+                "$concat" => {
+                    let BsonValue::Array(arguments) = argument else {
+                        return Err(CommandError::new(2, "$concat requires an array of expressions"));
+                    };
+                    let mut joined = String::new();
+                    for expression in arguments {
+                        match evaluate_expression(document, expression)? {
+                            BsonValue::String(text) => joined.push_str(&text),
+                            // "$concat returns null if any argument is null or missing"
+                            BsonValue::Null => return Ok(BsonValue::Null),
+                            other => {
+                                return Err(CommandError::new(2, format!("$concat requires string arguments, got {other:?}")));
+                            }
+                        }
+                    }
+                    Ok(BsonValue::String(joined))
+                }
+                "$ifNull" => {
+                    let BsonValue::Array(arguments) = argument else {
+                        return Err(CommandError::new(2, "$ifNull requires an array of expressions"));
+                    };
+                    if arguments.len() < 2 {
+                        return Err(CommandError::new(2, "$ifNull requires at least two arguments"));
+                    }
+                    for expression in arguments {
+                        let value = evaluate_expression(document, expression)?;
+                        if !matches!(value, BsonValue::Null) {
+                            return Ok(value);
+                        }
+                    }
+                    Ok(BsonValue::Null)
+                }
+                other => Err(CommandError::new(
+                    59,
+                    format!("unknown $project expression: {other} (supported: $add, $concat, $ifNull)"),
+                )),
+            }
+        }
+        other => Ok(other.clone()),
+    }
 }
 
 fn rule_is_inclusion(value: &BsonValue) -> bool {
@@ -1022,6 +1535,10 @@ fn rule_is_inclusion(value: &BsonValue) -> bool {
 fn rule_is_exclusion(value: &BsonValue) -> bool {
     matches!(value, BsonValue::Int32(0) | BsonValue::Int64(0) | BsonValue::Bool(false))
         || matches!(value, BsonValue::Double(number) if *number == 0.0)
+}
+
+fn count_value(count: i64) -> BsonValue {
+    i32::try_from(count).map(BsonValue::Int32).unwrap_or(BsonValue::Int64(count))
 }
 
 fn parse_sort(sort: Option<&BsonValue>) -> Vec<(String, i32)> {
@@ -1041,22 +1558,15 @@ fn sort_documents(documents: &mut [BsonDocument], sort: &[(String, i32)]) {
     if sort.is_empty() {
         return;
     }
-    documents.sort_by(|left, right| compare_documents(left, right, sort));
-}
-
-fn compare_documents(left: &BsonDocument, right: &BsonDocument, sort: &[(String, i32)]) -> Ordering {
-    for (field, direction) in sort {
-        let ordering = match (lookup_field(left, field), lookup_field(right, field)) {
-            (Some(left), Some(right)) => compare_values(left, right),
-            (Some(_), None) => Ordering::Greater,
-            (None, Some(_)) => Ordering::Less,
-            (None, None) => Ordering::Equal,
-        };
-        if ordering != Ordering::Equal {
-            return if *direction < 0 { ordering.reverse() } else { ordering };
+    documents.sort_by(|left, right| {
+        for (field, direction) in sort {
+            let ordering = compare_values(&sort_key(left, field, *direction), &sort_key(right, field, *direction));
+            if ordering != Ordering::Equal {
+                return if *direction < 0 { ordering.reverse() } else { ordering };
+            }
         }
-    }
-    Ordering::Equal
+        Ordering::Equal
+    });
 }
 
 fn document_matches(document: &BsonDocument, filter: &BsonDocument) -> Result<bool, CommandError> {
