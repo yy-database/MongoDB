@@ -1,0 +1,250 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "catalog.create.on_open",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dataFiles", "as": "r1" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1", "equals": ["s.yyds", "s.yykv"] },
+                { "at": "/r1/#", "equals": 2 },
+                { "at": "/r2/ok", "equals": true },
+                { "at": "/r2/byteLength", "equals": 71 },
+                { "at": "/r2/schema/present", "equals": true },
+                { "at": "/r2/schema/version", "equals": 1 },
+                { "at": "/r2/schema/length", "equals": 29 },
+                { "at": "/r2/namespaces", "equals": [] },
+                { "at": "/r2/shardCount", "equals": 1 },
+                { "at": "/r2/shards", "equals": ["s"] },
+                { "at": "/r2/trailing", "equals": 0 }
+            ]
+        },
+        {
+            "id": "catalog.register.after_insert",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r2" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r3" },
+                { "op": "listCollections", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r2", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r3/ok", "equals": true },
+                { "at": "/r3/byteLength", "equals": 82 },
+                { "at": "/r3/version", "equals": 0 },
+                { "at": "/r3/schema/present", "equals": true },
+                { "at": "/r3/schema/version", "equals": 1 },
+                { "at": "/r3/schema/length", "equals": 40 },
+                { "at": "/r3/namespaces", "equals": ["app.items"] },
+                { "at": "/r3/shardCount", "equals": 1 },
+                { "at": "/r3/shards", "equals": ["s"] },
+                { "at": "/r3/contractPresent", "equals": false },
+                { "at": "/r3/ownerCount", "equals": 0 },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/name", "equals": "items" }
+            ]
+        },
+        {
+            "id": "catalog.register.cross_reopen",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "a" }], "as": "r1" },
+                { "op": "reopen", "store": "s" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r3" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/ok", "equals": true },
+                { "at": "/r3/namespaces", "equals": ["app.items"] },
+                { "at": "/r3/shardCount", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/v", "equals": "a" }
+            ]
+        },
+        {
+            "id": "catalog.register.namespace_isolation",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "app", "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "other", "as": "r2" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r3" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r4" },
+                { "op": "count", "collection": "items", "query": {}, "db": "app", "as": "r5" },
+                { "op": "count", "collection": "items", "query": {}, "db": "other", "as": "r6" }
+            ],
+            "checks": [
+                { "at": "/r3", "equals": "5959445301000000000100000001000000360000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73222c226f746865722e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r4/namespaces", "equals": ["app.items", "other.items"] },
+                { "at": "/r4/byteLength", "equals": 96 },
+                { "at": "/r5/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r6/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "catalog.missing.seeded_from_shard",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "close", "store": "s" },
+                { "op": "removeFile", "path": "s.yyds" },
+                { "op": "open", "store": "s" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r4" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r5" },
+                { "op": "listCollections", "as": "r6" },
+                { "op": "find", "collection": "items", "filter": {}, "as": "r7" }
+            ],
+            "checks": [
+                { "at": "/r4", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r5/ok", "equals": true },
+                { "at": "/r5/namespaces", "equals": ["app.items"] },
+                { "at": "/r5/shardCount", "equals": 1 },
+                { "at": "/r5/shards", "equals": ["s"] },
+                { "at": "/r6/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r7/cursor/firstBatch/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.magic",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "59594453020000000000000000000000000100000001000000730000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "unknown catalog header" }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.version",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "59594453010100000000000000000000000100000001000000730000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "catalog format version requires regeneration" }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.length",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "595944530100000000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "is invalid" }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.checksum_slot",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000000000000000000010000000100000073000000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "trailing catalog bytes" }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.schema_version",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000100000002000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "schema version 2, expected 1" }
+            ]
+        },
+        {
+            "id": "catalog.corrupt.schema_document",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000100000001000000080000006e6f742d6a736f6e000000000100000001000000730000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "catalog schema document is not JSON" }
+            ]
+        },
+        {
+            "id": "catalog.reject.multiple_shards",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "595944530100000000000000000000000002000000010000007301000000740000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "registers 2 shards, expected 1" }
+            ]
+        },
+        {
+            "id": "catalog.reject.missing_shard",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000000000000000000010000000500000067686f73740000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "points at missing shard" }
+            ]
+        },
+        {
+            "id": "catalog.compat.redis_seed_read",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "local-0" },
+                { "op": "close", "store": "local-0" },
+                { "op": "removeFile", "path": "local-0.yyds" },
+                { "op": "writeBytes", "path": "s.yyds", "hex": "595944530100000000000000000000000001000000070000006c6f63616c2d300000000000000000" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r4" },
+                { "op": "open", "store": "s" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r6" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r7" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r8" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r9" }
+            ],
+            "checks": [
+                { "at": "/r4/ok", "equals": true },
+                { "at": "/r4/namespaces", "equals": null },
+                { "at": "/r6/ok", "equals": true },
+                { "at": "/r6/shards", "equals": ["local-0"] },
+                { "at": "/r7/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r8/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r9/namespaces", "equals": ["app.items"] },
+                { "at": "/r9/shards", "equals": ["local-0"] }
+            ]
+        },
+        {
+            "id": "catalog.compat.postgres_seed_rejected",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "59594453010000000000000000000000010000000a706f7374677265732d300000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "is invalid" }
+            ]
+        }
+    ]
+}

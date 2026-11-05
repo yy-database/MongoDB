@@ -10,8 +10,8 @@ const ts = JSON.parse(readFileSync(join(resultsDir, 'ts.json'), 'utf8'))
 const py = JSON.parse(readFileSync(join(resultsDir, 'py.json'), 'utf8'))
 
 // Measured floors: keep this number in sync with reality, never lower it.
-const MIN_ASSERTIONS = 620
-const MIN_CASES = 317
+const MIN_ASSERTIONS = 688
+const MIN_CASES = 332
 
 const problems = []
 for (const [name, summary] of [['ts', ts], ['py', py]]) {
@@ -36,8 +36,13 @@ for (const id of pyCases.keys()) {
 
 const mismatches = []
 // Server-generated ObjectIds are random by design; every fixture ObjectId stays
-// literal, so only opaque ids are flattened for the parity comparison.
-const normalize = (value) => value.replace(/"\$oid":"[0-9a-f]{24}"/g, '"$oid":"<generated>"')
+// literal, so only opaque ids are flattened for the parity comparison. The two
+// runners execute in different temporary directories, so catalog and shard
+// paths quoted inside error messages are flattened as well.
+const normalize = (value) =>
+    value
+        .replace(/"\$oid":"[0-9a-f]{24}"/g, '"$oid":"<generated>"')
+        .replace(/`[^`"]*(?:\.yyds|\.yykv)`/g, '`<path>`')
 for (const [id, tsResult] of tsCases) {
     const pyResult = pyCases.get(id)
     if (!pyResult) continue

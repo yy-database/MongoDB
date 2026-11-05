@@ -7,7 +7,7 @@
 // this implementation twice.
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +18,7 @@ const require = createRequire(import.meta.url)
 const platform = `${process.platform}-${process.arch}`
 const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, 'index.js'))
 const cliEntry = join(repo, 'projects', 'mongo.ts', 'packages', 'mongo', 'bin', 'mongo.mjs')
+const yydsVerifier = join(repo, 'scripts', 'verify-yyds.mjs')
 
 const caseDir = join(repo, 'tests', 'cases')
 const outputPath = process.env.MONGO_TEST_OUT ?? join(repo, '.tmp', 'test-results', 'ts.json')
@@ -234,6 +235,21 @@ function runCase(testCase) {
             }
             case 'cursorsLen':
                 return cursorTable().len()
+            case 'writeBytes':
+                writeFileSync(join(directory, step.path), Buffer.from(step.hex, 'hex'))
+                return null
+            case 'readBytes':
+                return readFileSync(join(directory, step.path)).toString('hex')
+            case 'removeFile':
+                rmSync(join(directory, step.path), { force: true })
+                return null
+            case 'verifyCatalog': {
+                const path = join(directory, step.path)
+                const run = spawnSync(process.execPath, [yydsVerifier, path], { encoding: 'utf8' })
+                if (run.error) throw run.error
+                if (run.status !== 0) throw new Error(`yyds verifier exited with ${run.status}: ${run.stderr}`)
+                return JSON.parse(run.stdout)
+            }
             case 'cli': {
                 const dataDir = join(directory, step.dir ?? 'data')
                 mkdirSync(dataDir, { recursive: true })

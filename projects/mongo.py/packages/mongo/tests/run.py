@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -20,6 +21,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 import mongo  # noqa: E402
 
 CASE_DIR = REPO / "tests" / "cases"
+YYDS_VERIFIER = REPO / "scripts" / "verify-yyds.mjs"
 OUTPUT = Path(os.environ.get("MONGO_TEST_OUT", REPO / ".tmp" / "test-results" / "py.json"))
 MISSING = object()
 
@@ -530,6 +532,31 @@ def run_case(case):
             return mongo.import_bson_file(store_of(step.get("store")), step["namespace"], path)
         if op == "cursorsLen":
             return len(cursor_table())
+        if op == "writeBytes":
+            target = os.path.join(directory, step["path"])
+            with open(target, "wb") as file:
+                file.write(bytes.fromhex(step["hex"]))
+            return None
+        if op == "readBytes":
+            with open(os.path.join(directory, step["path"]), "rb") as file:
+                return file.read().hex()
+        if op == "removeFile":
+            try:
+                os.remove(os.path.join(directory, step["path"]))
+            except FileNotFoundError:
+                pass
+            return None
+        if op == "verifyCatalog":
+            node = shutil.which("node") or "node"
+            run = subprocess.run(
+                [node, str(YYDS_VERIFIER), os.path.join(directory, step["path"])],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if run.returncode != 0:
+                raise RuntimeError(f"yyds verifier exited with {run.returncode}: {run.stderr}")
+            return json.loads(run.stdout)
         if op == "cli":
             return run_cli(directory, step)
         raise ValueError(f"unknown case op {op}")
