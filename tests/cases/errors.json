@@ -364,6 +364,18 @@
                 { "op": "importBson", "namespace": "app.items", "hex": "00000000", "as": "r1" }
             ],
             "checks": [{ "at": "/r1", "throws": true }]
+        },
+        {
+            "id": "err.bson.legacy_binary_short",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "10000000056100030000000207000000", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
+        },
+        {
+            "id": "err.bson.legacy_binary_length_mismatch",
+            "surface": "error",
+            "program": [{ "op": "decodeDocument", "hex": "1400000005610007000000020500000001020300", "as": "r" }],
+            "checks": [{ "at": "/r", "throws": true }]
         }
     ]
 }

@@ -1,0 +1,210 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "filter.operator.eq_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$eq": 2 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "filter.operator.ne_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$ne": 2 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 4 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "3" }, { "$numberInt": "4" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
+            "id": "filter.operator.gt_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$gt": 3 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "4" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
+            "id": "filter.operator.gte_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$gte": 3 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "3" }, { "$numberInt": "4" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
+            "id": "filter.operator.lt_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$lt": 2 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "filter.operator.lte_positive",
+            "surface": "query",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }, { "_id": 2, "n": 2 }, { "_id": 3, "n": 3 }, { "_id": 4, "n": 4 }, { "_id": 5, "n": 5 }] },
+                { "op": "find", "collection": "items", "filter": { "n": { "$lte": 2 } }, "sort": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/r/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "2" }] }
+            ]
+        },
+        {
+            "id": "filter.reject.where_find",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$where": "this.n > 1" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $where (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.expr_find",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$expr": { "$gt": ["$n", 1] } } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $expr (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.text_find",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$text": { "$search": "x" } } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $text (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.regex_find",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$regex": "^a" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $regex (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.in_find",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$in": [1, 2] } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $in (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.top_level_operator",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "$where": "true" }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown top level operator: $where (operation: find, fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.operator_index",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$gt": 0, "$text": "x" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $text (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 1)" }
+            ]
+        },
+        {
+            "id": "filter.reject.field_index",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "a": 1, "n": { "$where": "true" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $where (operation: find, field: \"n\", fieldIndex: 1, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.where_count",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "count", "collection": "items", "query": { "n": { "$where": "true" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $where (operation: count, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.regex_delete",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "delete", "collection": "items", "deletes": [{ "q": { "name": { "$regex": "^a" } }, "limit": 0 }], "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $regex (operation: delete, field: \"name\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.expr_aggregate_match",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "aggregate", "collection": "items", "pipeline": [{ "$match": { "n": { "$expr": { "$gt": ["$n", 1] } } } }], "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $expr (operation: aggregate $match, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.where_update",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "update", "collection": "items", "updates": [{ "q": { "n": { "$where": "true" } }, "u": { "$set": { "v": 1 } } }], "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $where (operation: update, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.listing_field",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "listCollections", "filter": { "type": "collection" }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "unsupported listCollections filter field: type (fieldIndex: 0)" }
+            ]
+        },
+        {
+            "id": "filter.reject.listing_operator",
+            "surface": "error",
+            "program": [{ "op": "open", "store": "s" }, { "op": "listCollections", "filter": { "name": { "$regex": "^a" } }, "as": "r" }],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "unknown operator: $regex (operation: listCollections, field: \"name\", fieldIndex: 0, operatorIndex: 0)" }
+            ]
+        }
+    ]
+}

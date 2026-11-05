@@ -171,6 +171,10 @@ def run_case(case):
             command = {"delete": step["collection"], "deletes": step["deletes"]}
             reply = mongo.delete(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "update":
+            command = {"update": step["collection"], "updates": step["updates"]}
+            reply = mongo.update(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "getMore":
             command = {"getMore": step.get("id"), "collection": step["collection"]}
             if "batchSize" in step:

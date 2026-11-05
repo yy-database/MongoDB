@@ -1,0 +1,289 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "update.set_one",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "a" }, { "_id": 2, "v": "b" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "v": "changed" } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/v", "equals": "changed" }
+            ]
+        },
+        {
+            "id": "update.set_many",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "g": "a" }, { "_id": 2, "g": "a" }, { "_id": 3, "g": "b" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "g": "a" }, "u": { "$set": { "v": 9 } }, "multi": true }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "v": 9 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r1/nModified", "equals": { "$numberLong": "2" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 2 }
+            ]
+        },
+        {
+            "id": "update.set_new_field",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "tag": "x" } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/tag", "equals": "x" },
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "update.set_dotted",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": { "b": 1 } }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a.b": 2 } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/a/b", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "update.set_immutable_id",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "a" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "_id": 2 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "66" } },
+                { "at": "/r/errmsg", "equals": "Performing an update on the path '_id' would modify the immutable field '_id'" }
+            ]
+        },
+        {
+            "id": "update.set_conflict",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$set": { "v": 1 }, "$unset": { "v": "" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "40" } },
+                { "at": "/r/errmsg", "equals": "Updating the path 'v' would create a conflict at 'v'" }
+            ]
+        },
+        {
+            "id": "update.unset_one",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1, "b": 2 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$unset": { "b": "" } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/b", "absent": true },
+                { "at": "/r2/cursor/firstBatch/0/a", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "update.unset_missing",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$unset": { "missing": "" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r/nModified", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "update.unset_immutable_id",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$unset": { "_id": "" } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "66" } },
+                { "at": "/r/errmsg", "equals": "Performing an update on the path '_id' would modify the immutable field '_id'" }
+            ]
+        },
+        {
+            "id": "update.inc_int",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": { "$numberInt": "5" } }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$inc": { "n": { "$numberInt": "3" } } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "8" } }
+            ]
+        },
+        {
+            "id": "update.inc_double",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": { "$numberDouble": "1.5" } }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$inc": { "n": { "$numberDouble": "0.5" } } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberDouble": "2.0" } }
+            ]
+        },
+        {
+            "id": "update.inc_missing",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$inc": { "n": { "$numberInt": "2" } } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "2" } }
+            ]
+        },
+        {
+            "id": "update.inc_non_numeric",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": "text" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$inc": { "n": { "$numberInt": "1" } } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "14" } },
+                { "at": "/r/errmsg", "equals": "Cannot apply $inc to a value of non-numeric type (field: \"n\", _id: 1)" }
+            ]
+        },
+        {
+            "id": "update.unknown_modifier",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "$push": { "n": 1 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "9" } },
+                { "at": "/r/errmsg", "equals": "Unknown modifier: $push (operatorIndex: 0)" }
+            ]
+        },
+        {
+            "id": "update.replacement_rejected",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": {}, "u": { "v": 1 } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "replacement updates are not supported; `u` must use $set, $unset or $inc" }
+            ]
+        },
+        {
+            "id": "update.upsert_rejected",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 9 }, "u": { "$set": { "v": 1 } }, "upsert": true }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "59" } },
+                { "at": "/r/errmsg", "equals": "update upsert is not supported" }
+            ]
+        },
+        {
+            "id": "update.no_updates",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "update", "collection": "items", "updates": null, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "update requires an 'updates' array" }
+            ]
+        },
+        {
+            "id": "update.multi_false_first",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "g": "a" }, { "_id": 2, "g": "a" }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "g": "a" }, "u": { "$set": { "v": 1 } } }], "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "v": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
+            ]
+        },
+        {
+            "id": "update.dotted_through_scalar",
+            "surface": "error",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": { "$numberInt": "1" } }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "a.b": 2 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r/errmsg", "equals": "cannot create field at path 'a.b'" }
+            ]
+        },
+        {
+            "id": "update.matches_none",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 9 }, "u": { "$set": { "v": 1 } } }], "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r/nModified", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "update.persist_reopen",
+            "surface": "update",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": 1 }] },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "n": 2 } } }], "as": "r1" },
+                { "op": "reopen", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/cursor/firstBatch/0/n", "equals": { "$numberInt": "2" } }
+            ]
+        }
+    ]
+}

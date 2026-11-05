@@ -214,6 +214,33 @@
                 { "op": "count", "collection": "items", "query": {}, "as": "r2" }
             ],
             "checks": [{ "at": "/r2/n", "equals": { "$numberLong": "1" } }]
+        },
+        {
+            "id": "persist.binary_subtype_survives_reopen",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "legacy": { "$binary": { "base64": "AQID", "subType": "02" } } }] },
+                { "op": "reopen", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "_id": 1 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/0/legacy", "equals": { "$binary": { "base64": "AQID", "subType": "02" } } }
+            ]
+        },
+        {
+            "id": "persist.numeric_id_survives_reopen",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberLong": "1" }, "v": "x" }] },
+                { "op": "reopen", "store": "s" },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberDouble": "1.0" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberLong": "1" } }
+            ]
         }
     ]
 }

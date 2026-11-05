@@ -439,6 +439,100 @@
                 { "at": "/r2/n", "equals": { "$numberLong": "0" } },
                 { "at": "/r3/n", "equals": { "$numberLong": "2" } }
             ]
+        },
+        {
+            "id": "doc.id.numeric_int_found_by_long",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "one" }] },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberLong": "1" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/v", "equals": "one" }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_int_found_by_double",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "one" }] },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberDouble": "1.0" } }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_double_found_by_int",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberDouble": "2.0" }, "v": "two" }] },
+                { "op": "find", "collection": "items", "filter": { "_id": 2 }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r/cursor/firstBatch/0/v", "equals": "two" }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_string_not_equal",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "v": "one" }] },
+                { "op": "find", "collection": "items", "filter": { "_id": "1" }, "as": "r" }
+            ],
+            "checks": [
+                { "at": "/r/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r/cursor/firstBatch", "equals": [] }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_duplicate_double",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberInt": "1" }, "v": "first" }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberDouble": "1.0" }, "v": "second" }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_duplicate_long",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberLong": "1" } }], "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r2/writeErrors/0/code", "equals": { "$numberInt": "11000" } }
+            ]
+        },
+        {
+            "id": "doc.id.numeric_large_int_exact",
+            "surface": "document",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": { "$numberLong": "9007199254740993" } }] },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberDouble": "9007199254740992.0" } }, "as": "r1" },
+                { "op": "find", "collection": "items", "filter": { "_id": { "$numberLong": "9007199254740993" } }, "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r1/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r2/cursor/firstBatch/#", "equals": 1 }
+            ]
         }
     ]
 }

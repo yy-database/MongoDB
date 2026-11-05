@@ -846,6 +846,198 @@
             ]
         },
         {
+            "id": "bson.encode.binary_legacy_02",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "encodeDocument",
+                    "document": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "02"
+                            }
+                        }
+                    },
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": "1400000005610007000000020300000001020300"
+                }
+            ]
+        },
+        {
+            "id": "bson.decode.binary_legacy_02",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "decodeDocument",
+                    "hex": "1400000005610007000000020300000001020300",
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "02"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "bson.encode.binary_legacy_02_long",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "encodeDocument",
+                    "document": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AAECAwQ=",
+                                "subType": "02"
+                            }
+                        }
+                    },
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": "16000000056100090000000205000000000102030400"
+                }
+            ]
+        },
+        {
+            "id": "bson.decode.binary_legacy_02_long",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "decodeDocument",
+                    "hex": "16000000056100090000000205000000000102030400",
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AAECAwQ=",
+                                "subType": "02"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "bson.encode.binary_subtype_05",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "encodeDocument",
+                    "document": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "05"
+                            }
+                        }
+                    },
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": "10000000056100030000000501020300"
+                }
+            ]
+        },
+        {
+            "id": "bson.decode.binary_subtype_05",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "decodeDocument",
+                    "hex": "10000000056100030000000501020300",
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "05"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "bson.encode.binary_subtype_80",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "encodeDocument",
+                    "document": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "80"
+                            }
+                        }
+                    },
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": "10000000056100030000008001020300"
+                }
+            ]
+        },
+        {
+            "id": "bson.decode.binary_subtype_80",
+            "surface": "bson",
+            "program": [
+                {
+                    "op": "decodeDocument",
+                    "hex": "10000000056100030000008001020300",
+                    "as": "r"
+                }
+            ],
+            "checks": [
+                {
+                    "at": "/r",
+                    "equals": {
+                        "a": {
+                            "$binary": {
+                                "base64": "AQID",
+                                "subType": "80"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
             "id": "bson.encode.string_empty",
             "surface": "bson",
             "program": [

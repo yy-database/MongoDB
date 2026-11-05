@@ -181,6 +181,10 @@ function runCase(testCase) {
                 const command = { delete: step.collection, deletes: step.deletes }
                 return JSON.parse(binding.delete(storeOf(step.store), commandText(testCase, step, command)))
             }
+            case 'update': {
+                const command = { update: step.collection, updates: step.updates }
+                return JSON.parse(binding.update(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'getMore': {
                 const command = { getMore: step.id, collection: step.collection }
                 if (step.batchSize !== undefined) command.batchSize = step.batchSize
