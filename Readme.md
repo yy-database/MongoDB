@@ -167,7 +167,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9`（Windows 社区版 zip 解压到 `%TEMP%`，`--dbpath` 临时目录、`--port 28017`、`--bind_ip 127.0.0.1`、不注册服务）上跑了 26 个高风险探针：**22 个一致、4 个不一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`；不一致项见“能力边界”。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 939 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9` 上跑了 **47 个探针：45 个一致、2 个不一致**（`$project` 混用错误码、`$in` 含 `null` 对缺失字段；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 961 条断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
@@ -214,9 +214,11 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 ## 能力边界
 
 - `_id` 数值判等：按 MongoDB 官方文档“所有数值类型在比较时等价”实现（整型走精确 `i128` 比较，避免 `2^53` 以上被 double 折叠）；已在 `mongod 8.0.9` 上对拍一致（`1` / `1.0` / `NumberLong(1)`、`9007199254740993` 与 `9007199254740992.0`、跨命令重复键）。
-- `$unwind` 的 `includeArrayIndex`：真实 `mongod 8.0.9` 返回 **int64**，本仓返回 **int32**，值一致、类型不一致（尚未改动）。
-- **同一个 `insert` 命令的批内重复 `_id`**：真实 `mongod 8.0.9` 拒绝第二条（`11000`）；本仓批内不判重，`n` 计为 2，提交时后写覆盖前写。跨命令的重复 `_id` 两侧一致。
-- `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；都拒绝，错误码不同。
+- **同一个 `insert` 命令的批内重复 `_id`**：批内校验复用与单条路径相同的 key 编码（int32/int64/整值 double 同一 key 空间，字符串 `"1"` 与数字 `1` 不冲突）。真机对拍一致：`ordered` 停在首个冲突并保留此前文档（`[1, 2, 1]` 保留 1、2，`n=2`），`ordered: false` 跳过冲突继续写入，错误码 `11000`。
+- `$unwind` 的 `includeArrayIndex`：与真机一致，输出 **int64**（`{"$numberLong":"0"}`），非数组/保留文档输出 `null`。
+- `update` 的 `multi` 只修改已存在文档，没有批量插入路径，因此不存在同类批内重复问题（不适用）。
+- `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；语义同为拒绝，错误码粒度不同。
+- `$in` 含 `null`：真实 `mongod 8.0.9` 中 `{a: {$in: [null, 2]}}` 与 `{a: null}` 一样会匹配**缺失字段**的文档；本仓只匹配显式 `null` 与含 `null` 的数组，不匹配缺失字段（尚未改动）。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
