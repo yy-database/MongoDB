@@ -27,6 +27,7 @@ from .mongo_pyo3 import (  # noqa: F401
     list_collections,
     list_databases,
     ping,
+    repair_shard,
     update,
 )
 
@@ -53,5 +54,6 @@ __all__ = [
     "list_collections",
     "list_databases",
     "ping",
+    "repair_shard",
     "update",
 ]

@@ -203,3 +203,11 @@ pub fn import_bson_file(store: &MongoStore, namespace: String, path: String) -> 
         .map(|count| count as u32)
         .map_err(|message| Error::new(Status::GenericFailure, message))
 }
+
+/// Creates the empty shard a catalog names when only the catalog survived.
+#[napi]
+pub fn repair_shard(path: String) -> Result<String> {
+    Store::repair_shard(path)
+        .map(|report| report.to_json())
+        .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))
+}

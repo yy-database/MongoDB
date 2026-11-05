@@ -250,6 +250,8 @@ function runCase(testCase) {
                 if (run.status !== 0) throw new Error(`yyds verifier exited with ${run.status}: ${run.stderr}`)
                 return JSON.parse(run.stdout)
             }
+            case 'repairShard':
+                return JSON.parse(binding.repairShard(join(directory, `${step.store ?? 's'}.yykv`)))
             case 'cli': {
                 const dataDir = join(directory, step.dir ?? 'data')
                 mkdirSync(dataDir, { recursive: true })
