@@ -38,6 +38,19 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 - **catalog 存在**：解析；要求恰好注册 1 个 shard、schema 版本为 `1`、文档是含 `namespaces` 数组的 JSON，且它指向的 shard 文件存在。任一不满足即结构化拒绝（`StoreError::Catalog`），不静默修复、不猜测。
 - **catalog 缺失**：新建一个单 shard 的 catalog，并用 `.yykv` 里的 `!catalog` 标签补齐命名空间后照常打开；已写入的数据不受影响。
 - **写入**：新命名空间出现时把注册表回写进 catalog；shard 路径始终由 catalog 的 `ShardId` 决定。
+- **写序**：先写 `.yykv`（不存在则立即落盘），后写 `.yyds`；catalog 用“临时文件 + `sync_all` + 原子 rename”替换，不会出现半截 catalog。崩溃落在两次写入之间只会留下 `.yykv`，下次打开自动补 catalog，不会出现“只剩 catalog 永久打不开”的窗口。
+- **显式修复**：`repair_shard`（napi / pyo3 对称导出）只处理“catalog 在、shard 不在”的残留：按 catalog 里的 `ShardId` 补写一个空 shard，不改写 catalog 字节、不覆盖已存在的 shard（哪怕它不可读）、健康目录上是 no-op；没有 catalog 时直接拒绝，不会凭空造 catalog。`open` 永远不会调用它，也不会静默新建空分片。
+
+报错与修复对照：
+
+| 现象 | `errmsg` 关键字 | 处理 |
+|------|------|------|
+| catalog 指向的 `.yykv` 不存在 | `points at missing shard` | 先确认 catalog 是期望的那份，再调 `repair_shard` 补空 shard；原 shard 曾丢失时数据无法从 catalog 恢复 |
+| 只剩 `.yykv` | 不报错 | 默认自愈：用 `!catalog` 标签重建 catalog |
+| `.yykv` 为空/损坏 | shard 解码错误 | 拒绝且 `repair_shard` 为 no-op（不覆盖已有文件）；需人工介入 |
+| catalog 损坏 | `catalog ... is invalid` | 拒绝；不会自动重建，避免把配置错误当成缺失 |
+
+删除全部文档或删掉最后一个集合不会删除 `.yykv`：catalog 与 shard 都保留，reopen 走的是正常路径而不是缺失态。
 
 ## 能力矩阵
 
