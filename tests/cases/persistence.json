@@ -153,9 +153,9 @@
                 { "op": "fileSize", "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2", "equals": ["s.yykv"] },
+                { "at": "/r2", "equals": ["s.yyds", "s.yykv"] },
                 { "at": "/r3", "gte": 1 },
-                { "at": "/r2/#", "equals": 1 }
+                { "at": "/r2/#", "equals": 2 }
             ]
         },
         {
@@ -170,7 +170,7 @@
             ],
             "checks": [
                 { "at": "/r1/n", "equals": { "$numberLong": "100" } },
-                { "at": "/r2/#", "equals": 1 },
+                { "at": "/r2/#", "equals": 2 },
                 { "at": "/r3", "gte": 100 },
                 { "at": "/r4/n", "equals": { "$numberLong": "100" } }
             ]
