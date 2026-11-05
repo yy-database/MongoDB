@@ -6,6 +6,7 @@
 // command replies follow MongoDB semantics, so nothing is derived by calling
 // this implementation twice.
 import { createRequire } from 'node:module'
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -16,6 +17,7 @@ const repo = resolve(here, '..', '..', '..', '..', '..')
 const require = createRequire(import.meta.url)
 const platform = `${process.platform}-${process.arch}`
 const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, 'index.js'))
+const cliEntry = join(repo, 'projects', 'mongo.ts', 'packages', 'mongo', 'bin', 'mongo.mjs')
 
 const caseDir = join(repo, 'tests', 'cases')
 const outputPath = process.env.MONGO_TEST_OUT ?? join(repo, '.tmp', 'test-results', 'ts.json')
@@ -161,7 +163,7 @@ function runCase(testCase) {
             }
             case 'find': {
                 const command = { find: step.collection }
-                for (const key of ['filter', 'sort', 'skip', 'limit', 'batchSize']) {
+                for (const key of ['filter', 'projection', 'sort', 'skip', 'limit', 'batchSize']) {
                     if (step[key] !== undefined) command[key] = step[key]
                 }
                 return JSON.parse(binding.find(storeOf(step.store), cursorTable(), commandText(testCase, step, command)))
@@ -232,6 +234,21 @@ function runCase(testCase) {
             }
             case 'cursorsLen':
                 return cursorTable().len()
+            case 'cli': {
+                const dataDir = join(directory, step.dir ?? 'data')
+                mkdirSync(dataDir, { recursive: true })
+                const run = spawnSync(process.execPath, [cliEntry, '--data-dir', dataDir, '--db', step.db ?? testCase.db ?? 'app'], {
+                    input: `${step.commands.join('\n')}\n`,
+                    encoding: 'utf8',
+                })
+                if (run.error) throw run.error
+                if (run.status !== 0) throw new Error(`cli exited with ${run.status}: ${run.stderr}`)
+                const lines = run.stdout
+                    .split(/\r?\n/)
+                    .filter((line) => line.trim() !== '')
+                    .map((line) => JSON.parse(line))
+                return { exitCode: run.status, lines }
+            }
             default:
                 throw new Error(`unknown case op ${step.op}`)
         }

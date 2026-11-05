@@ -3,8 +3,11 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "TypeScript acceptance surface for the Rust MongoDB primitives",
+    "description": "TypeScript acceptance surface and minimal shell for the Rust MongoDB primitives",
     "license": "MPL-2.0",
+    "bin": {
+        "yydb-mongo": "bin/mongo.mjs"
+    },
     "scripts": {
         "test": "node tests/run.mjs"
     },

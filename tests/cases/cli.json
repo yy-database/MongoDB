@@ -1,0 +1,432 @@
+{
+    "version": 1,
+    "cases": [
+        {
+            "id": "cli.use_switches_database",
+            "surface": "cli",
+            "program": [
+                { "op": "cli", "as": "out", "commands": ["use app", "use other", "use app"] }
+            ],
+            "checks": [
+                { "at": "/out/exitCode", "equals": 0 },
+                { "at": "/out/lines/#", "equals": 3 },
+                { "at": "/out/lines/0/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/0/db", "equals": "app" },
+                { "at": "/out/lines/1/db", "equals": "other" }
+            ]
+        },
+        {
+            "id": "cli.show_dbs",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "insertOne(items, {\"_id\": 1})", "show dbs"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/2/databases/#", "equals": 1 },
+                { "at": "/out/lines/2/databases/0/name", "equals": "app" },
+                { "at": "/out/lines/2/totalSize", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "cli.show_collections",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertOne(items, {\"_id\": 1})",
+                        "insertOne(logs, {\"_id\": 1})",
+                        "show collections"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/3/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/3/cursor/firstBatch/#", "equals": 2 },
+                { "at": "/out/lines/3/cursor/firstBatch/*/name", "equals": ["items", "logs"] },
+                { "at": "/out/lines/3/cursor/ns", "equals": "app.$cmd.listCollections" }
+            ]
+        },
+        {
+            "id": "cli.namespace_isolation",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "insertOne(items, {\"_id\": 1})", "use other", "show collections"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/3/cursor/firstBatch/#", "equals": 0 }
+            ]
+        },
+        {
+            "id": "cli.insert_one",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "insertOne(items, {\"_id\": 1, \"n\": \"a\"})", "countDocuments(items)"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "cli.insert_many",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1}, {\"_id\": 2}, {\"_id\": 3}])",
+                        "countDocuments(items)"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/n", "equals": { "$numberLong": "3" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } }
+            ]
+        },
+        {
+            "id": "cli.insert_extended_json",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertOne(items, {\"_id\": {\"$numberLong\": \"9\"}, \"n\": \"ejson\"})",
+                        "find(items, {\"_id\": {\"$numberLong\": \"9\"}})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/n", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/out/lines/2/cursor/firstBatch/0/_id", "equals": { "$numberLong": "9" } }
+            ]
+        },
+        {
+            "id": "cli.find_projection_sort_skip_limit",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 10, \"extra\": \"a\"}, {\"_id\": 2, \"n\": 20, \"extra\": \"b\"}, {\"_id\": 3, \"n\": 30}, {\"_id\": 4, \"n\": 40}])",
+                        "find(items, {\"n\": {\"$gte\": 20}}, {\"_id\": 1, \"n\": 1}).sort({\"n\": -1}).skip(1).limit(1)"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/out/lines/2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "3" } },
+                { "at": "/out/lines/2/cursor/firstBatch/0/n", "equals": { "$numberInt": "30" } },
+                { "at": "/out/lines/2/cursor/firstBatch/0/extra", "absent": true }
+            ]
+        },
+        {
+            "id": "cli.update_one",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 1}, {\"_id\": 2, \"n\": 2}])",
+                        "updateOne(items, {\"_id\": 1}, {\"$set\": {\"n\": 99}})",
+                        "find(items, {\"_id\": 1})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/2/nModified", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/3/cursor/firstBatch/0/n", "equals": { "$numberInt": "99" } }
+            ]
+        },
+        {
+            "id": "cli.update_many",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 1}, {\"_id\": 2, \"n\": 2}, {\"_id\": 3, \"n\": 3}])",
+                        "updateMany(items, {}, {\"$inc\": {\"n\": 1}})",
+                        "find(items, {}).sort({\"_id\": 1})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/out/lines/2/nModified", "equals": { "$numberLong": "3" } },
+                { "at": "/out/lines/3/cursor/firstBatch/*/n", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }] }
+            ]
+        },
+        {
+            "id": "cli.delete_one",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 1}, {\"_id\": 2, \"n\": 2}, {\"_id\": 3, \"n\": 3}])",
+                        "deleteOne(items, {\"n\": {\"$gte\": 2}})",
+                        "countDocuments(items)"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "1" } },
+                { "at": "/out/lines/3/n", "equals": { "$numberLong": "2" } }
+            ]
+        },
+        {
+            "id": "cli.delete_many",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1}, {\"_id\": 2}, {\"_id\": 3}])",
+                        "deleteMany(items, {})",
+                        "countDocuments(items)"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } },
+                { "at": "/out/lines/3/n", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "cli.count_documents",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"n\": 10}, {\"_id\": 2, \"n\": 20}, {\"_id\": 3, \"n\": 30}, {\"_id\": 4, \"n\": 40}])",
+                        "countDocuments(items, {\"n\": {\"$gte\": 20}})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "3" } }
+            ]
+        },
+        {
+            "id": "cli.exit_stops_reading",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "dir": "data",
+                    "commands": ["use app", "insertOne(items, {\"_id\": 1})", "exit", "insertOne(items, {\"_id\": 2})"]
+                },
+                {
+                    "op": "cli",
+                    "as": "after",
+                    "dir": "data",
+                    "commands": ["use app", "countDocuments(items)"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/#", "equals": 3 },
+                { "at": "/out/lines/2/bye", "equals": true },
+                { "at": "/out/exitCode", "equals": 0 },
+                { "at": "/after/lines/1/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "cli.quit_stops_reading",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "quit", "show dbs"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/#", "equals": 2 },
+                { "at": "/out/lines/1/bye", "equals": true }
+            ]
+        },
+        {
+            "id": "cli.persist_across_processes",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "a",
+                    "dir": "data",
+                    "commands": ["use app", "insertMany(items, [{\"_id\": 1}, {\"_id\": 2}])"]
+                },
+                {
+                    "op": "cli",
+                    "as": "b",
+                    "dir": "data",
+                    "commands": ["use app", "countDocuments(items)"]
+                }
+            ],
+            "checks": [
+                { "at": "/a/lines/1/n", "equals": { "$numberLong": "2" } },
+                { "at": "/b/lines/#", "equals": 2 },
+                { "at": "/b/lines/1/n", "equals": { "$numberLong": "2" } }
+            ]
+        },
+        {
+            "id": "cli.reject.unknown_command",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "dropDatabase()", "use app"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/1/code", "equals": { "$numberInt": "59" } },
+                { "at": "/out/lines/1/errmsg", "matches": "unknown command: dropDatabase" },
+                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } }
+            ]
+        },
+        {
+            "id": "cli.reject.bad_arguments",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["insertOne(items, 5)", "insertOne(items)", "insertMany(items, [5])"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/0/code", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/0/errmsg", "matches": "insertOne requires a document as argument 2" },
+                { "at": "/out/lines/1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/2/errmsg", "matches": "insertMany documents must be objects" }
+            ]
+        },
+        {
+            "id": "cli.reject.unknown_operator",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "find(items, {\"n\": {\"$regex\": \"a\"}})"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/1/errmsg", "matches": "\\$regex" }
+            ]
+        },
+        {
+            "id": "cli.reject.missing_collection",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "countDocuments(nothing)", "deleteMany(nothing, {})"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/1/n", "equals": { "$numberLong": "0" } },
+                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/2/n", "equals": { "$numberLong": "0" } }
+            ]
+        },
+        {
+            "id": "cli.reject.inc_non_numeric",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertOne(items, {\"_id\": 1, \"v\": \"x\"})",
+                        "updateOne(items, {\"_id\": 1}, {\"$inc\": {\"v\": 1}})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/2/code", "equals": { "$numberInt": "14" } },
+                { "at": "/out/lines/2/errmsg", "matches": "non-numeric" }
+            ]
+        },
+        {
+            "id": "cli.reject.update_id",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertOne(items, {\"_id\": 1})",
+                        "updateOne(items, {\"_id\": 1}, {\"$set\": {\"_id\": 2}})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/ok", "equals": { "$numberInt": "0" } },
+                { "at": "/out/lines/2/code", "equals": { "$numberInt": "66" } },
+                { "at": "/out/lines/2/errmsg", "matches": "immutable field '_id'" }
+            ]
+        },
+        {
+            "id": "cli.reject.unknown_method",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": ["use app", "find(items).populate({})", "find(items).limit(-1)"]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/1/errmsg", "matches": "unknown find method: populate" },
+                { "at": "/out/lines/2/code", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/2/errmsg", "matches": "non-negative integer" }
+            ]
+        }
+    ]
+}
