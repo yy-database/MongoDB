@@ -346,12 +346,12 @@
                 {
                     "op": "cli",
                     "as": "out",
-                    "commands": ["use app", "find(items, {\"n\": {\"$regex\": \"a\"}})"]
+                    "commands": ["use app", "find(items, {\"n\": {\"$mod\": [2, 0]}})"]
                 }
             ],
             "checks": [
                 { "at": "/out/lines/1/code", "equals": { "$numberInt": "2" } },
-                { "at": "/out/lines/1/errmsg", "matches": "\\$regex" }
+                { "at": "/out/lines/1/errmsg", "matches": "\\$mod" }
             ]
         },
         {
@@ -426,6 +426,33 @@
                 { "at": "/out/lines/1/errmsg", "matches": "unknown find method: populate" },
                 { "at": "/out/lines/2/code", "equals": { "$numberInt": "2" } },
                 { "at": "/out/lines/2/errmsg", "matches": "non-negative integer" }
+            ]
+        },
+        {
+            "id": "cli.find_new_operators",
+            "surface": "cli",
+            "program": [
+                {
+                    "op": "cli",
+                    "as": "out",
+                    "commands": [
+                        "use app",
+                        "insertMany(items, [{\"_id\": 1, \"tags\": [\"red\", \"blue\"], \"qty\": 5}, {\"_id\": 2, \"tags\": [\"green\"], \"qty\": 15}, {\"_id\": 3, \"tags\": [], \"qty\": 25}])",
+                        "find(items, {\"tags\": {\"$in\": [\"blue\"]}})",
+                        "find(items, {\"qty\": {\"$gte\": 15, \"$lt\": 25}})",
+                        "find(items, {\"tags\": {\"$elemMatch\": {\"$eq\": \"green\"}}})",
+                        "find(items, {\"tags\": {\"$all\": []}})"
+                    ]
+                }
+            ],
+            "checks": [
+                { "at": "/out/lines/2/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/out/lines/2/cursor/firstBatch/0/_id", "equals": { "$numberInt": "1" } },
+                { "at": "/out/lines/3/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/out/lines/3/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/out/lines/4/cursor/firstBatch/0/_id", "equals": { "$numberInt": "2" } },
+                { "at": "/out/lines/5/cursor/firstBatch/#", "equals": 0 }
             ]
         }
     ]
