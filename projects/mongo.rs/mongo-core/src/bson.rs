@@ -7,6 +7,26 @@
 
 use std::io::{self, Cursor, Read, Write};
 
+/// Binary payload with its BSON subtype preserved.
+///
+/// The bytes are kept exactly as they appear on the wire, so the deprecated
+/// subtype `0x02` layout (which embeds its own length inside the payload) is
+/// decoded and re-encoded byte for byte.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinaryData {
+    /// BSON binary subtype (`0x00`, `0x02`, `0x05`, `0x80`, ...).
+    pub subtype: u8,
+    /// Raw payload bytes, without the outer length or subtype.
+    pub bytes: Vec<u8>,
+}
+
+impl BinaryData {
+    /// Builds one binary payload.
+    pub fn new(subtype: u8, bytes: Vec<u8>) -> Self {
+        Self { subtype, bytes }
+    }
+}
+
 /// BSON value variants supported by this gateway.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BsonValue {
@@ -28,8 +48,8 @@ pub enum BsonValue {
     Null,
     /// 12-byte ObjectId (0x07).
     ObjectId([u8; 12]),
-    /// Binary payload (0x05, subtype 0x00 = generic).
-    Binary(Vec<u8>),
+    /// Binary payload (0x05) with its subtype.
+    Binary(BinaryData),
 }
 
 /// A BSON document preserves field insertion order (unlike a HashMap) because BSON
@@ -139,9 +159,16 @@ fn encode_field<W: Write>(writer: &mut W, key: &str, value: &BsonValue) -> io::R
         BsonValue::Binary(v) => {
             writer.write_all(&0x05_u8.to_le_bytes())?;
             write_cstring(writer, key)?;
-            writer.write_all(&(v.len() as i32).to_le_bytes())?;
-            writer.write_all(&0x00_u8.to_le_bytes())?;
-            writer.write_all(v)?;
+            // BSON spec: subtype 0x02 (deprecated "old binary") carries its own
+            // 4-byte length ahead of the payload. The stored bytes are the
+            // payload only, so the length is restored verbatim here.
+            let wire_len = if v.subtype == 0x02 { v.bytes.len() + 4 } else { v.bytes.len() };
+            writer.write_all(&(wire_len as i32).to_le_bytes())?;
+            writer.write_all(&v.subtype.to_le_bytes())?;
+            if v.subtype == 0x02 {
+                writer.write_all(&(v.bytes.len() as i32).to_le_bytes())?;
+            }
+            writer.write_all(&v.bytes)?;
         }
         BsonValue::ObjectId(bytes) => {
             writer.write_all(&0x07_u8.to_le_bytes())?;
@@ -240,10 +267,26 @@ fn parse_value<R: Read>(cursor: &mut R, elem_type: u8) -> Result<BsonValue, Bson
         0x04 => Ok(BsonValue::Array(parse_sub_document(cursor)?.fields.into_iter().map(|(_, v)| v).collect())),
         0x05 => {
             let len = read_i32(cursor)?;
-            let _subtype = read_u8(cursor)?;
+            if len < 0 {
+                return Err(BsonError::Malformed("negative BSON binary length".into()));
+            }
+            let subtype = read_u8(cursor)?;
             let mut data = vec![0_u8; len as usize];
             cursor.read_exact(&mut data)?;
-            Ok(BsonValue::Binary(data))
+            if subtype == 0x02 {
+                // The deprecated subtype embeds its own length; keep the payload
+                // that follows it, and refuse a stream whose inner length
+                // disagrees with the outer one.
+                if len < 4 {
+                    return Err(BsonError::Malformed("legacy BSON binary is shorter than its length field".into()));
+                }
+                let embedded = read_i32(&mut Cursor::new(&data[..4]))?;
+                if embedded < 0 || embedded as usize + 4 != len as usize {
+                    return Err(BsonError::Malformed("legacy BSON binary length mismatch".into()));
+                }
+                data.drain(..4);
+            }
+            Ok(BsonValue::Binary(BinaryData::new(subtype, data)))
         }
         0x07 => {
             let mut bytes = [0_u8; 12];
@@ -340,6 +383,12 @@ fn read_string<R: Read>(r: &mut R) -> Result<String, BsonError> {
 /// Serializes a BSON value into a stable key bytes buffer so documents can be routed
 /// through the YYDS KV store. Different types get different encodings so two distinct
 /// MongoDB values cannot collide on the same byte pattern.
+///
+/// Numeric values share one key space: MongoDB compares `int32`, `int64` and
+/// `double` by numeric value, so `1`, `1.0` and `NumberLong(1)` must resolve to
+/// the same document and must collide as `_id` duplicates. Integral doubles are
+/// keyed as the exact integer they represent; only fractional doubles use a
+/// bit-pattern key.
 pub fn value_to_key(value: &BsonValue) -> Vec<u8> {
     let mut out = Vec::new();
     match value {
@@ -351,18 +400,15 @@ pub fn value_to_key(value: &BsonValue) -> Vec<u8> {
             out.push(b's');
             out.extend_from_slice(s.as_bytes());
         }
-        BsonValue::Int32(v) => {
-            out.push(b'i');
-            out.extend_from_slice(&v.to_le_bytes());
-        }
-        BsonValue::Int64(v) => {
-            out.push(b'l');
-            out.extend_from_slice(&v.to_le_bytes());
-        }
-        BsonValue::Double(v) => {
-            out.push(b'd');
-            out.extend_from_slice(&v.to_le_bytes());
-        }
+        BsonValue::Int32(v) => out.extend_from_slice(&integral_key(*v as i64)),
+        BsonValue::Int64(v) => out.extend_from_slice(&integral_key(*v)),
+        BsonValue::Double(v) => match integral_value(*v) {
+            Some(integer) => out.extend_from_slice(&integral_key(integer)),
+            None => {
+                out.push(b'd');
+                out.extend_from_slice(&double_bits(*v).to_be_bytes());
+            }
+        },
         BsonValue::Bool(v) => {
             out.push(b'b');
             out.push(if *v { 1 } else { 0 });
@@ -381,4 +427,29 @@ pub fn value_to_key(value: &BsonValue) -> Vec<u8> {
         }
     }
     out
+}
+
+/// Returns the exact 64-bit integer a double represents, if any.
+///
+/// `1.0` and `NumberLong(1)` are the same `_id` in MongoDB; `1e20` is not
+/// representable as an `i64`, so it keeps a distinct key.
+pub fn integral_value(value: f64) -> Option<i64> {
+    if !value.is_finite() || value.fract() != 0.0 {
+        return None;
+    }
+    let integer = value as i64;
+    (integer as f64 == value).then_some(integer)
+}
+
+/// Order-preserving key prefix shared by every integer-valued number.
+fn integral_key(value: i64) -> [u8; 9] {
+    let mut key = [0_u8; 9];
+    key[0] = b'n';
+    key[1..].copy_from_slice(&((value as u64) ^ (1_u64 << 63)).to_be_bytes());
+    key
+}
+
+/// Canonical bits for a fractional double (`-0.0` folds into `0.0`).
+pub fn double_bits(value: f64) -> u64 {
+    if value == 0.0 { 0 } else { value.to_bits() }
 }

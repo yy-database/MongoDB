@@ -152,8 +152,17 @@ impl Store {
         Ok(removed)
     }
 
+    /// Overwrites documents in place without duplicate checks, used by `update`.
+    pub fn replace(&self, namespace: &str, documents: &[(Vec<u8>, Vec<u8>)]) -> Result<usize, StoreError> {
+        self.write_batch(namespace, documents)
+    }
+
     /// Persists one batch without duplicate checks, used by `mongodump` import.
     pub fn import(&self, namespace: &str, documents: &[(Vec<u8>, Vec<u8>)]) -> Result<usize, StoreError> {
+        self.write_batch(namespace, documents)
+    }
+
+    fn write_batch(&self, namespace: &str, documents: &[(Vec<u8>, Vec<u8>)]) -> Result<usize, StoreError> {
         let mut shard = self.lock();
         let mut changes = Vec::with_capacity(documents.len() + 1);
         for (key_bytes, payload) in documents {
