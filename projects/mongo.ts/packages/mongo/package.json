@@ -3,21 +3,9 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "MongoDB wire-protocol server assembled from the Rust primitives",
+    "description": "TypeScript acceptance surface for the Rust MongoDB primitives",
     "license": "MPL-2.0",
-    "exports": {
-        ".": "./dist/index.js"
-    },
-    "bin": {
-        "mongo-mongod": "./bin/mongod.mjs"
-    },
-    "files": [
-        "dist",
-        "bin",
-        "README.md"
-    ],
     "scripts": {
-        "build": "tsc -p tsconfig.json",
         "test": "node tests/run.mjs"
     },
     "optionalDependencies": {

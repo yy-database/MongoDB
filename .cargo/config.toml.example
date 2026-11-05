@@ -1,0 +1,10 @@
+# Optional local override. Fresh clones and CI need nothing here: `Cargo.toml`
+# pins the `yyds` git revision and `cargo test` resolves it directly.
+#
+# Only when you are co-developing `yyds` in a local checkout, copy this file to
+# `.cargo/config.toml` (gitignored) and point the patch at that checkout. Do not
+# commit it, and remove it when the path is gone: a stale path makes
+# `cargo test` fail before compilation starts.
+#
+# [patch."https://github.com/oovm/database.rs.git"]
+# yyds = { path = "../database.rs/projects/facades/yyds" }
