@@ -178,6 +178,27 @@
             ]
         },
         {
+            "id": "op.in.null_matches_missing_field",
+            "surface": "query",
+            "source": "oracle: mongod 8.0.9 standalone (--port 28017), 2026-11-05, find {a: {$in: [null, 2]}} matched _id 2 (explicit null), 3 (missing), 4 ([null]) and 5 (2); {a: null} uses the same null predicate (https://www.mongodb.com/docs/manual/reference/operator/query/in/)",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "a": 1 }, { "_id": 2, "a": null }, { "_id": 3 }, { "_id": 4, "a": [null] }, { "_id": 5, "a": 2 }] },
+                { "op": "find", "collection": "items", "filter": { "a": { "$in": [null, 2] } }, "sort": { "_id": 1 }, "as": "mixed" },
+                { "op": "find", "collection": "items", "filter": { "a": { "$in": [null] } }, "sort": { "_id": 1 }, "as": "single" },
+                { "op": "find", "collection": "items", "filter": { "a": { "$nin": [null] } }, "sort": { "_id": 1 }, "as": "nin" },
+                { "op": "find", "collection": "items", "filter": { "a": { "$ne": null } }, "sort": { "_id": 1 }, "as": "ne" }
+            ],
+            "checks": [
+                { "at": "/mixed/cursor/firstBatch/#", "equals": 4 },
+                { "at": "/mixed/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }, { "$numberInt": "5" }] },
+                { "at": "/single/cursor/firstBatch/#", "equals": 3 },
+                { "at": "/single/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "2" }, { "$numberInt": "3" }, { "$numberInt": "4" }] },
+                { "at": "/nin/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "5" }] },
+                { "at": "/ne/cursor/firstBatch/*/_id", "equals": [{ "$numberInt": "1" }, { "$numberInt": "5" }] }
+            ]
+        },
+        {
             "id": "op.in.empty_array_rejected",
             "surface": "error",
             "source": "No source: https://www.mongodb.com/docs/manual/reference/operator/query/in/ and .../nin/ do not define an empty operand array; the gateway refuses instead of guessing",
