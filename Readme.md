@@ -11,7 +11,7 @@
 | 协议 | MongoDB wire protocol，`OP_MSG` 为主，兼容驱动的首个 `OP_QUERY` handshake 探测 |
 | 存储 | YYDS `.yykv` 分片（`yyds::kv::FileShard`），命名空间 = `<database>.<collection>` |
 | 验收 | 同一批 case 同时驱动 TypeScript 与 Python 绑定，逐 case 比对两侧输出 |
-| 命令行 | 尚未实现（当前只有库原语与验收 runner），不提供万能入口 |
+| 命令行 | JS/TS 最小入口 `projects/mongo.ts/packages/mongo/bin/mongo.mjs`，只组合 napi 原语；管道模式逐行读命令、逐行输出 JSON |
 | 发布 | 当前阶段**不发布**：所有包 `private: true`，未配置 Trusted Publisher |
 
 ## 存储兼容口径
@@ -31,7 +31,7 @@
 | `hello` / `isMaster` | 已支持 | `isWritablePrimary: true`、`minWireVersion: 0`、`maxWireVersion: 17` |
 | `ping` | 已支持 | `{ ok: 1 }` |
 | `insert` | 已支持 | 缺省 `_id` 自动生成 ObjectId；重复 `_id` 报 `11000` 且保留原文档；`ordered: false` 继续写入后续合法文档 |
-| `find` | 已支持 | 字段过滤（`$eq`/`$ne`/`$gt`/`$gte`/`$lt`/`$lte`、一级点号嵌套）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
+| `find` | 已支持 | 字段过滤（`$eq`/`$ne`/`$gt`/`$gte`/`$lt`/`$lte`、一级点号嵌套）、`projection`（0/1 包含排除，`_id` 单独规则）、`sort`、`skip`、`limit`、`batchSize`；白名单外的算子回 `2` 并带算子名、操作名与位置 |
 | `count` | 已支持 | 读 `query` 过滤，遵守 `skip` / `limit`；未知算子同上拒绝 |
 | `aggregate` | 部分支持 | 仅 `$match`、常量 `_id` 的 `$sum: 1` `$group`、`$project`（含/排除）；其他阶段回 `59`；`$match` 的未知算子回 `2` |
 | `delete` | 已支持 | `deletes[].q` 与 `limit`（`0` 表示全部）；未知算子回 `2` |
@@ -47,7 +47,7 @@
 
 ```
 projects/mongo.rs/   Rust 库原语（mongo-core）与绑定（mongo-napi / mongo-pyo3 / mongo-wasm）
-projects/mongo.ts/   TypeScript 绑定与安装态验收 runner
+projects/mongo.ts/   TypeScript 绑定、安装态验收 runner 与最小命令行 `packages/mongo/bin/mongo.mjs`
 projects/mongo.py/   Python 包与同一批 case 的验收 runner
 scripts/             构建、BSON case 生成与跨语言门禁脚本
 tests/cases/         两种语言共用的声明式 case 语料
@@ -71,6 +71,39 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
 当前没有接入真实 MongoDB 的在线对比 runner，因此不存在 oracle 计数；需要真库对照时应另起 runner 并单独计数，不能混入上述 300+ 断言。
+
+## 命令行（最小面）
+
+`projects/mongo.ts/packages/mongo/bin/mongo.mjs` 是唯一 CLI 入口：用 JS 写解析与分发，每条命令只调用一个 napi 原语，不新增 Rust `[[bin]]`、不做 shell 拼串、不做 JS eval、不提供万能子命令。
+
+```bash
+printf 'use app\ninsertMany(items, [{"_id":1},{"_id":2}])\nfind(items, {}).sort({"_id":1})\n' \
+  | node projects/mongo.ts/packages/mongo/bin/mongo.mjs --data-dir .tmp/cli --db app
+```
+
+支持的命令（`--help` 会原样列出）：
+
+| 命令 | 说明 |
+|------|------|
+| `use <db>` | 切换 `$db` 命名空间 |
+| `show dbs` / `show collections` | 走 `listDatabases` / `listCollections` |
+| `insertOne(<coll>, <doc>)` / `insertMany(<coll>, [<doc>...])` | JSON 或 Extended JSON 输入 |
+| `find(<coll>, [filter], [projection])[.sort(<doc>)][.skip(<n>)][.limit(<n>)]` | 过滤白名单与 `find` 命令一致 |
+| `updateOne` / `updateMany`(`<coll>, <filter>, <update>`) | 仅 `$set` / `$unset` / `$inc` |
+| `deleteOne` / `deleteMany`(`<coll>, <filter>`) | `limit` 1 / 0 |
+| `countDocuments(<coll>, [filter])` | 走 `count` |
+| `exit` / `quit` | 停止读后续行 |
+
+管道模式每条命令输出一行 Extended JSON；被拒绝的输入也输出一行 `{"ok":{"$numberInt":"0"},"code":...,"errmsg":...}` 并继续处理后续行，进程退出码为 `0`。未知命令回 `59` 且 `errmsg` 含 `unknown command:` 与支持清单；参数形态错误回 `2`；命令语义错误沿用原语错误码（`14` / `66` 等）。存储固定为 `<data-dir>/mongo.yykv`，不监听端口。
+
+测试覆盖性质不同：TypeScript 侧真实启动该进程（`cli` 面 23 个 case）；Python 侧没有同一入口，用同一份 case 把命令行语法映射到 pyo3 原语后比对终态，属于**语义等价**验证，不等同于“同一个入口两侧都跑”。
+
+## 能力边界
+
+- `_id` 数值判等：按 MongoDB 官方文档“所有数值类型在比较时等价”实现（整型走精确 `i128` 比较，避免 `2^53` 以上被 double 折叠），**仅文档依据、未在真实 `mongod` 上实机验证**。
+- `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
+- CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
+- `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
 
 ### 本地 `yyds` 联调（可选）
 
