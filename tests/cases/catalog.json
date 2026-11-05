@@ -245,6 +245,131 @@
                 { "at": "/r1", "throws": true },
                 { "at": "/r1", "errorContains": "is invalid" }
             ]
+        },
+        {
+            "id": "catalog.residual.catalog_only",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "op": "open", "store": "s", "as": "r1" },
+                { "op": "repairShard", "store": "s", "as": "r2" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r3" },
+                { "op": "open", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r5" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r6" },
+                { "op": "dataFiles", "as": "r7" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r1", "errorContains": "points at missing shard" },
+                { "at": "/r2/created", "equals": true },
+                { "at": "/r2/shard", "equals": "s" },
+                { "at": "/r3", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r5/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r6/ok", "equals": true },
+                { "at": "/r6/namespaces", "equals": ["app.items"] },
+                { "at": "/r7", "equals": ["s.yyds", "s.yykv"] }
+            ]
+        },
+        {
+            "id": "catalog.residual.shard_only",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "close", "store": "s" },
+                { "op": "removeFile", "path": "s.yyds" },
+                { "op": "open", "store": "s" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r4" },
+                { "op": "dataFiles", "as": "r5" },
+                { "op": "repairShard", "store": "s", "as": "r6" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r7" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r8" }
+            ],
+            "checks": [
+                { "at": "/r4/ok", "equals": true },
+                { "at": "/r4/namespaces", "equals": ["app.items"] },
+                { "at": "/r5", "equals": ["s.yyds", "s.yykv"] },
+                { "at": "/r6/created", "equals": false },
+                { "at": "/r6/shard", "equals": "s" },
+                { "at": "/r7", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r8/n", "equals": { "$numberLong": "1" } }
+            ]
+        },
+        {
+            "id": "catalog.residual.empty_shard",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "op": "repairShard", "store": "s", "as": "r1" },
+                { "op": "open", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r2" },
+                { "op": "dataFiles", "as": "r3" },
+                { "op": "repairShard", "store": "s", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1/created", "equals": true },
+                { "at": "/r1/shard", "equals": "s" },
+                { "at": "/r2/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r3", "equals": ["s.yyds", "s.yykv"] },
+                { "at": "/r4/created", "equals": false }
+            ]
+        },
+        {
+            "id": "catalog.residual.zero_byte_shard",
+            "surface": "catalog",
+            "program": [
+                { "op": "writeBytes", "path": "s.yyds", "hex": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "op": "writeBytes", "path": "s.yykv", "hex": "" },
+                { "op": "open", "store": "s", "as": "r1" },
+                { "op": "repairShard", "store": "s", "as": "r2" },
+                { "op": "readBytes", "path": "s.yyds", "as": "r3" },
+                { "op": "readBytes", "path": "s.yykv", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r1", "throws": true },
+                { "at": "/r2/created", "equals": false },
+                { "at": "/r3", "equals": "5959445301000000000100000001000000280000007b2276657273696f6e223a312c226e616d65737061636573223a5b226170702e6974656d73225d7d000000000100000001000000730000000000000000" },
+                { "at": "/r4", "equals": "" }
+            ]
+        },
+        {
+            "id": "catalog.repair.reject_without_catalog",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "close", "store": "s" },
+                { "op": "removeFile", "path": "s.yyds" },
+                { "op": "repairShard", "store": "s", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3", "throws": true },
+                { "at": "/r3", "errorContains": "is missing" }
+            ]
+        },
+        {
+            "id": "catalog.retain.after_delete_all",
+            "surface": "catalog",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": {}, "limit": 0 }], "as": "r2" },
+                { "op": "dataFiles", "as": "r3" },
+                { "op": "close", "store": "s" },
+                { "op": "open", "store": "s" },
+                { "op": "count", "collection": "items", "query": {}, "as": "r5" },
+                { "op": "listCollections", "as": "r6" },
+                { "op": "verifyCatalog", "path": "s.yyds", "as": "r7" }
+            ],
+            "checks": [
+                { "at": "/r2/n", "equals": { "$numberLong": "2" } },
+                { "at": "/r3", "equals": ["s.yyds", "s.yykv"] },
+                { "at": "/r5/n", "equals": { "$numberLong": "0" } },
+                { "at": "/r6/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r7/ok", "equals": true },
+                { "at": "/r7/namespaces", "equals": ["app.items"] }
+            ]
         }
     ]
 }
