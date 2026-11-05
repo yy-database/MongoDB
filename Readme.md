@@ -167,7 +167,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9` 上跑了 **47 个探针：45 个一致、2 个不一致**（`$project` 混用错误码、`$in` 含 `null` 对缺失字段；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 961 条断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，本仓的 Extended JSON 解析会重排字段）。本轮在 `mongod 8.0.9` 上跑了 **74 个探针：64 个一致、10 个不一致**（1 个错误码粒度 + 2 个 `$group` 累加器 + 4 个 `update` 错误通道/码 + 2 个 `delete`/1 个 `count` 回复形态；见“能力边界”）。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 967 条断言。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
@@ -218,12 +218,21 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `$unwind` 的 `includeArrayIndex`：与真机一致，输出 **int64**（`{"$numberLong":"0"}`），非数组/保留文档输出 `null`。
 - `update` 的 `multi` 只修改已存在文档，没有批量插入路径，因此不存在同类批内重复问题（不适用）。
 - `$project` 混用排除与包含：真实 `mongod 8.0.9` 回 `31254`（`Invalid $project :: caused by :: Cannot do exclusion on field ... in inclusion projection`），本仓回 `2`；语义同为拒绝，错误码粒度不同。
-- `$in` 含 `null`：真实 `mongod 8.0.9` 中 `{a: {$in: [null, 2]}}` 与 `{a: null}` 一样会匹配**缺失字段**的文档；本仓只匹配显式 `null` 与含 `null` 的数组，不匹配缺失字段（尚未改动）。
+- `$in` / `$nin` 含 `null`：已按真机对齐——列表里每个值都复用 `{field: <value>}` 的同一判等谓词，所以 `{a: {$in: [null, 2]}}` 匹配缺失字段（与 `{a: null}` 相同），`$nin: [null]` 因此**排除**缺失字段，且 `$ne: null` 与 `$nin: [null]` 在同一批文档上结果一致（探针 `in.with_null` / `in.null_single_element` / `in.null_on_array_field` / `nin.with_null` / `nin.null_and_value` / `ne.null_on_same_docs` 全部 MATCH，case `op.in.null_matches_missing_field`）。
+- `$group` 的 `$push` / `$addToSet` 对**缺失字段**：真机跳过缺失（`[1, null, 2]`，显式 `null` 才进数组），本仓把缺失求值为 `null` 后压入（`[1, null, null, 2]`）。属**静默错数据**（数组内容多一项），本轮只报不改。
+- `$group` 的 `$addToSet` 对**文档**判等：真机按字段顺序判等，`{x:1, y:2}` 与 `{y:2, x:1}` 是两个值；本仓经 JSON 命令解析后字段被排序（`serde_json::Map` 按 key 排序），两者合并成一个。属**静默错数据**（去重结果少一项），根因是命令 JSON 输入不保字段顺序，本轮只报不改。
+- `update` 修饰符错误通道：真机回 `ok: 1` + `writeErrors`（如 `$inc` `null` 为 code `14`，`$set` 穿数组为 code `28`），本仓回顶层 `ok: 0` + `code`；`$set` 穿数组的错误码也不同（真机 `28`，本仓 `2`）。语义同为拒绝，通道与码粒度不同。
+- 写命令回复类型：真机 `update` / `delete` / `count` 的 `n` 为 int32、`ok` 为 double `1.0`，本仓为 int64 与 int32；真机 `delete` 原始回复**没有** `deletedCount`（由驱动计算），本仓直接写出该字段。语义（`n`、无匹配 0）一致。
 - `update` 的 `upsert` 未实现，显式回 `59`；替换式更新同样回 `59`，不做半实现。
 - CLI 不监听网络端口、不做鉴权、不模拟 `mongosh` 的 JavaScript 求值；所有写语义都在 Rust 原语里。
 - `find` 的 `projection` 只支持 0/1 包含排除，不支持位置投影与 `$elemMatch`。
 - 聚合管道只覆盖 `$match` / `$sort` / `$limit` / `$skip` / `$count` / `$unwind` / `$group` / `$project`；`$lookup`、`$out`、`$merge`、`$facet`、`$bucket` 等阶段回 `59`；`$group` 的文档式 `_id`、其余累加器、`$project` 的其余表达式也回 `59`（清单见“聚合管道”一节）。
 - `$count` 空输入不输出文档、`$unwind` 默认丢弃空数组/`null`/缺失、`$sort` 不假设稳定次序、`null`/`$exists`/`$type`/`$all`/`$elemMatch`/点路径数组匹配、`$group` 的 `$avg`/`$min`/`$max`、数组升/降序取最小/最大元素：均在 `mongod 8.0.9` 上对拍一致（探针与 case 见上）。
+- 范围算子按类型分桶：`{a: {$gt: 5}}` 只匹配 int32/int64/double，**不匹配字符串 `"5"`**；`{a: {$gt: null}}` 与 `{a: {$lt: null}}` 在真机上都匹配空集，本仓一致。
+- `$exists: true` 对 `a: []`、`a: [null]`、`a: null` 均匹配；`$size: 0` 只匹配空数组，不匹配缺失或 `null`。
+- `find` 的 `sort` → `skip` → `limit` 顺序与真机一致（先 `$limit` 再 `$skip` 的管道会得到不同结果，已单列探针）；`find limit 1` 无 `sort` 取自然序首条、有 `sort` 取排序后首条。
+- `$sum` 忽略字符串/`null`/缺失/布尔，只累加数值；`$group` 的 `$avg`/`$min`/`$max` 行为同前。
+- `count` 的 `query` 与 `find` 的同名过滤（含 `{a: null}` 匹配缺失字段）计数一致，`$match` + `$count` 等价。
 - `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
 - `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 

@@ -138,6 +138,10 @@ function localCommand(command) {
             return JSON.parse(binding.aggregate(store, text))
         case 'delete':
             return JSON.parse(binding.delete(store, text))
+        case 'update':
+            return JSON.parse(binding.update(store, text))
+        case 'count':
+            return JSON.parse(binding.count(store, text))
         default:
             throw new Error(`unsupported local command ${name}`)
     }
@@ -156,6 +160,18 @@ function firstBatch(reply) {
     return reply?.cursor?.firstBatch ?? null
 }
 
+// `$addToSet` output order is not part of the contract, so sort the set itself.
+function sortedKeySet(reply) {
+    const batch = firstBatch(reply)
+    if (!Array.isArray(batch)) return batch
+    return batch.map((document) => ({
+        ...document,
+        ...(Array.isArray(document.s)
+            ? { s: [...document.s].sort((a, b) => stable(a).localeCompare(stable(b))) }
+            : {})
+    }))
+}
+
 function isZero(value) {
     if (value === 0) return true
     if (!value || typeof value !== 'object') return false
@@ -165,6 +181,18 @@ function isZero(value) {
 function errorShape(reply) {
     if (reply && isZero(reply.ok)) return { code: reply.code, errmsg: reply.errmsg }
     return { code: null, errmsg: null }
+}
+
+// Write commands report modifier failures through `writeErrors` on an
+// `ok: 1` reply; compare only the code so message wording does not mask it.
+function writeErrorCode(reply) {
+    if (reply?.writeErrors?.length) return { code: reply.writeErrors[0].code }
+    return { code: reply?.code ?? null }
+}
+
+function errorChannel(reply) {
+    if (reply?.writeErrors?.length) return 'writeErrors'
+    return isZero(reply?.ok) ? 'top-level' : 'other'
 }
 
 function insertOutcome(reply) {
@@ -180,7 +208,10 @@ const insert = (collection, documents, ordered) => ({
     $db: DB
 })
 const aggregate = (collection, pipeline) => ({ aggregate: collection, pipeline, cursor: {}, $db: DB })
-const find = (collection, filter) => ({ find: collection, filter, $db: DB })
+const find = (collection, filter, options = {}) => ({ find: collection, filter, ...options, $db: DB })
+const count = (collection, query) => ({ count: collection, query, $db: DB })
+const update = (collection, updates) => ({ update: collection, updates, $db: DB })
+const remove = (collection, q, limit) => ({ delete: collection, deletes: [{ q, limit }], $db: DB })
 
 const collections = {
     unwind: 'oracle_unwind',
@@ -197,7 +228,13 @@ const collections = {
     sizeq: 'oracle_sizeq',
     inq: 'oracle_inq',
     norq: 'oracle_norq',
-    mergeq: 'oracle_mergeq'
+    mergeq: 'oracle_mergeq',
+    rangeq: 'oracle_rangeq',
+    skipq: 'oracle_skipq',
+    groupq2: 'oracle_groupq2',
+    updq: 'oracle_updq',
+    delq: 'oracle_delq',
+    countq: 'oracle_countq'
 }
 
 const probes = [
@@ -806,6 +843,337 @@ const probes = [
             ])
         ],
         command: find(collections.mergeq, { tags: { $elemMatch: { n: { $in: [1, 9] } } } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'range.gt_numeric_only',
+        note: '$gt: 5 compares int/long/double only; the string "5" is never matched',
+        setup: [
+            insert(collections.rangeq, [
+                { _id: 1, a: '5' },
+                { _id: 2, a: 6 },
+                { _id: 3, a: 5.5 },
+                { _id: 4, a: { $numberLong: '6' } },
+                { _id: 5, a: 5 },
+                { _id: 6, a: null },
+                { _id: 7 }
+            ])
+        ],
+        command: find(collections.rangeq, { a: { $gt: 5 } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'range.gte_numeric_only',
+        note: '$gte: 5 includes int/long/double boundaries but not strings',
+        setup: [
+            insert(collections.rangeq, [
+                { _id: 1, a: '5' },
+                { _id: 2, a: 6 },
+                { _id: 3, a: 5.5 },
+                { _id: 4, a: { $numberLong: '6' } },
+                { _id: 5, a: 5 },
+                { _id: 6, a: null },
+                { _id: 7 }
+            ])
+        ],
+        command: find(collections.rangeq, { a: { $gte: 5 } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'range.gt_null',
+        note: '$gt: null - what does the real server match?',
+        setup: [
+            insert(collections.rangeq, [
+                { _id: 1, a: 1 },
+                { _id: 2, a: 'x' },
+                { _id: 3, a: null },
+                { _id: 4 },
+                { _id: 5, a: false }
+            ])
+        ],
+        command: find(collections.rangeq, { a: { $gt: null } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'range.lt_null',
+        note: '$lt: null - what does the real server match?',
+        setup: [
+            insert(collections.rangeq, [
+                { _id: 1, a: 1 },
+                { _id: 2, a: 'x' },
+                { _id: 3, a: null },
+                { _id: 4 },
+                { _id: 5, a: false }
+            ])
+        ],
+        command: find(collections.rangeq, { a: { $lt: null } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'exists.true_on_empty_arrays',
+        note: '$exists: true for [], [null], null, missing and a scalar',
+        setup: [
+            insert(collections.sizeq, [
+                { _id: 1, a: [] },
+                { _id: 2, a: [null] },
+                { _id: 3, a: null },
+                { _id: 4 },
+                { _id: 5, a: 1 }
+            ])
+        ],
+        command: find(collections.sizeq, { a: { $exists: true } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'size.zero_empty_array_only',
+        note: '$size: 0 - empty array only, or missing fields too?',
+        setup: [
+            insert(collections.sizeq, [
+                { _id: 1, a: [] },
+                { _id: 2, a: [null] },
+                { _id: 3, a: null },
+                { _id: 4 },
+                { _id: 5, a: [1, 2] }
+            ])
+        ],
+        command: find(collections.sizeq, { a: { $size: 0 } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'find.sort_skip_limit',
+        note: 'find applies sort, then skip, then limit',
+        setup: [
+            insert(collections.skipq, [
+                { _id: 1, a: 7 },
+                { _id: 2, a: 2 },
+                { _id: 3, a: 5 },
+                { _id: 4, a: 1 },
+                { _id: 5, a: 4 },
+                { _id: 6, a: 6 },
+                { _id: 7, a: 3 }
+            ])
+        ],
+        command: find(collections.skipq, {}, { sort: { a: 1 }, skip: 2, limit: 3 }),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'find.limit_then_skip_pipeline',
+        note: 'contrast: a $limit stage before $skip truncates first',
+        setup: [
+            insert(collections.skipq, [
+                { _id: 1, a: 7 },
+                { _id: 2, a: 2 },
+                { _id: 3, a: 5 },
+                { _id: 4, a: 1 },
+                { _id: 5, a: 4 },
+                { _id: 6, a: 6 },
+                { _id: 7, a: 3 }
+            ])
+        ],
+        command: aggregate(collections.skipq, [{ $sort: { a: 1 } }, { $limit: 3 }, { $skip: 2 }]),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'find.limit_one_no_sort',
+        note: 'find limit 1 without sort returns the first document in natural order',
+        setup: [insert(collections.skipq, [{ _id: 1, a: 3 }, { _id: 2, a: 1 }, { _id: 3, a: 2 }])],
+        command: find(collections.skipq, {}, { limit: 1 }),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'find.limit_one_with_sort',
+        note: 'find limit 1 with a sort returns the sorted first document',
+        setup: [insert(collections.skipq, [{ _id: 1, a: 3 }, { _id: 2, a: 1 }, { _id: 3, a: 2 }])],
+        command: find(collections.skipq, {}, { sort: { a: -1 }, limit: 1 }),
+        pick: firstBatch,
+        orderMatters: true
+    },
+    {
+        id: 'group.push_missing_field',
+        note: '$push of a missing field - is null pushed or nothing?',
+        setup: [
+            insert(collections.groupq2, [
+                { _id: 1, v: 1 },
+                { _id: 2 },
+                { _id: 3, v: null },
+                { _id: 4, v: 2 }
+            ])
+        ],
+        command: aggregate(collections.groupq2, [{ $group: { _id: null, pushed: { $push: '$v' } } }]),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'group.add_to_set_documents',
+        note: '$addToSet equality for documents, arrays and numeric types',
+        setup: [
+            insert(collections.groupq2, [
+                { _id: 1, d: { x: 1, y: 2 } },
+                { _id: 2, d: { y: 2, x: 1 } },
+                { _id: 3, d: [1, 2] },
+                { _id: 4, d: [2, 1] },
+                { _id: 5, d: 1 },
+                { _id: 6, d: 1.0 },
+                { _id: 7, d: 's' },
+                { _id: 8 }
+            ])
+        ],
+        command: aggregate(collections.groupq2, [{ $group: { _id: null, s: { $addToSet: '$d' } } }]),
+        pick: sortedKeySet,
+        orderMatters: false
+    },
+    {
+        id: 'group.sum_ignores_non_numeric',
+        note: '$sum over strings, null, missing and booleans',
+        setup: [
+            insert(collections.groupq2, [
+                { _id: 1, v: 'x' },
+                { _id: 2, v: null },
+                { _id: 3 },
+                { _id: 4, v: true },
+                { _id: 5, v: false },
+                { _id: 6, v: 2 },
+                { _id: 7, v: 3.5 }
+            ])
+        ],
+        command: aggregate(collections.groupq2, [{ $group: { _id: null, total: { $sum: '$v' } } }]),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'update.unset_missing',
+        note: '$unset a field that does not exist - n vs nModified',
+        setup: [insert(collections.updq, [{ _id: 1, a: 1 }])],
+        command: update(collections.updq, [{ q: { _id: 1 }, u: { $unset: { b: '' } } }]),
+        pick: (reply) => reply,
+        orderMatters: false
+    },
+    {
+        id: 'update.inc_null_field',
+        note: '$inc on an explicit null - real error code',
+        setup: [insert(collections.updq, [{ _id: 1, a: null }])],
+        command: update(collections.updq, [{ q: { _id: 1 }, u: { $inc: { a: 1 } } }]),
+        pick: writeErrorCode,
+        orderMatters: false,
+        errorProbe: true
+    },
+    {
+        id: 'update.set_dotted_scalar_array',
+        note: '$set a.b where a is an array of scalars - real error code',
+        setup: [insert(collections.updq, [{ _id: 1, a: [1, 2] }])],
+        command: update(collections.updq, [{ q: { _id: 1 }, u: { $set: { 'a.b': 1 } } }]),
+        pick: writeErrorCode,
+        orderMatters: false,
+        errorProbe: true
+    },
+    {
+        id: 'update.error_channel',
+        note: 'modifier failures: does the reply use writeErrors or a top-level ok: 0?',
+        setup: [insert(collections.updq, [{ _id: 1, a: [1, 2] }])],
+        command: update(collections.updq, [{ q: { _id: 1 }, u: { $set: { 'a.b': 1 } } }]),
+        pick: errorChannel,
+        orderMatters: false,
+        errorProbe: true
+    },
+    {
+        id: 'update.set_dotted_document_array',
+        note: '$set a.b where a is an array of documents - applied to each element?',
+        setup: [insert(collections.updq, [{ _id: 1, a: [{ b: 1 }, { b: 2 }] }])],
+        command: update(collections.updq, [{ q: { _id: 1 }, u: { $set: { 'a.b': 5 } } }]),
+        pick: (reply) => reply,
+        orderMatters: false
+    },
+    {
+        id: 'delete.many_no_match',
+        note: 'deleteMany with no match - n and deletedCount',
+        setup: [insert(collections.delq, [{ _id: 1, a: 1 }, { _id: 2, a: 2 }])],
+        command: remove(collections.delq, { a: 99 }, 0),
+        pick: (reply) => reply,
+        orderMatters: false
+    },
+    {
+        id: 'delete.one_no_match',
+        note: 'deleteOne with no match - n and deletedCount',
+        setup: [insert(collections.delq, [{ _id: 1, a: 1 }, { _id: 2, a: 2 }])],
+        command: remove(collections.delq, { a: 99 }, 1),
+        pick: (reply) => reply,
+        orderMatters: false
+    },
+    {
+        id: 'count.null_filter',
+        note: 'count with {a: null} - same null/missing semantics as find',
+        setup: [
+            insert(collections.countq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: 2 }])
+        ],
+        command: count(collections.countq, { a: null }),
+        pick: (reply) => reply,
+        orderMatters: false
+    },
+    {
+        id: 'count.aggregate_equivalent',
+        note: 'countDocuments equivalence: $match + $count sees the same rows',
+        setup: [
+            insert(collections.countq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: 2 }])
+        ],
+        command: aggregate(collections.countq, [{ $match: { a: null } }, { $count: 'n' }]),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'in.null_single_element',
+        note: '$in: [null] equals {a: null}',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: [] }])],
+        command: find(collections.inq, { a: { $in: [null] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'nin.with_null',
+        note: '$nin: [null] excludes missing fields, complement of $in: [null]',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: [] }])],
+        command: find(collections.inq, { a: { $nin: [null] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'nin.null_and_value',
+        note: '$nin: [null, 2] vs $ne: null and $ne: 2',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 6, a: 2 }])],
+        command: find(collections.inq, { a: { $nin: [null, 2] } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'ne.null_on_same_docs',
+        note: '$ne: null on the same documents as $nin: [null] - are they equivalent?',
+        setup: [insert(collections.inq, [{ _id: 1, a: 1 }, { _id: 2, a: null }, { _id: 3 }, { _id: 4, a: [null] }, { _id: 5, a: [] }])],
+        command: find(collections.inq, { a: { $ne: null } }),
+        pick: firstBatch,
+        orderMatters: false
+    },
+    {
+        id: 'in.null_on_array_field',
+        note: '$in: [null] matches an array field containing null',
+        setup: [
+            insert(collections.inq, [
+                { _id: 1, a: [null] },
+                { _id: 2, a: [1, null] },
+                { _id: 3, a: [] },
+                { _id: 4, a: null },
+                { _id: 5 }
+            ])
+        ],
+        command: find(collections.inq, { a: { $in: [null] } }),
         pick: firstBatch,
         orderMatters: false
     }
