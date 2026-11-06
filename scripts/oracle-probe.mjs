@@ -17,7 +17,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..')
 const require = createRequire(import.meta.url)
 const short = `${process.platform}-${process.arch}`
-const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${short}`, `mongodb.${short}.node`))
+const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${short}`))
+
 
 const args = process.argv.slice(2)
 const option = (name, fallback) => {

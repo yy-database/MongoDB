@@ -1,6 +1,7 @@
 // Resolves the platform addon the same way `bin/mongo.mjs` does: installed
-// packages go through the platform dependency, a plain checkout falls back to
-// the repository path. Every MongoDB semantic still lives in Rust.
+// packages go through the optional dependency, a plain checkout falls back to
+// the sibling platform package directory. `package.json#main` owns the `.node`
+// filename — callers never concatenate it.
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -16,8 +17,8 @@ function loadBinding(): any {
         return require(platformPackage)
     } catch (error) {
         const repo = resolve(packageRoot, '..', '..', '..', '..')
-        const local = join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, `mongodb.${platform}.node`)
-        if (existsSync(local)) return require(local)
+        const local = join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`)
+        if (existsSync(join(local, 'package.json'))) return require(local)
         throw new Error(`cannot resolve ${platformPackage}: install the matching platform package (${(error as Error).message})`)
     }
 }

@@ -19,16 +19,16 @@ const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const platformPackage = `@yydb/mongodb-${process.platform}-${process.arch}`
 
-// Installed layouts resolve the platform package through `node_modules`; a
-// checkout that never ran a workspace install keeps the same package next to
-// this command, so fall back to that repository path only when it exists.
+// Installed layouts resolve through `node_modules` + `package.json#main`. A
+// checkout falls back to the sibling platform package directory — never the
+// `.node` filename, which only lives in that package's `main`.
 function loadBinding() {
     try {
         return require(platformPackage)
     } catch (error) {
         const short = `${process.platform}-${process.arch}`
-        const local = resolve(here, '..', '..', '..', 'platforms', `mongo-${short}`, `mongodb.${short}.node`)
-        if (existsSync(local)) return require(local)
+        const local = resolve(here, '..', '..', '..', 'platforms', `mongo-${short}`)
+        if (existsSync(join(local, 'package.json'))) return require(local)
         throw new Error(`cannot resolve ${platformPackage}: install the matching platform package (${error.message})`)
     }
 }

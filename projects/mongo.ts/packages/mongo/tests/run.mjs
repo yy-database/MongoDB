@@ -1,10 +1,10 @@
 // TypeScript-side acceptance runner.
 //
-// Every case in `tests/cases/*.json` is executed through the installed platform
-// package (`@yydb/mongodb-<os>-<arch>` -> `mongodb.<os>-<arch>.node`). Expectations are
-// literals in the case files: BSON bytes follow the specification layouts and
-// command replies follow MongoDB semantics, so nothing is derived by calling
-// this implementation twice.
+// Every case in `tests/cases/*.json` is executed through the platform package
+// (`@yydb/mongodb-<os>-<arch>`, resolved via `package.json#main`). Expectations
+// are literals in the case files: BSON bytes follow the specification layouts
+// and command replies follow MongoDB semantics, so nothing is derived by
+// calling this implementation twice.
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -16,7 +16,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..', '..', '..', '..')
 const require = createRequire(import.meta.url)
 const platform = `${process.platform}-${process.arch}`
-const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, `mongodb.${platform}.node`))
+const binding = require(join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`))
 const cliEntry = join(repo, 'projects', 'mongo.ts', 'packages', 'mongo', 'bin', 'mongo.mjs')
 const yydsVerifier = join(repo, 'scripts', 'verify-yyds.mjs')
 
