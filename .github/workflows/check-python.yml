@@ -46,6 +46,8 @@ jobs:
         run: node scripts/build-pyo3.mjs
       - name: Python suite
         run: pnpm run test:py
+      - name: Installation-state gate
+        run: pnpm run gate:install-py
       - name: Python wire server suite
         run: pnpm run test:server:py
       - name: Assertion count gate
