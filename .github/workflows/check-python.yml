@@ -44,6 +44,8 @@ jobs:
           python -m pip install --quiet "maturin>=1.7,<2.0" "pymongo>=4.11,<5.0"
       - name: Build pyo3 wheel
         run: node scripts/build-pyo3.mjs
+      - name: Build the native binding
+        run: node scripts/build-napi.mjs
       - name: Python suite
         run: pnpm run test:py
       - name: Installation-state gate
