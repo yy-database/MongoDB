@@ -40,7 +40,7 @@ jobs:
       - name: Wire server suite
         run: pnpm run test:server
       - name: Assertion count gate
-        run: pnpm run gate:test-count
+        run: pnpm run gate:test-count -- --language ts
 
   corpus:
     name: differential corpus
@@ -75,4 +75,4 @@ jobs:
       - name: Build the native binding
         run: node scripts/build-napi.mjs
       - name: Differential corpus gate
-        run: pnpm corpus --host 127.0.0.1 --port 27017 --seed 20261106 --count 291 --check
+        run: pnpm corpus --host 127.0.0.1 --port 27017 --seed 20261106 --count 309 --check

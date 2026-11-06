@@ -41,10 +41,12 @@ jobs:
       - name: Install tooling
         run: |
           pnpm install --no-frozen-lockfile
-          python -m pip install --quiet "maturin>=1.7,<2.0"
+          python -m pip install --quiet "maturin>=1.7,<2.0" "pymongo>=4.11,<5.0"
       - name: Build pyo3 wheel
         run: node scripts/build-pyo3.mjs
       - name: Python suite
         run: pnpm run test:py
       - name: Python wire server suite
         run: pnpm run test:server:py
+      - name: Assertion count gate
+        run: pnpm run gate:test-count -- --language py
