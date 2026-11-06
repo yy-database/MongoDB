@@ -1,7 +1,6 @@
 {
-    "name": "@yydb/mongo",
+    "name": "@yydb/mongodb",
     "version": "0.0.0",
-    "private": true,
     "type": "module",
     "description": "TypeScript acceptance surface and minimal shell for the Rust MongoDB primitives",
     "license": "MPL-2.0",
@@ -25,11 +24,19 @@
         "test": "node tests/run.mjs"
     },
     "optionalDependencies": {
-        "@yydb/mongo-darwin-arm64": "0.0.0",
-        "@yydb/mongo-darwin-x64": "0.0.0",
-        "@yydb/mongo-linux-x64": "0.0.0",
-        "@yydb/mongo-unknown-wasm32": "0.0.0",
-        "@yydb/mongo-win32-x64": "0.0.0"
+        "@yydb/mongodb-darwin-arm64": "0.0.0",
+        "@yydb/mongodb-darwin-x64": "0.0.0",
+        "@yydb/mongodb-linux-x64": "0.0.0",
+        "@yydb/mongodb-unknown-wasm32": "0.0.0",
+        "@yydb/mongodb-win32-x64": "0.0.0"
+    },
+    "engines": {
+        "node": ">=20"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/yy-database/MongoDB.git",
+        "directory": "projects/mongo.ts/packages/mongo"
     },
     "devDependencies": {
         "@types/node": "^22.15.0",

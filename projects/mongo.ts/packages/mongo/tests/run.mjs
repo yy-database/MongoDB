@@ -1,7 +1,7 @@
 // TypeScript-side acceptance runner.
 //
 // Every case in `tests/cases/*.json` is executed through the installed platform
-// package (`@yydb/mongo-<os>-<arch>` -> `lib/mongo.node`). Expectations are
+// package (`@yydb/mongodb-<os>-<arch>` -> `lib/mongo.node`). Expectations are
 // literals in the case files: BSON bytes follow the specification layouts and
 // command replies follow MongoDB semantics, so nothing is derived by calling
 // this implementation twice.
@@ -453,7 +453,7 @@ for (const item of results) {
 
 const summary = {
     language: 'ts',
-    binding: `@yydb/mongo-${platform}`,
+    binding: `@yydb/mongodb-${platform}`,
     cases: results.length,
     assertions: totalAssertions,
     passed: totalAssertions - failed.length,

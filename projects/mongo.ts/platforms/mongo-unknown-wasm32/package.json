@@ -1,0 +1,15 @@
+{
+    "name": "@yydb/mongodb-unknown-wasm32",
+    "version": "0.0.0",
+    "license": "MPL-2.0",
+    "description": "WASM binding for @yydb/mongodb",
+    
+    "main": "index.js",
+    "files": ["index.js", "lib"],
+    "engines": { "node": ">=20" },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/yy-database/MongoDB.git",
+        "directory": "projects/mongo.ts/platforms/mongo-unknown-wasm32"
+    }
+}

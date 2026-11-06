@@ -1,19 +1,24 @@
-name: Publish npm
+name: publish-npm
 
-# Runs only after Check Rust, Check TypeScript and Check Python all succeed
-# on this tag (re-run via workflow_call). Packages stay private until the
-# product shell flips that flag; the gate still must pass before this job.
+# Trusted Publisher contract (sole npm trusted workflow — keep this filename):
+#   file = publish-npm.yml
+#   repo = yy-database/MongoDB
+#   env  = NPM_PUBLISH
 #
-# Trigger: git tag v0.1.0 && git push origin v0.1.0
+# Real `@yydb/mongodb*` versions publish only through npm Trusted Publisher
+# (OIDC) on tag push. Local `nifty publish --placeholder` is only for 0.0.0 stubs.
+#
+# Runs only after Check Rust, Check TypeScript and Check Python all succeed
+# on this tag (re-run via workflow_call).
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: Version without v prefix (workflow_dispatch only)
-        required: false
+      tag:
+        description: "Existing release tag (for example v0.0.1). Its version is published."
+        required: true
         type: string
 
 permissions:
@@ -76,6 +81,8 @@ jobs:
     needs: [check-rust, check-typescript, check-python, build-native]
     runs-on: ubuntu-latest
     environment: NPM_PUBLISH
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
@@ -85,9 +92,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          package-manager-cache: false
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly-2026-07-20
+      - name: Upgrade npm for Trusted Publisher support
+        run: npm install --global npm@11
       - run: pnpm install --no-frozen-lockfile
       - name: Download native artifacts
         uses: actions/download-artifact@v4
@@ -107,31 +117,5 @@ jobs:
             ls -la "$dest"
           done
       - run: pnpm run build:ts
-      - name: Resolve version
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
-            version="${{ inputs.version }}"
-          else
-            tag="${GITHUB_REF_NAME}"
-            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
-              echo "expected semver tag like v1.2.3, got: $tag" >&2
-              exit 1
-            fi
-            version="${tag#v}"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "publishing version $version"
-      - name: Gate private packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          private="$(node -p "require('./projects/mongo.ts/packages/mongo/package.json').private === true")"
-          if [[ "$private" == "true" ]]; then
-            echo "packages are still private — check gates passed, npm publish skipped"
-            exit 0
-          fi
-          echo "packages are public — add a Trusted Publisher publish step before flipping private"
-          exit 1
+      - name: Publish packages to npm
+        run: pnpm exec nifty publish --access public --version="${RELEASE_TAG#v}"

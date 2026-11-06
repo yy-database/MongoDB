@@ -26,6 +26,13 @@ projects/mongo.ts/platforms/*/lib/
 projects/mongo.ts/platforms/*/README.md
 projects/mongo.ts/homepage/site/
 
+# Local npm 2FA (never commit)
+.env.placeholder.local
+.env*.local
+
+# Nifty local cache
+.cache/
+
 # Python
 projects/mongo.py/packages/mongo/.venv/
 projects/mongo.py/packages/mongo/build/

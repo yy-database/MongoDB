@@ -176,7 +176,7 @@ tests/diff/          固定种子差分语料与其真机 baseline（含 digest�
 
 Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。BSON 与 `OP_MSG` / `OP_QUERY` 编解码直接 re-export 上游 `database-protocol-mongo`（pin 到 `dev` 的完整 40 位 rev），本仓不再维护 `bson.rs` / `codec.rs` / `wire.rs`。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
 
-平台包目录 = `mongo-<os>-<arch>`，包名与目录同构：`mongo-win32-x64` → `@yydb/mongo-win32-x64`；WASM 为 `mongo-unknown-wasm32`。所有包 `private: true`，到产品级之前不发布。
+平台包目录 = `mongo-<os>-<arch>`，npm 包名为 `@yydb/mongodb-<os>-<arch>`（例如 `mongo-win32-x64` → `@yydb/mongodb-win32-x64`）；WASM 为 `@yydb/mongodb-unknown-wasm32`。主包为 `@yydb/mongodb`。`0.0.0` 占位经本地 `nifty publish --placeholder` 发布，真实版本只走 Trusted Publisher。
 
 ## 开发
 

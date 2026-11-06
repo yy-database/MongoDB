@@ -1,12 +1,21 @@
 {
-    "name": "@yydb/mongo-win32-x64",
+    "name": "@yydb/mongodb-win32-x64",
     "version": "0.0.0",
-    "private": true,
     "license": "MPL-2.0",
-    "description": "Native binding for @yydb/mongo on win32-x64",
+    "description": "Native binding for @yydb/mongodb on win32-x64",
+    "os": ["win32"],
+    "cpu": ["x64"],
     "main": "index.js",
     "files": [
         "index.js",
         "lib"
-    ]
+    ],
+    "engines": {
+        "node": ">=20"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/yy-database/MongoDB.git",
+        "directory": "projects/mongo.ts/platforms/mongo-win32-x64"
+    }
 }

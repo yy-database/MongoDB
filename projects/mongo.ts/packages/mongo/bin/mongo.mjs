@@ -17,7 +17,7 @@ import { createInterface } from 'node:readline'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
-const platformPackage = `@yydb/mongo-${process.platform}-${process.arch}`
+const platformPackage = `@yydb/mongodb-${process.platform}-${process.arch}`
 
 // Installed layouts resolve the platform package through `node_modules`; a
 // checkout that never ran a workspace install keeps the same package next to

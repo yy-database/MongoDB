@@ -1,17 +1,17 @@
-# @yydb/mongo
+# `@yydb/mongodb`
 
 MongoDB wire-protocol server assembled in TypeScript on top of the Rust
 primitives in `projects/mongo.rs`. Documents live in a `.yykv` shard.
 
 ```ts
-import { createServer } from '@yydb/mongo'
+import { createServer } from '@yydb/mongodb'
 
 const server = createServer({ dataDir: './data', port: 27017 })
 console.log(await server.listening)
 ```
 
 The package is private during the product build. Builds resolve the platform
-binding from `@yydb/mongo-<os>-<arch>`.
+binding from `@yydb/mongodb-<os>-<arch>`.
 
 ## Compression
 

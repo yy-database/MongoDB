@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const platform = `${process.platform}-${process.arch}`
-const platformPackage = `@yydb/mongo-${platform}`
+const platformPackage = `@yydb/mongodb-${platform}`
 const require = createRequire(import.meta.url)
 
 function loadBinding(): any {
