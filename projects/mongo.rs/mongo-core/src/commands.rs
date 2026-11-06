@@ -32,8 +32,8 @@ pub const FILTER_OPERATORS: [&str; 16] = [
 pub const LOGICAL_OPERATORS: [&str; 3] = ["$and", "$or", "$nor"];
 
 /// Update operators this gateway implements.
-pub const UPDATE_OPERATORS: [&str; 9] =
-    ["$set", "$unset", "$inc", "$mul", "$rename", "$push", "$pop", "$addToSet", "$pull"];
+pub const UPDATE_OPERATORS: [&str; 12] =
+    ["$set", "$unset", "$inc", "$mul", "$min", "$max", "$rename", "$push", "$pop", "$addToSet", "$pull", "$setOnInsert"];
 
 /// Command failure carrying the MongoDB error code.
 #[derive(Debug, Clone, PartialEq)]
@@ -2353,7 +2353,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
                 build_replacement(update_document, identifier_value.as_ref())
             }
             else {
-                apply_update(&document, update_document, &identifier, filter)
+                apply_update(&document, update_document, &identifier, filter, false)
             };
             let updated = match applied {
                 Ok(updated) => updated,
@@ -2428,7 +2428,7 @@ pub fn update(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Com
             else {
                 let base = upsert_base(filter);
                 let identifier = base.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
-                apply_update(&base, update_document, &identifier, filter)
+                apply_update(&base, update_document, &identifier, filter, true)
             };
             let mut inserted = match applied {
                 Ok(document) => document,
@@ -2646,12 +2646,13 @@ fn apply_update(
     specification: &BsonDocument,
     identifier: &str,
     filter: &BsonDocument,
+    on_insert: bool,
 ) -> Result<BsonDocument, CommandError> {
     let mut updated = document.clone();
     for (operator, operand) in &specification.fields {
         let BsonValue::Document(operand) = operand
         else { continue };
-        if matches!(operator.as_str(), "$set" | "$inc" | "$mul") {
+        if matches!(operator.as_str(), "$set" | "$inc" | "$mul" | "$min" | "$max") {
             for path in operand.fields.iter().map(|(path, _)| path) {
                 let segments = resolve_segments(path, document, filter)?;
                 let path_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
@@ -2666,6 +2667,17 @@ fn apply_update(
                 "$unset" => unset_segments(&mut updated, &path_refs),
                 "$inc" => numeric_segments(&mut updated, &path_refs, value, path, identifier, false)?,
                 "$mul" => numeric_segments(&mut updated, &path_refs, value, path, identifier, true)?,
+                // `$min` / `$max` keep the smaller / larger value under the BSON
+                // ordering, and write the operand when the field is missing.
+                "$min" => keep_extreme(&mut updated, &path_refs, value, true)?,
+                "$max" => keep_extreme(&mut updated, &path_refs, value, false)?,
+                // `$setOnInsert` is a no-op on a matched document and applies only
+                // while constructing the document an upsert inserts.
+                "$setOnInsert" => {
+                    if on_insert {
+                        set_segments(&mut updated, &path_refs, value.clone())?;
+                    }
+                }
                 "$rename" => rename_path(&mut updated, &path_refs, value, path)?,
                 "$push" => push_path(&mut updated, &path_refs, value, path, identifier)?,
                 "$pop" => pop_path(&mut updated, &path_refs, value, path)?,
@@ -2856,6 +2868,23 @@ fn descend_value_mut<'a>(value: &'a mut BsonValue, segments: &[&str]) -> Option<
         }
         _ => None,
     }
+}
+
+/// `$min` / `$max`: keep the operand only when it is smaller / larger than the
+/// current value under the BSON ordering. A missing field always takes the
+/// operand, matching `mongod` where `{ $min: { a: 1 } }` creates `a: 1`.
+fn keep_extreme(document: &mut BsonDocument, segments: &[&str], value: &BsonValue, minimum: bool) -> Result<(), CommandError> {
+    let replace = match value_at(document, segments) {
+        None => true,
+        Some(current) => {
+            let ordering = compare_values(value, current);
+            if minimum { ordering == Ordering::Less } else { ordering == Ordering::Greater }
+        }
+    };
+    if replace {
+        set_segments(document, segments, value.clone())?;
+    }
+    Ok(())
 }
 
 fn set_segments(document: &mut BsonDocument, segments: &[&str], value: BsonValue) -> Result<(), CommandError> {
@@ -4363,7 +4392,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         let identifier_value = document.get("_id").cloned();
         let identifier = identifier_value.as_ref().map(describe_id).unwrap_or_else(|| "<missing>".to_string());
         let updated = if operator_update {
-            apply_update(document, update_document, &identifier, filter)?
+            apply_update(document, update_document, &identifier, filter, false)?
         }
         else {
             build_replacement(update_document, identifier_value.as_ref())?
@@ -4413,7 +4442,7 @@ pub fn find_and_modify(command: &BsonDocument, store: &Store) -> Result<BsonDocu
         let mut inserted = if operator_update {
             let base = upsert_base(filter);
             let identifier = base.get("_id").map(describe_id).unwrap_or_else(|| "<missing>".to_string());
-            apply_update(&base, update_document, &identifier, filter)?
+            apply_update(&base, update_document, &identifier, filter, true)?
         }
         else {
             let query_identifier = match filter.get("_id") {

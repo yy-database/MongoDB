@@ -203,13 +203,13 @@ node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；�
 
 手挑探针到顶后改用固定种子生成的差分语料：`scripts/diff-corpus.mjs` 按簇生成命令，两条路各跑一遍——本仓 napi 原语与真机 `mongod 8.0.9`——再比对归一化后的回复。期望值只来自真机：一致的条目用真机回复写成门禁 case，稳定不一致的写成“已知差异” case 并在 `source` 引用真机回复，不拿本实现当参照。
 
-seed `20261106`、`mongod 8.0.9`，共 **291 条 / 16 簇**：`find` 24、`aggregate` 36、`update` 43、`insert` 10、`indexes` 21、`delete` 8、`cursor` 8、`findAndModify` 18、`distinct` 11、`bulkWrite` 15、`validators` 16、`listCollections` 8、`count` 10、`hint` 25、`undefined` 32、`bsonTypes` 6。每条独立命名空间 `diff_<cluster>_<n>`，真机侧跑前重置（`delete` 全部 + `dropIndexes *`），本仓侧每条用全新临时存储与游标表，因此长驻 `mongod` 上重跑结果不变。`bsonTypes` 簇覆盖 `Date` / `Timestamp` / `MinKey` / `MaxKey` 的交换、混合类型 `sort` 位次与重复键 `errmsg` 渲染。
+seed `20261106`、`mongod 8.0.9`，共 **317 条 / 16 簇**：`find` 24、`aggregate` 36、`update` 51、`insert` 10、`indexes` 26、`delete` 8、`cursor` 8、`findAndModify` 18、`distinct` 11、`bulkWrite` 15、`validators` 16、`listCollections` 8、`count` 10、`hint` 25、`undefined` 45、`bsonTypes` 6。每条独立命名空间 `diff_<cluster>_<n>`，真机侧跑前重置（`delete` 全部 + `dropIndexes *`），本仓侧每条用全新临时存储与游标表，因此长驻 `mongod` 上重跑结果不变。`bsonTypes` 簇覆盖 `Date` / `Timestamp` / `MinKey` / `MaxKey` 的交换、混合类型 `sort` 位次与重复键 `errmsg` 渲染。
 
 | 文件 | 内容 | digest |
 |------|------|--------|
-| `tests/diff/corpus.json` | 生成语料（291 条，含 setup / steps / 无序声明） | `a758a218…` |
-| `tests/diff/baseline.json` | 真机归一化回复，按条目 id 索引 | `c129c3e6…`（replyDigest） |
-| `tests/cases/diff.json` | 一致且可进门禁的 **250** 条 case，期望值取自真机 | — |
+| `tests/diff/corpus.json` | 生成语料（317 条，含 setup / steps / 无序声明） | `6092d7a2…` |
+| `tests/diff/baseline.json` | 真机归一化回复，按条目 id 索引 | `eb8e38ea…`（replyDigest） |
+| `tests/cases/diff.json` | 一致且可进门禁的 **275** 条 case，期望值取自真机 | — |
 | `tests/cases/diff-known.json` | **0** 条稳定差异，本批已全部对齐 | — |
 
 ```bash
@@ -218,7 +218,7 @@ node scripts/diff-corpus.mjs --only diff.find.sort_skip_limit  # 单条复跑并
 node scripts/diff-corpus.mjs --write --emit-cases  # 全量跑，重写 baseline 与 case
 ```
 
-归一化只抹服务端随机量：非零游标 id、`cursorsKilled` 一类数组元素、建索引 build/collection UUID、自动生成 ObjectId、`cursor id N not found` 文案；`$addToSet` 顺序未定义的结果按无序比较，因此该条不进门禁。最近一次全量结果：**291 条一致**（其中 250 条可进门禁）、**0 条稳定差异**、**0 条不稳定**。
+归一化只抹服务端随机量：非零游标 id、`cursorsKilled` 一类数组元素、建索引 build/collection UUID、自动生成 ObjectId、`cursor id N not found` 文案；`$addToSet` 顺序未定义的结果按无序比较，因此该条不进门禁。最近一次全量结果：**317 条一致**（其中 275 条可进门禁）、**0 条稳定差异**、**0 条不稳定**。
 
 差分语料确认并已修正的差异：
 
@@ -226,12 +226,12 @@ node scripts/diff-corpus.mjs --write --emit-cases  # 全量跑，重写 baseline
 - 重复键值为整值 double：真机消息 `dup key: { _id: 1.0 }`，本仓原先渲染 `Double(1.0)`。
 - `getMore` / 已杀游标：真机回 `43 CursorNotFound`，本仓原先缺 `codeName`。
 
-11 条已知差异（全部是能力缺口，真机正常执行、本仓拒绝）：
+差分语料当前 **0 条已知差异**。此前记录的能力缺口（`$addFields`、数组下标路径、`$push` / `$pop` / `$addToSet` / `$pull` / `$rename` / `$mul`、`upsert`、替换式更新、游标与错误回复的 `ok` 类型）均已落地并由语料逐条对齐。
 
-- `$addFields` 阶段 2 条：真机支持，本仓回 `59`。
-- `update` 9 条：数组下标路径 `$set: {"items.0.qty": 7}` 真机接受并落地、本仓回 `28`；`$push` / `$pop` / `$addToSet` / `$pull` / `$rename` / `$mul` 真机应用、本仓回 `9`；`upsert` 与替换式更新真机执行、本仓回 `59`。
+仍存在的边界（坐标，不降级成“返回错误即通过”）：
 
-剩余差异（坐标，不降级成“返回错误即通过”）：上述 `$addFields`、数组下标路径与 6 个 update 修饰符、`upsert` / 替换式更新；以及**游标与错误回复的 `ok` 类型**——真机所有回复的 `ok` 都是 double（`1.0` / `0.0`），本仓游标与错误回复仍走共享回复助手的 int32，比对时按数值归一化、生成 case 时跳过该字段，助手改动待裁决。
+- `update` 管道形态（`u: [{ $set: … }]`）：真机执行，本仓回 `2`（`update specification requires a 'u' document`）。
+- `arrayFilters`（`u: { $set: { 'items.$[i].qty': … } }` 配 `arrayFilters`）：真机执行，本仓因未解析过滤器回 `28`。
 
 ## 命令行（最小面）
 

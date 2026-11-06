@@ -1,12 +1,12 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 309,
+  "count": 317,
   "mongod": "8.0.9",
   "counts": {
     "find": 24,
     "aggregate": 36,
-    "update": 43,
+    "update": 51,
     "delete": 8,
     "insert": 10,
     "indexes": 26,
@@ -21,7 +21,7 @@
     "undefined": 45,
     "bsonTypes": 6
   },
-  "digest": "6b07c402b5b9678139b3bd2634e2406b4b1d2324d8433e40a58a895d71a7d9b2",
+  "digest": "6092d7a29b4abefe039df47fb5d21eaacaf341fe07334fd89f5cb730e64af9d6",
   "entries": [
     {
       "id": "diff.find.eq_int",
@@ -9960,7 +9960,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.array_index_inc",
+      "id": "diff.update.min_lower",
       "cluster": "update",
       "collection": "diff_update_29",
       "setup": [
@@ -10066,8 +10066,8 @@
                 "_id": 1
               },
               "u": {
-                "$inc": {
-                  "items.0.qty": 1
+                "$min": {
+                  "score": 5
                 }
               }
             }
@@ -10077,7 +10077,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.array_index_unset",
+      "id": "diff.update.min_keep",
       "cluster": "update",
       "collection": "diff_update_30",
       "setup": [
@@ -10183,8 +10183,8 @@
                 "_id": 1
               },
               "u": {
-                "$unset": {
-                  "items.0.qty": ""
+                "$min": {
+                  "score": 15
                 }
               }
             }
@@ -10194,7 +10194,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.array_index_pad",
+      "id": "diff.update.min_missing",
       "cluster": "update",
       "collection": "diff_update_31",
       "setup": [
@@ -10297,11 +10297,11 @@
           "updates": [
             {
               "q": {
-                "_id": 3
+                "_id": 1
               },
               "u": {
-                "$set": {
-                  "items.5.qty": 1
+                "$min": {
+                  "ghost": 3
                 }
               }
             }
@@ -10311,7 +10311,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.array_index_negative_error",
+      "id": "diff.update.max_raise",
       "cluster": "update",
       "collection": "diff_update_32",
       "setup": [
@@ -10417,8 +10417,8 @@
                 "_id": 1
               },
               "u": {
-                "$set": {
-                  "items.-1.qty": 3
+                "$max": {
+                  "score": 25
                 }
               }
             }
@@ -10428,7 +10428,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.positional_dotted",
+      "id": "diff.update.max_keep",
       "cluster": "update",
       "collection": "diff_update_33",
       "setup": [
@@ -10531,14 +10531,11 @@
           "updates": [
             {
               "q": {
-                "_id": 1,
-                "items.qty": {
-                  "$gte": 5
-                }
+                "_id": 1
               },
               "u": {
-                "$set": {
-                  "items.$.qty": 0
+                "$max": {
+                  "score": 5
                 }
               }
             }
@@ -10548,7 +10545,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.positional_elem_match",
+      "id": "diff.update.max_missing",
       "cluster": "update",
       "collection": "diff_update_34",
       "setup": [
@@ -10651,16 +10648,11 @@
           "updates": [
             {
               "q": {
-                "_id": 1,
-                "items": {
-                  "$elemMatch": {
-                    "qty": 2
-                  }
-                }
+                "_id": 1
               },
               "u": {
-                "$inc": {
-                  "items.$.qty": 10
+                "$max": {
+                  "ghost": 4
                 }
               }
             }
@@ -10670,7 +10662,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.push_nonarray_error",
+      "id": "diff.update.set_on_insert_upsert",
       "cluster": "update",
       "collection": "diff_update_35",
       "setup": [
@@ -10773,13 +10765,17 @@
           "updates": [
             {
               "q": {
-                "_id": 1
+                "_id": 97
               },
               "u": {
-                "$push": {
+                "$set": {
+                  "name": "ins"
+                },
+                "$setOnInsert": {
                   "score": 1
                 }
-              }
+              },
+              "upsert": true
             }
           ]
         }
@@ -10787,7 +10783,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.pull_nonarray_error",
+      "id": "diff.update.set_on_insert_match",
       "cluster": "update",
       "collection": "diff_update_36",
       "setup": [
@@ -10893,10 +10889,14 @@
                 "_id": 1
               },
               "u": {
-                "$pull": {
-                  "score": 1
+                "$set": {
+                  "score": 12
+                },
+                "$setOnInsert": {
+                  "name": "ignored"
                 }
-              }
+              },
+              "upsert": true
             }
           ]
         }
@@ -10904,7 +10904,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.upsert_operator_fields",
+      "id": "diff.update.array_index_inc",
       "cluster": "update",
       "collection": "diff_update_37",
       "setup": [
@@ -11007,15 +11007,13 @@
           "updates": [
             {
               "q": {
-                "_id": 99,
-                "grp": "z"
+                "_id": 1
               },
               "u": {
                 "$inc": {
-                  "score": 1
+                  "items.0.qty": 1
                 }
-              },
-              "upsert": true
+              }
             }
           ]
         }
@@ -11023,7 +11021,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.upsert_replacement",
+      "id": "diff.update.array_index_unset",
       "cluster": "update",
       "collection": "diff_update_38",
       "setup": [
@@ -11126,13 +11124,13 @@
           "updates": [
             {
               "q": {
-                "_id": 98
+                "_id": 1
               },
               "u": {
-                "grp": "r",
-                "score": 7
-              },
-              "upsert": true
+                "$unset": {
+                  "items.0.qty": ""
+                }
+              }
             }
           ]
         }
@@ -11140,7 +11138,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.upsert_match_existing",
+      "id": "diff.update.array_index_pad",
       "cluster": "update",
       "collection": "diff_update_39",
       "setup": [
@@ -11243,14 +11241,13 @@
           "updates": [
             {
               "q": {
-                "_id": 1
+                "_id": 3
               },
               "u": {
                 "$set": {
-                  "score": 11
+                  "items.5.qty": 1
                 }
-              },
-              "upsert": true
+              }
             }
           ]
         }
@@ -11258,7 +11255,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.replacement_keep_id",
+      "id": "diff.update.array_index_negative_error",
       "cluster": "update",
       "collection": "diff_update_40",
       "setup": [
@@ -11364,7 +11361,9 @@
                 "_id": 1
               },
               "u": {
-                "score": 1
+                "$set": {
+                  "items.-1.qty": 3
+                }
               }
             }
           ]
@@ -11373,7 +11372,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.replacement_alter_id_error",
+      "id": "diff.update.positional_dotted",
       "cluster": "update",
       "collection": "diff_update_41",
       "setup": [
@@ -11476,11 +11475,15 @@
           "updates": [
             {
               "q": {
-                "_id": 1
+                "_id": 1,
+                "items.qty": {
+                  "$gte": 5
+                }
               },
               "u": {
-                "_id": 9,
-                "score": 1
+                "$set": {
+                  "items.$.qty": 0
+                }
               }
             }
           ]
@@ -11489,7 +11492,7 @@
       "seed": 20276944
     },
     {
-      "id": "diff.update.replacement_empty",
+      "id": "diff.update.positional_elem_match",
       "cluster": "update",
       "collection": "diff_update_42",
       "setup": [
@@ -11589,6 +11592,947 @@
         {
           "op": "update",
           "collection": "diff_update_42",
+          "updates": [
+            {
+              "q": {
+                "_id": 1,
+                "items": {
+                  "$elemMatch": {
+                    "qty": 2
+                  }
+                }
+              },
+              "u": {
+                "$inc": {
+                  "items.$.qty": 10
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.push_nonarray_error",
+      "cluster": "update",
+      "collection": "diff_update_43",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_43",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_43",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$push": {
+                  "score": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.pull_nonarray_error",
+      "cluster": "update",
+      "collection": "diff_update_44",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_44",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_44",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$pull": {
+                  "score": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_operator_fields",
+      "cluster": "update",
+      "collection": "diff_update_45",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_45",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_45",
+          "updates": [
+            {
+              "q": {
+                "_id": 99,
+                "grp": "z"
+              },
+              "u": {
+                "$inc": {
+                  "score": 1
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_replacement",
+      "cluster": "update",
+      "collection": "diff_update_46",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_46",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_46",
+          "updates": [
+            {
+              "q": {
+                "_id": 98
+              },
+              "u": {
+                "grp": "r",
+                "score": 7
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.upsert_match_existing",
+      "cluster": "update",
+      "collection": "diff_update_47",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_47",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_47",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "$set": {
+                  "score": 11
+                }
+              },
+              "upsert": true
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_keep_id",
+      "cluster": "update",
+      "collection": "diff_update_48",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_48",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_48",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "score": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_alter_id_error",
+      "cluster": "update",
+      "collection": "diff_update_49",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_49",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_49",
+          "updates": [
+            {
+              "q": {
+                "_id": 1
+              },
+              "u": {
+                "_id": 9,
+                "score": 1
+              }
+            }
+          ]
+        }
+      ],
+      "seed": 20276944
+    },
+    {
+      "id": "diff.update.replacement_empty",
+      "cluster": "update",
+      "collection": "diff_update_50",
+      "setup": [
+        {
+          "op": "insert",
+          "collection": "diff_update_50",
+          "documents": [
+            {
+              "_id": 1,
+              "grp": "a",
+              "score": 10,
+              "a": {
+                "b": 5
+              },
+              "items": [
+                {
+                  "qty": 2
+                },
+                {
+                  "qty": 5
+                }
+              ],
+              "name": "alpha",
+              "tags": [
+                "old",
+                "mid"
+              ]
+            },
+            {
+              "_id": 2,
+              "grp": "a",
+              "score": 20,
+              "a": {
+                "b": 7
+              },
+              "items": [
+                {
+                  "qty": 1
+                }
+              ],
+              "name": "beta",
+              "tags": [
+                "red"
+              ]
+            },
+            {
+              "_id": 3,
+              "grp": "b",
+              "score": 30,
+              "a": {
+                "b": 9
+              },
+              "items": [],
+              "name": "gamma",
+              "tags": []
+            },
+            {
+              "_id": 4,
+              "grp": "b",
+              "score": 40,
+              "a": {
+                "b": 11
+              },
+              "items": [
+                {
+                  "qty": 4
+                }
+              ],
+              "name": "delta",
+              "tags": [
+                "blue",
+                "old"
+              ]
+            },
+            {
+              "_id": 5,
+              "grp": "c",
+              "score": 50,
+              "a": {
+                "b": 13
+              },
+              "items": [
+                {
+                  "qty": 6
+                }
+              ],
+              "name": "epsilon",
+              "tags": [
+                "mid",
+                "green"
+              ]
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "op": "update",
+          "collection": "diff_update_50",
           "updates": [
             {
               "q": {

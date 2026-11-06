@@ -1,10 +1,10 @@
 {
   "version": 1,
   "seed": 20261106,
-  "count": 309,
+  "count": 317,
   "mongod": "8.0.9",
-  "corpusDigest": "6b07c402b5b9678139b3bd2634e2406b4b1d2324d8433e40a58a895d71a7d9b2",
-  "replyDigest": "d065a89a89e374169af7c01d39c85f3c20ba25bfa23f2a2ad140e4ec98bfb90a",
+  "corpusDigest": "6092d7a29b4abefe039df47fb5d21eaacaf341fe07334fd89f5cb730e64af9d6",
+  "replyDigest": "eb8e38ea1e9b0bb741062695b2edcc81c78f165bd77034314d5fda2d5b8481ca",
   "knownDifferences": {},
   "replies": {
     "diff.find.eq_int": [
@@ -4505,6 +4505,120 @@
       }
     ],
     "diff.update.mul_double": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.min_lower": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.min_keep": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.min_missing": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.max_raise": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.max_keep": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.max_missing": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "nModified": {
+          "$numberInt": "1"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_on_insert_upsert": [
+      {
+        "n": {
+          "$numberInt": "1"
+        },
+        "upserted": [
+          {
+            "index": {
+              "$numberInt": "0"
+            },
+            "_id": {
+              "$numberInt": "97"
+            }
+          }
+        ],
+        "nModified": {
+          "$numberInt": "0"
+        },
+        "ok": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "diff.update.set_on_insert_match": [
       {
         "n": {
           "$numberInt": "1"
