@@ -3,10 +3,15 @@
     "version": "0.0.0",
     "license": "MPL-2.0",
     "description": "Native binding for @yydb/mongodb on macOS arm64",
-    "os": ["darwin"], "cpu": ["arm64"],
-    "main": "index.js",
-    "files": ["index.js", "lib"],
-    "engines": { "node": ">=20" },
+    "os": ["darwin"],
+    "cpu": ["arm64"],
+    "main": "mongodb.darwin-arm64.node",
+    "files": [
+        "mongodb.darwin-arm64.node"
+    ],
+    "engines": {
+        "node": ">=20"
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/yy-database/MongoDB.git",

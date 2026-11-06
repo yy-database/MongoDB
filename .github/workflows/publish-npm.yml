@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.short }}
-          path: projects/mongo.ts/platforms/mongo-${{ matrix.short }}/lib/*
+          path: projects/mongo.ts/platforms/mongo-${{ matrix.short }}/mongodb.${{ matrix.short }}.node
           if-no-files-found: error
 
   publish:
@@ -111,9 +111,14 @@ jobs:
           set -euo pipefail
           for dir in _natives/native-*; do
             short="${dir##*/native-}"
-            dest="projects/mongo.ts/platforms/mongo-${short}/lib"
-            mkdir -p "$dest"
-            cp -R "$dir"/. "$dest"/
+            dest="projects/mongo.ts/platforms/mongo-${short}/mongodb.${short}.node"
+            src="$dir/mongodb.${short}.node"
+            if [[ ! -f "$src" ]]; then
+              # upload-artifact may flatten a single-file upload
+              src="$(find "$dir" -type f -name "mongodb.${short}.node" | head -n 1)"
+            fi
+            test -f "$src"
+            cp "$src" "$dest"
             ls -la "$dest"
           done
       - run: pnpm run build:ts

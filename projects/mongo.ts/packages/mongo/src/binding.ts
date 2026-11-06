@@ -16,7 +16,7 @@ function loadBinding(): any {
         return require(platformPackage)
     } catch (error) {
         const repo = resolve(packageRoot, '..', '..', '..', '..')
-        const local = join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, 'index.js')
+        const local = join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, `mongodb.${platform}.node`)
         if (existsSync(local)) return require(local)
         throw new Error(`cannot resolve ${platformPackage}: install the matching platform package (${(error as Error).message})`)
     }

@@ -26,7 +26,8 @@ function loadBinding() {
     try {
         return require(platformPackage)
     } catch (error) {
-        const local = resolve(here, '..', '..', '..', 'platforms', `mongo-${process.platform}-${process.arch}`, 'index.js')
+        const short = `${process.platform}-${process.arch}`
+        const local = resolve(here, '..', '..', '..', 'platforms', `mongo-${short}`, `mongodb.${short}.node`)
         if (existsSync(local)) return require(local)
         throw new Error(`cannot resolve ${platformPackage}: install the matching platform package (${error.message})`)
     }

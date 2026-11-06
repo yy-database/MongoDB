@@ -5,10 +5,9 @@
     "description": "Native binding for @yydb/mongodb on win32-x64",
     "os": ["win32"],
     "cpu": ["x64"],
-    "main": "index.js",
+    "main": "mongodb.win32-x64.node",
     "files": [
-        "index.js",
-        "lib"
+        "mongodb.win32-x64.node"
     ],
     "engines": {
         "node": ">=20"

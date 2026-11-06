@@ -22,7 +22,7 @@ node_modules/
 dist/
 .turbo/
 *.tgz
-projects/mongo.ts/platforms/*/lib/
+projects/mongo.ts/platforms/*/*.node
 projects/mongo.ts/platforms/*/README.md
 projects/mongo.ts/homepage/site/
 

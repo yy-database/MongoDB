@@ -3,10 +3,13 @@
     "version": "0.0.0",
     "license": "MPL-2.0",
     "description": "WASM binding for @yydb/mongodb",
-    
-    "main": "index.js",
-    "files": ["index.js", "lib"],
-    "engines": { "node": ">=20" },
+    "main": "mongodb.unknown-wasm32.node",
+    "files": [
+        "mongodb.unknown-wasm32.node"
+    ],
+    "engines": {
+        "node": ">=20"
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/yy-database/MongoDB.git",
