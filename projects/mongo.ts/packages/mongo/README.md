@@ -45,8 +45,10 @@ and `iterationCount`). `hello` answers `saslSupportedMechs` and accepts
 `speculativeAuthenticate`, so official drivers pick their mechanism during the
 handshake. Failure codes and messages (`Authentication failed.`, code 18;
 `MechanismUnavailable`, 334; `No SASL session state found`, 17) were captured
-from `mongod 8.0.9`. Role-based authorization is deliberately not enforced yet;
-see [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
+from `mongod 8.0.9`. Built-in roles are expanded into privileges and enforced
+on every command once `--auth` is on; only the six built-in roles exist, so
+custom roles and authentication restrictions are refused. Deliberate gaps are
+listed in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 
 ```ts
 const server = createServer({ dataDir: './data', port: 27017, auth: true })
