@@ -15,6 +15,7 @@
 - 聚合阶段：`$match`、`$sort`、`$limit`、`$skip`、`$count`、`$unwind`、`$lookup`（equality form）、`$sortByCount`、`$group`、`$project`。
 - 索引：单字段与复合键、`unique`、显式 `name`、多键展开与 parallel arrays 拒绝；元数据随 catalog 落盘并在重开后保留。
 - 绑定：`mongo-napi` 与 `mongo-pyo3` 对称导出原语，TypeScript 与 Python 只做组合与验收；命令行入口 `yydb-mongo` / `yydb-mongod` 在 npm 包里以 `bin/*.mjs` 分发。
+- npm 主包为 ESM 包，`exports` 只声明 `types` / `import` / `default` 且都指向 `dist/` 编译产物，不声明 `require` 条件。
 - 验收：同一批 case 同时驱动 TypeScript 与 Python 绑定并逐 case 比对；驱动兼容矩阵按 `mongodb@6.22.0`、`pymongo@4.19.0` 实测，CI 按安装口径装驱动直连本仓服务端。
 
 ### 兼容口径

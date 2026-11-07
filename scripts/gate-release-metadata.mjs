@@ -34,6 +34,8 @@ check((main.files ?? []).includes('bin'), 'npm main `files` does not include `bi
 const entry = (main.exports ?? {})['.'] ?? {}
 check(entry.types === './dist/index.d.ts', 'exports[.].types is not ./dist/index.d.ts')
 check(entry.import === './dist/index.js', 'exports[.].import is not ./dist/index.js')
+check(entry.default === './dist/index.js', 'exports[.].default is not ./dist/index.js')
+check(entry.require === undefined, 'exports[.].require must not exist for the ESM-only package')
 for (const [condition, target] of Object.entries(entry)) {
     const source = typeof target === 'string' && target.endsWith('.ts') && !target.endsWith('.d.ts')
     check(!source, `exports[.].${condition} points at TypeScript source`)

@@ -14,6 +14,12 @@
 | 命令行 | JS/TS 最小入口 `projects/mongo.ts/packages/mongo/bin/mongo.mjs`，只组合 napi 原语；管道模式逐行读命令、逐行输出 JSON |
 | 发布 | 当前阶段**不发布**：所有包 `private: true`，未配置 Trusted Publisher |
 
+## 包形态
+
+npm 主包 `@yydb/mongodb` 是 ESM 包（`"type": "module"`）。`exports` 只声明 `types` / `import` / `default` 三个条件，都指向 `dist/` 下的编译产物，不声明 `require` 条件；消费方用 `import` 或动态 `import()`。`files` 只含 `bin` 与 `dist`，不携带 TypeScript 源码。`bin` 暴露 `yydb-mongo`（命令行）与 `yydb-mongod`（服务端）。Node 版本要求 `>=20`。
+
+Python 侧对应包是 `yydb-mongo`，由 maturin 从 `mongo-pyo3` 构建，模块名 `mongo.mongo_pyo3`。
+
 ## 驱动兼容矩阵
 
 对外契约是 wire protocol，不绑定单个驱动版本。下表是真实跑过的版本，CI 按“安装口径”装驱动后直接连本仓服务端做 handshake、CRUD 与鉴权。
