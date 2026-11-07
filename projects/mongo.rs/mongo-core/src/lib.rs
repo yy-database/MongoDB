@@ -15,8 +15,7 @@
 #[cfg(feature = "storage")]
 use std::path::Path;
 
-pub use database_protocol_mongo::{bson, wire};
-pub mod json;
+pub use database_protocol_mongo::{bson, json, wire};
 
 #[cfg(feature = "storage")]
 pub mod commands;
