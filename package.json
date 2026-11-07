@@ -2,7 +2,7 @@
     "name": "mongo-workspace",
     "private": true,
     "type": "module",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "scripts": {
         "check": "cargo +nightly-2026-07-20 check --manifest-path projects/mongo.rs/Cargo.toml --workspace",
         "build:napi": "node scripts/build-napi.mjs",

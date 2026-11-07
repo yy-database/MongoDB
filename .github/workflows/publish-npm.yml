@@ -6,7 +6,7 @@ name: publish-npm
 #   env  = NPM_PUBLISH
 #
 # Real `@yydb/mongodb*` versions publish only through npm Trusted Publisher
-# (OIDC) on tag push. Local `nifty publish --placeholder` is only for 0.0.0 stubs.
+# (OIDC) on tag push. Local `nifty publish --placeholder` is only for placeholder stubs.
 #
 # Runs only after Check Rust, Check TypeScript and Check Python all succeed
 # on this tag (re-run via workflow_call).

@@ -1,6 +1,6 @@
 {
     "name": "@yydb/mongodb",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "private": true,
     "type": "module",
     "description": "TypeScript acceptance surface and minimal shell for the Rust MongoDB primitives",
@@ -25,11 +25,11 @@
         "test": "node tests/run.mjs"
     },
     "optionalDependencies": {
-        "@yydb/mongodb-darwin-arm64": "0.0.0",
-        "@yydb/mongodb-darwin-x64": "0.0.0",
-        "@yydb/mongodb-linux-x64": "0.0.0",
-        "@yydb/mongodb-unknown-wasm32": "0.0.0",
-        "@yydb/mongodb-win32-x64": "0.0.0"
+        "@yydb/mongodb-darwin-arm64": "0.0.1",
+        "@yydb/mongodb-darwin-x64": "0.0.1",
+        "@yydb/mongodb-linux-x64": "0.0.1",
+        "@yydb/mongodb-unknown-wasm32": "0.0.1",
+        "@yydb/mongodb-win32-x64": "0.0.1"
     },
     "engines": {
         "node": ">=20"

@@ -9,7 +9,7 @@ members = [
 default-members = ["mongo-core"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1"
 edition = "2024"
 authors = ["Yggdrasill Team <192607617@qq.com>"]
 license = "MPL-2.0"
