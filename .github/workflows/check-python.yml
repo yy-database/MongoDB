@@ -34,7 +34,7 @@ jobs:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly-2026-07-20
+          toolchain: nightly
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/mongo.rs
