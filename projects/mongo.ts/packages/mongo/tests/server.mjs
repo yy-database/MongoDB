@@ -141,6 +141,50 @@ const address = await server.listening
     socket.destroy()
 }
 
+// A frame split across reads must be buffered until the header length is met.
+{
+    const { socket, next } = await connect(address.port)
+    socket.write(encodeMsgFrame(1, 0, frameBody({ hello: 1, $db: 'admin' })))
+    await next()
+    const frame = encodeMsgFrame(2, 0, frameBody({ ping: 1, $db: 'admin' }))
+    for (const part of [frame.subarray(0, 3), frame.subarray(3, 10), frame.subarray(10)]) {
+        socket.write(part)
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 5))
+    }
+    const reply = JSON.parse(binding.decodeOpMsg((await next()).subarray(16)))
+    equal(reply.ok, { $numberDouble: '1.0' }, 'a frame split across reads is decoded once complete')
+    socket.destroy()
+}
+
+// Two frames packed into one read must both run, in request order.
+{
+    const { socket, next } = await connect(address.port)
+    socket.write(encodeMsgFrame(1, 0, frameBody({ hello: 1, $db: 'admin' })))
+    await next()
+    socket.write(Buffer.concat([encodeMsgFrame(2, 0, frameBody({ ping: 1, $db: 'admin' })), encodeMsgFrame(3, 0, frameBody({ ping: 1, $db: 'admin' }))]))
+    const first = await next()
+    const second = await next()
+    equal(first.readInt32LE(8), 2, 'the packed frames are answered in request order')
+    equal(second.readInt32LE(8), 3, 'the second packed frame carries its own request id')
+    socket.destroy()
+}
+
+// A frame that announces more than the 48 MB ceiling is rejected on its header,
+// before any payload is buffered.
+{
+    const { socket, next } = await connect(address.port)
+    const header = Buffer.alloc(16)
+    header.writeInt32LE(48_000_001, 0)
+    header.writeInt32LE(7, 4)
+    header.writeInt32LE(0, 8)
+    header.writeInt32LE(OP_MSG, 12)
+    socket.write(header)
+    const reply = JSON.parse(binding.decodeOpMsg((await next()).subarray(16)))
+    equal(reply.ok, { $numberDouble: '0.0' }, 'an oversized frame is rejected from its header')
+    ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('outside the accepted range'), 'the error names the accepted range')
+    socket.destroy()
+}
+
 // Each codec: echoed in hello, accepted inbound, mirrored outbound.
 for (const [name, id, compressor] of [
     ['snappy', 1, snappyCompress],
