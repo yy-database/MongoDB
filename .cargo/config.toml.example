@@ -6,6 +6,6 @@
 # checkout. Do not commit it, and remove it when the path is gone: a stale path
 # makes `cargo test` fail before compilation starts.
 #
-# [patch."https://github.com/oovm/database.rs.git"]
+# [patch."https://github.com/yy-database/database.rs.git"]
 # database = { path = "../database.rs/projects/database/database" }
 # database-protocol-mongo = { path = "../database.rs/projects/database/database.protocol.mongo" }

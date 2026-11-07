@@ -321,12 +321,12 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
 - `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 
-### 本地 `yyds` 联调（可选）
+### 本地 `database.rs` 联调（可选）
 
-默认不需要任何本地配置：`Cargo.toml` 锁定 `yyds` 的 git revision，`cargo test` 直接按该 revision 解析。只有在你自己也检出 `yyds` 源码时才需要本地覆盖：
+默认不需要任何本地配置：`Cargo.toml` 锁定 `database.rs` 的 git revision，`cargo test` 直接按该 revision 解析。只有在你自己也检出 `database.rs` 源码时才需要本地覆盖：
 
 1. 复制 `.cargo/config.toml.example` 为 `.cargo/config.toml`（已被 gitignore）；
-2. 去掉 `[patch."https://github.com/oovm/database.rs.git"]` 的注释并把路径改成你的检出目录；
+2. 去掉 `[patch."https://github.com/yy-database/database.rs.git"]` 的注释并把路径改成你的检出目录；
 3. 该目录不存在时请删掉 `.cargo/config.toml`，否则 `cargo test` 在编译前就会因找不到路径而失败。
 
 `cargo test` 不依赖 `.cargo/` 目录本身；把整个目录临时移走再跑一遍即可验证。
