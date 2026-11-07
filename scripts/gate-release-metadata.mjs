@@ -97,6 +97,19 @@ const cargo = readText('projects/mongo.rs/Cargo.toml')
 const cargoVersion = cargo.match(/\[workspace\.package\][^\[]*?version = "([^"]+)"/s)?.[1]
 check(cargoVersion === rootVersion, `Cargo workspace version ${cargoVersion} != workspace ${rootVersion}`)
 
+const changelogPath = 'CHANGELOG.md'
+check(existsSync(join(root, changelogPath)), `${changelogPath} is missing`)
+if (existsSync(join(root, changelogPath))) {
+    const changelog = readText(changelogPath)
+    check(changelog.startsWith('# Changelog'), 'CHANGELOG.md does not open with the Changelog title')
+    const versions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+)$/gm)].map((match) => match[1])
+    check(versions.length > 0, 'CHANGELOG.md has no version heading')
+    check(versions[0] === rootVersion, `CHANGELOG.md newest version ${versions[0]} != workspace ${rootVersion}`)
+    check(new Set(versions).size === versions.length, 'CHANGELOG.md repeats a version heading')
+    const section = changelog.split(new RegExp(`^## ${rootVersion.replace(/\./g, '\\.')}$`, 'm'))[1] ?? ''
+    check(section.split('\n').some((line) => line.startsWith('### ')), `CHANGELOG.md ${rootVersion} section has no subsections`)
+}
+
 // Every publishable package must carry the license text: npm only auto-includes
 // LICENSE files that sit in the package directory, and maturin ships whatever
 // `license-files` names.
