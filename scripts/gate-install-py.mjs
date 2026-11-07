@@ -2,7 +2,7 @@
 // into a fresh virtualenv under the system temp directory, then import and
 // execute a real call from that installed copy.
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,6 +28,45 @@ if (!wheel) {
     console.error('maturin produced no wheel')
     process.exit(1)
 }
+
+// Inspect the wheel before installing it: the metadata and the bundled license
+// are what a public index would expose, so assert them on the real archive.
+const pyproject = readFileSync(join(packageDir, 'pyproject.toml'), 'utf8')
+const pyVersion = pyproject.match(/^version = "([^"]+)"/m)?.[1]
+writeFileSync(join(work, 'check_wheel.py'), `
+import sys
+import zipfile
+
+wheel = sys.argv[1]
+version = sys.argv[2]
+license_path = sys.argv[3]
+
+with open(license_path, 'rb') as handle:
+    repository_license = handle.read()
+
+with zipfile.ZipFile(wheel) as archive:
+    names = archive.namelist()
+    metadata_name = next((name for name in names if name.endswith('.dist-info/METADATA')), None)
+    assert metadata_name, 'wheel carries no METADATA'
+    metadata = archive.read(metadata_name).decode('utf-8')
+    license_name = metadata_name.replace('METADATA', 'licenses/License.md')
+    assert license_name in names, 'wheel is missing ' + license_name
+    wheel_license = archive.read(license_name)
+    assert wheel_license == repository_license, 'wheel license differs from the repository License.md'
+    assert any(name.endswith(('.pyd', '.so')) for name in names), 'wheel carries no compiled extension'
+
+for line in [
+    'Name: yydb-mongo',
+    'Version: ' + version,
+    'License-Expression: MPL-2.0',
+    'License-File: License.md',
+    'Description-Content-Type: text/markdown',
+]:
+    assert line in metadata, 'METADATA is missing ' + line
+assert 'canonical Extended JSON strings' in metadata, 'METADATA long description does not carry the package README'
+print('wheel ok: ' + metadata_name + ' license=' + license_name)
+`)
+run(python, ['check_wheel.py', join(wheels, wheel), pyVersion ?? '', join(root, 'License.md')], work)
 
 run(python, ['-m', 'venv', venv], work)
 const venvPython = join(venv, process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python')
