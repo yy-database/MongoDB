@@ -894,6 +894,156 @@ async function driverLogin(user, password, db) {
     equal(looseSession.finished.done, true, 'a proof over an arbitrary c= is accepted like mongod')
     looseBinding.socket.destroy()
 
+    // --- authorization matrix ------------------------------------------------
+    //
+    // One row per command: the action `mongod` requires, the database it is
+    // checked against, and the role expected to pass or fail. `1` means the
+    // command runs, `13` means Unauthorized, and any other code means
+    // authorization passed and the command itself answered. Every row opens its
+    // own SCRAM connection, so this table is the gate, not a checklist.
+    {
+        const other = 'authz_other'
+        await command(login, { insert: 'secret', documents: [{ _id: 1 }], $db: other })
+        await command(login, { createUser: 'z_victim_z_ua', pwd: 'secret', roles: [], $db: database })
+        await command(login, { createUser: 'z_victim_z_root', pwd: 'secret', roles: [], $db: database })
+
+        const matrix = {
+            z_read: (await loginAs('z_read', database)).connection,
+            z_rw: (await loginAs('z_rw', database)).connection,
+            z_dba: (await loginAs('z_dba', database)).connection,
+            z_ua: (await loginAs('z_ua', database)).connection,
+            z_ca: (await loginAs('z_ca', 'admin')).connection,
+            z_root: (await loginAs('z_root', 'admin')).connection
+        }
+        const users = Object.keys(matrix)
+
+        /** Expected codes for a row: `allowed` pass authorization, everyone else is refused. */
+        const allowOnly = (...allowed) => {
+            const codes = {}
+            for (const user of users) codes[user] = allowed.includes(user) ? 1 : 13
+            return codes
+        }
+
+        const rows = [
+            // read: `find` / `count` / `distinct` / `collStats` / `dbStats` /
+            // `listCollections` / `listIndexes` / `killCursors` on its database.
+            { label: 'find (find@authz)', build: () => ({ find: 'items', filter: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: 'count (find@authz)', build: () => ({ count: 'items', $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: 'distinct (find@authz)', build: () => ({ distinct: 'items', key: 'v', $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: 'aggregate (find@authz)', build: () => ({ aggregate: 'items', pipeline: [{ $match: {} }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: 'explain (privileges of the explained command)', build: () => ({ explain: { find: 'items', filter: {} }, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: 'listIndexes (listIndexes@authz)', build: () => ({ listIndexes: 'items', $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_dba', 'z_root') },
+            { label: 'listCollections (listCollections@authz)', build: () => ({ listCollections: 1, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_dba', 'z_root') },
+            { label: 'listCollections on another database', build: () => ({ listCollections: 1, $db: other }), codes: allowOnly('z_root') },
+            { label: 'dbStats (dbStats@authz)', build: () => ({ dbStats: 1, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_dba', 'z_ca', 'z_root') },
+            { label: 'dbStats on another database', build: () => ({ dbStats: 1, $db: other }), codes: allowOnly('z_ca', 'z_root') },
+            { label: 'collStats (collStats@authz)', build: () => ({ collStats: 'items', $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_dba', 'z_ca', 'z_root') },
+            { label: 'killCursors (killCursors@authz)', build: () => ({ killCursors: 'items', cursors: [{ $numberLong: '999' }], $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_ca', 'z_root') },
+            { label: 'killCursors on another database', build: () => ({ killCursors: 'secret', cursors: [{ $numberLong: '999' }], $db: other }), codes: allowOnly('z_ca', 'z_root') },
+
+            // The credential collections are readable only through `viewUser`
+            // and `viewRole`.
+            { label: 'find system.users (viewUser@authz)', build: () => ({ find: 'system.users', filter: {}, $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            { label: 'count system.users (viewUser@authz)', build: () => ({ count: 'system.users', $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            { label: 'find system.roles (viewRole@authz)', build: () => ({ find: 'system.roles', filter: {}, $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            { label: 'usersInfo (viewUser@authz)', build: () => ({ usersInfo: 1, $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            { label: 'usersInfo forAllDBs (cluster viewUser)', build: () => ({ usersInfo: { forAllDBs: true }, $db: database }), codes: allowOnly('z_root') },
+
+            // Lookups and unions resolve `from` inside the command's database,
+            // so an object namespace is refused and no other database is read.
+            { label: '$lookup from its database (find@authz)', build: () => ({ aggregate: 'items', pipeline: [{ $lookup: { from: 'secret', localField: '_id', foreignField: '_id', as: 'joined' } }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: '$lookup with a foreign namespace object', build: () => ({ aggregate: 'items', pipeline: [{ $lookup: { from: { db: other, coll: 'secret' }, localField: '_id', foreignField: '_id', as: 'leak' } }], cursor: {}, $db: database }), codes: { z_read: 9, z_rw: 9, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 9 } },
+            { label: '$graphLookup with a foreign namespace object', build: () => ({ aggregate: 'items', pipeline: [{ $graphLookup: { from: { db: other, coll: 'secret' }, startWith: '$_id', connectFromField: '_id', connectToField: '_id', as: 'leak' } }], cursor: {}, $db: database }), codes: { z_read: 40105, z_rw: 40105, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 40105 } },
+            { label: '$unionWith with a foreign database field', build: () => ({ aggregate: 'items', pipeline: [{ $unionWith: { db: other, coll: 'secret' } }], cursor: {}, $db: database }), codes: { z_read: 40415, z_rw: 40415, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 40415 } },
+            { label: '$expr (no code execution)', build: () => ({ aggregate: 'items', pipeline: [{ $match: { $expr: { $eq: ['$v', 'a'] } } }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: '$where is not an accepted filter', build: () => ({ find: 'items', filter: { $where: 'this.v === "a"' }, $db: database }), codes: { z_read: 2, z_rw: 2, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 2 } },
+            { label: '$function is not an accepted expression', build: () => ({ aggregate: 'items', pipeline: [{ $match: { $expr: { $function: { body: 'function(){return true}', args: [], lang: 'js' } } } }], cursor: {}, $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+
+            // Writes need the action on the database they write, including the
+            // namespace `bulkWrite` names in `nsInfo` rather than in its field.
+            { label: 'insert (insert@authz)', build: (user) => ({ insert: 'items', documents: [{ _id: `matrix_${user}` }], $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'update (update@authz)', build: (user) => ({ update: 'items', updates: [{ q: { _id: `matrix_${user}` }, u: { $set: { v: user } } }], $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'delete (remove@authz)', build: (user) => ({ delete: 'items', deletes: [{ q: { _id: `matrix_${user}` }, limit: 1 }], $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'findAndModify remove (find+remove@authz)', build: () => ({ findAndModify: 'items', query: { _id: 'matrix_missing' }, remove: true, $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'bulkWrite (insert@authz through nsInfo)', build: (user) => ({ bulkWrite: 1, ops: [{ insert: 0, document: { _id: `bulk_${user}` } }], nsInfo: [{ ns: `${database}.items` }], $db: 'admin' }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'bulkWrite into another database', build: () => ({ bulkWrite: 1, ops: [{ insert: 0, document: { _id: 'crossed' } }], nsInfo: [{ ns: `${other}.secret` }], $db: 'admin' }), codes: allowOnly('z_root') },
+
+            // Structure: `create` of a view also needs the source's read action,
+            // so `dbAdmin` (which has no `find`) cannot mint one.
+            { label: 'create collection (createCollection@authz)', build: (user) => ({ create: `made_${user}`, $db: database }), codes: allowOnly('z_rw', 'z_dba', 'z_root') },
+            { label: 'create view over items (createCollection+find@authz)', build: (user) => ({ create: `view_${user}`, viewOn: 'items', pipeline: [], $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'create view over system.users (createCollection+viewUser@authz)', build: (user) => ({ create: `sysview_${user}`, viewOn: 'system.users', pipeline: [], $db: database }), codes: allowOnly('z_root') },
+            { label: 'createIndexes (createIndex@authz)', build: (user) => ({ createIndexes: 'items', indexes: [{ key: { [`f_${user}`]: 1 }, name: `by_${user}` }], $db: database }), codes: allowOnly('z_rw', 'z_dba', 'z_root') },
+            { label: 'dropIndexes (dropIndex@authz)', build: (user) => ({ dropIndexes: 'items', index: `by_${user}`, $db: database }), codes: allowOnly('z_rw', 'z_dba', 'z_root') },
+            { label: 'collMod (collMod@authz)', build: () => ({ collMod: 'items', validator: { v: { $type: 'string' } }, $db: database }), codes: allowOnly('z_dba', 'z_root') },
+            { label: 'drop collection (dropCollection@authz)', build: (user) => ({ drop: `made_${user}`, $db: database }), codes: allowOnly('z_rw', 'z_dba', 'z_root') },
+
+            // Credential and role administration.
+            { label: 'createUser with a role on its database', build: () => ({ createUser: 'z_matrix_delegated', pwd: 'x', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 1, z_ca: 13, z_root: 51003 } },
+            { label: 'createUser with root on admin (grantRole@admin)', build: () => ({ createUser: 'z_matrix_rooted', pwd: 'x', roles: [{ role: 'root', db: 'admin' }], $db: database }), codes: allowOnly('z_root') },
+            { label: 'dropUser (dropUser@authz)', build: (user) => ({ dropUser: `z_victim_${user}`, $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            { label: 'aggregate $out to its database (insert+remove@authz)', build: (user) => ({ aggregate: 'items', pipeline: [{ $out: `out_${user}` }], cursor: {}, $db: database }), codes: allowOnly('z_rw', 'z_root') },
+            { label: 'aggregate $out to another database', build: () => ({ aggregate: 'items', pipeline: [{ $out: { db: other, coll: 'copied' } }], cursor: {}, $db: database }), codes: allowOnly('z_root') },
+
+            // Credential collections have no generic write path at all: `drop`,
+            // `collMod`, `$out`, `$merge` and `bulkWrite` are refused even for
+            // `root`, because only the user-management commands may write them.
+            { label: '$out to system.users', build: () => ({ aggregate: 'items', pipeline: [{ $out: 'system.users' }], cursor: {}, $db: database }), codes: allowOnly() },
+            { label: '$merge into admin.system.users', build: () => ({ aggregate: 'items', pipeline: [{ $merge: { into: { db: 'admin', coll: 'system.users' } } }], cursor: {}, $db: database }), codes: allowOnly() },
+            { label: 'drop system.users', build: () => ({ drop: 'system.users', $db: database }), codes: allowOnly() },
+            { label: 'collMod system.users', build: () => ({ collMod: 'system.users', validator: {}, $db: database }), codes: allowOnly() },
+            { label: 'bulkWrite into system.users', build: () => ({ bulkWrite: 1, ops: [{ insert: 0, document: { _id: 'evil', user: 'evil', db: 'admin', roles: [{ role: 'root', db: 'admin' }] } }], nsInfo: [{ ns: `${database}.system.users` }], $db: 'admin' }), codes: allowOnly() },
+
+            // Cluster actions.
+            { label: 'serverStatus (serverStatus@cluster)', build: () => ({ serverStatus: 1, $db: 'admin' }), codes: allowOnly('z_ca', 'z_root') },
+            { label: 'currentOp (inprog@cluster)', build: () => ({ currentOp: 1, $db: 'admin' }), codes: allowOnly('z_ca', 'z_root') },
+            { label: 'hostInfo (hostInfo@cluster)', build: () => ({ hostInfo: 1, $db: 'admin' }), codes: allowOnly('z_ca', 'z_root') },
+
+            // Commands this server does not implement answer `no such command`
+            // for every role, so none of them can be used to reach another
+            // database by accident.
+            { label: 'renameCollection (unimplemented)', build: () => ({ renameCollection: `${database}.items`, to: `${other}.stolen`, $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'cloneCollection (unimplemented)', build: () => ({ cloneCollection: `${database}.items`, to: `${other}.stolen`, from: '127.0.0.1:1', $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'dbHash (unimplemented)', build: () => ({ dbHash: 1, $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'validate (unimplemented)', build: () => ({ validate: 'items', $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'updateUser (unimplemented)', build: () => ({ updateUser: 'z_read', pwd: 'other', $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'grantPrivilegesToRole (unimplemented)', build: () => ({ grantPrivilegesToRole: 'x', privileges: [], $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'invalidateUserCache (unimplemented)', build: () => ({ invalidateUserCache: 1, $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } }
+        ]
+
+        const codeOf = (reply) => {
+            const value = reply.code
+            if (value === undefined) return 0
+            return Number(value.$numberInt ?? value.$numberLong ?? value.$numberDouble ?? value)
+        }
+
+        for (const row of rows) {
+            for (const user of users) {
+                const reply = await command(matrix[user], row.build(user))
+                const expected = row.codes[user]
+                if (expected === 1) {
+                    equal(reply.ok, { $numberDouble: '1.0' }, `${row.label}: ${user} is allowed`)
+                    continue
+                }
+                equal(codeOf(reply), expected, `${row.label}: ${user} answers ${expected}`)
+                if (expected === 13) equal(reply.codeName, 'Unauthorized', `${row.label}: ${user} is refused as Unauthorized`)
+            }
+        }
+
+        // A cursor is bound to the database that authorized it, and the grant
+        // does not move with the namespace name in `getMore`.
+        const opened = await command(matrix.z_read, { find: 'items', filter: {}, batchSize: 1, $db: database })
+        ok(opened.cursor?.id !== undefined, 'the matrix opens a cursor')
+        equal((await command(matrix.z_read, { getMore: opened.cursor.id, collection: 'items', $db: database })).ok, { $numberDouble: '1.0' }, 'getMore on its database is allowed')
+        equal(codeOf(await command(matrix.z_read, { getMore: opened.cursor.id, collection: 'secret', $db: other })), 13, 'getMore cannot reach another database')
+
+        // Only the databases the caller holds a privilege on are listed.
+        const visible = await command(matrix.z_read, { listDatabases: 1, $db: 'admin' })
+        equal(visible.databases.map((entry) => entry.name), [database], 'listDatabases hides unauthorized database names')
+
+        for (const connection of Object.values(matrix)) connection.socket.destroy()
+    }
+
     // dbAdmin may drop a database it administers; run it last because it
     // removes the users created above.
     const dbAdmin = await loginAs('z_dba', database)

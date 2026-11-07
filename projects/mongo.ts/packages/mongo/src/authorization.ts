@@ -982,8 +982,8 @@ const CREDENTIAL_READ_ACTIONS: Record<string, string> = {
     'system.roles': 'viewRole'
 }
 
-/** Commands that would write a credential collection directly. */
-const CREDENTIAL_WRITE_COMMANDS = new Set(['insert', 'update', 'delete', 'bulkWrite', 'findAndModify'])
+/** Commands whose command document names the collection they write. */
+const CREDENTIAL_WRITE_COMMANDS = new Set(['insert', 'update', 'delete', 'bulkWrite', 'findAndModify', 'drop', 'collMod'])
 
 /**
  * Action a read of `collection` needs. A plain `read` role covers every
@@ -997,6 +997,87 @@ function readAction(collection: string): string {
 
 function credentialCollection(name: unknown): boolean {
     return typeof name === 'string' && Object.hasOwn(CREDENTIAL_READ_ACTIONS, name)
+}
+
+/**
+ * `true` when the command would write a credential collection, either directly
+ * or as the output of an aggregation.
+ *
+ * `drop` and `collMod` are included because deleting the user collection or
+ * changing its validator removes the accounts just as effectively as a raw
+ * `delete`, `$out` / `$merge` because their effect is a write even though the
+ * command name says `aggregate`, and `bulkWrite` because the namespaces it
+ * writes are in `nsInfo` rather than in the command-name field.
+ */
+function writesCredentials(name: string, command: any, database: string): boolean {
+    if (name === 'bulkWrite') return bulkWriteNamespaces(command, database).some((target) => credentialCollection(target.collection))
+    if (CREDENTIAL_WRITE_COMMANDS.has(name) && credentialCollection(command[name])) return true
+    if (name !== 'aggregate') return false
+    const pipeline = Array.isArray(command.pipeline) ? command.pipeline : []
+    for (const stage of pipeline) {
+        if (stage === null || typeof stage !== 'object') continue
+        const out = outputTarget(stage.$out, database)
+        if (out !== null && credentialCollection(out.collection)) return true
+        const merge = outputTarget(stage.$merge?.into, database)
+        if (merge !== null && credentialCollection(merge.collection)) return true
+    }
+    return false
+}
+
+/** An integer that may arrive as a plain number or a tagged BSON number. */
+function numberField(value: any): number | null {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value
+    if (value === null || typeof value !== 'object') return null
+    const tagged = value.$numberInt ?? value.$numberLong
+    if (typeof tagged === 'string' && /^\d+$/.test(tagged)) return Number(tagged)
+    return null
+}
+
+/** Split a `db.collection` namespace, defaulting a bare name to `database`. */
+function namespaceTarget(ns: unknown, database: string): { db: string; collection: string } | null {
+    if (typeof ns !== 'string' || ns.length === 0) return null
+    const dot = ns.indexOf('.')
+    if (dot === -1) return { db: database, collection: ns }
+    if (dot === 0 || dot === ns.length - 1) return null
+    return { db: ns.slice(0, dot), collection: ns.slice(dot + 1) }
+}
+
+/** Every namespace `bulkWrite` can reach through its `nsInfo` table. */
+function bulkWriteNamespaces(command: any, database: string): { db: string; collection: string }[] {
+    const info = Array.isArray(command.nsInfo) ? command.nsInfo : []
+    const targets: { db: string; collection: string }[] = []
+    for (const entry of info) {
+        if (entry === null || typeof entry !== 'object') continue
+        const target = namespaceTarget(entry.ns, database)
+        if (target !== null) targets.push(target)
+    }
+    return targets
+}
+
+/**
+ * `bulkWrite` requirements: one per op, on the namespace the op's index names.
+ *
+ * Authorizing the command name alone checks collection `"1"` in `admin`,
+ * which is neither the database nor the collection the ops write.
+ */
+function bulkWriteRequirements(command: any, database: string): Requirement[] {
+    const info = Array.isArray(command.nsInfo) ? command.nsInfo : []
+    const ops = Array.isArray(command.ops) ? command.ops : []
+    const requirements: Requirement[] = []
+    for (const op of ops) {
+        if (op === null || typeof op !== 'object') continue
+        const insert = numberField(op.insert)
+        const update = numberField(op.update)
+        const remove = numberField(op.delete)
+        const index = insert ?? update ?? remove
+        if (index === null) continue
+        const entry = info[index]
+        const target = entry !== null && typeof entry === 'object' ? namespaceTarget(entry.ns, database) : null
+        if (target === null) continue
+        const action = insert !== null ? 'insert' : update !== null ? 'update' : 'remove'
+        requirements.push({ action, db: target.db, collection: target.collection })
+    }
+    return requirements
 }
 
 /** The collection a `$out` or `$merge.into` value names, defaulting to the command database. */
@@ -1069,19 +1150,27 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             return [{ action: 'update', db: database, collection: typeof command.update === 'string' ? command.update : '' }]
         case 'delete':
             return [{ action: 'remove', db: database, collection: typeof command.delete === 'string' ? command.delete : '' }]
-        case 'findAndModify':
+        case 'findAndModify': {
+            const collection = typeof command.findAndModify === 'string' ? command.findAndModify : ''
+            // `findAndModify` with `remove: true` deletes the matching document,
+            // so it needs `remove` rather than `update`.
             return [
-                { action: 'find', db: database, collection: typeof command.findAndModify === 'string' ? command.findAndModify : '' },
-                { action: 'update', db: database, collection: typeof command.findAndModify === 'string' ? command.findAndModify : '' }
+                { action: 'find', db: database, collection },
+                { action: command.remove === true ? 'remove' : 'update', db: database, collection }
             ]
+        }
         case 'bulkWrite':
-            return [
-                { action: 'insert', db: database, collection: typeof command.bulkWrite === 'string' ? command.bulkWrite : '' },
-                { action: 'update', db: database, collection: typeof command.bulkWrite === 'string' ? command.bulkWrite : '' },
-                { action: 'remove', db: database, collection: typeof command.bulkWrite === 'string' ? command.bulkWrite : '' }
-            ]
-        case 'create':
-            return [{ action: 'createCollection', db: database, collection: typeof command.create === 'string' ? command.create : '' }]
+            return bulkWriteRequirements(command, database)
+        case 'create': {
+            const collection = typeof command.create === 'string' ? command.create : ''
+            const requirements: Requirement[] = [{ action: 'createCollection', db: database, collection }]
+            // A view reads its source to answer queries, so `mongod` requires
+            // the source's read action on top of creating the view.
+            if (typeof command.viewOn === 'string' && command.viewOn.length > 0) {
+                requirements.push({ action: readAction(command.viewOn), db: database, collection: command.viewOn })
+            }
+            return requirements
+        }
         case 'drop':
             return [{ action: 'dropCollection', db: database, collection: typeof command.drop === 'string' ? command.drop : '' }]
         case 'collMod':
@@ -1200,7 +1289,7 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
         return null
     }
     const database = typeof command.$db === 'string' ? command.$db : 'admin'
-    if (CREDENTIAL_WRITE_COMMANDS.has(name) && credentialCollection(command[name])) {
+    if (writesCredentials(name, command, database)) {
         // Credentials are written only by `createUser` / `updateUser` /
         // `dropUser`, which check the roles being granted. A generic write would
         // bypass that check, so it is refused even for `root`.
