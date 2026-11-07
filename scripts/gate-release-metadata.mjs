@@ -77,6 +77,14 @@ check(/^authors = \[{ name = "([^"]+)" }\]/m.test(pyproject), 'pyproject authors
 const pyUrls = pyproject.match(/^\[project\.urls\]\n([^\[]*)/m)?.[1] ?? ''
 check(pyUrls.includes('Homepage = "https://github.com/yy-database/MongoDB"'), 'pyproject Homepage url is missing or points elsewhere')
 check(pyUrls.includes('Repository = "https://github.com/yy-database/MongoDB.git"'), 'pyproject Repository url is missing or points elsewhere')
+check(pyproject.includes('readme = "README.md"'), 'pyproject readme is not README.md')
+const pyReadmePath = 'projects/mongo.py/packages/mongo/README.md'
+check(existsSync(join(root, pyReadmePath)), `python package README ${pyReadmePath} is missing`)
+if (existsSync(join(root, pyReadmePath))) {
+    const pyReadme = readText(pyReadmePath)
+    check(pyReadme.startsWith('# `yydb-mongo`'), 'python package README does not open with the package title')
+    check(pyReadme.includes('https://github.com/yy-database/MongoDB'), 'python package README does not link to the repository')
+}
 
 const cargo = readText('projects/mongo.rs/Cargo.toml')
 const cargoVersion = cargo.match(/\[workspace\.package\][^\[]*?version = "([^"]+)"/s)?.[1]
