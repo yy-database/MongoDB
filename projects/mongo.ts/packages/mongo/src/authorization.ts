@@ -975,6 +975,14 @@ function renderDocument(command: any): string {
     return renderValue(redacted)
 }
 
+/** The collection a `$out` or `$merge.into` value names, defaulting to the command database. */
+function outputTarget(value: any, database: string): { db: string; collection: string } | null {
+    if (typeof value === 'string') return value.length > 0 ? { db: database, collection: value } : null
+    if (value === null || typeof value !== 'object') return null
+    if (typeof value.coll !== 'string' || value.coll.length === 0) return null
+    return { db: typeof value.db === 'string' ? value.db : database, collection: value.coll }
+}
+
 /** Actions `mongod` requires for a command this server answers. */
 function requirementsFor(name: string, command: any, database: string): Requirement[] | null {
     switch (name) {
@@ -989,7 +997,30 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             if (pipeline.length > 0 && typeof pipeline[0] === 'object' && pipeline[0] !== null && Object.hasOwn(pipeline[0], '$currentOp')) {
                 return [{ action: 'inprog', cluster: true }]
             }
-            return [{ action: 'find', db: database, collection: typeof command.aggregate === 'string' ? command.aggregate : '' }]
+            const requirements: Requirement[] = [
+                { action: 'find', db: database, collection: typeof command.aggregate === 'string' ? command.aggregate : '' }
+            ]
+            for (const stage of pipeline) {
+                if (stage === null || typeof stage !== 'object') continue
+                // `$out` and `$merge` write to another collection. Without their
+                // write actions a read-only user could run a pipeline that
+                // rewrites data, so the output target is authorized too.
+                const out = outputTarget(stage.$out, database)
+                if (out !== null) {
+                    requirements.push(
+                        { action: 'insert', db: out.db, collection: out.collection },
+                        { action: 'remove', db: out.db, collection: out.collection }
+                    )
+                }
+                const merge = outputTarget(stage.$merge?.into, database)
+                if (merge !== null) {
+                    requirements.push(
+                        { action: 'insert', db: merge.db, collection: merge.collection },
+                        { action: 'update', db: merge.db, collection: merge.collection }
+                    )
+                }
+            }
+            return requirements
         }
         case 'explain':
             // `explain` requires the privileges of the explained command; every

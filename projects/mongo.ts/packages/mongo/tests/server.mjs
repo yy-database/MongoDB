@@ -592,6 +592,32 @@ const login = await connect(authAddress.port)
     delegated.socket.destroy()
 }
 
+// `$out` and `$merge` write to a collection, so a read-only user must not be
+// able to run them, and the write actions are needed on the output database.
+{
+    const created = await command(login, { createUser: 'viewer', pwd: 'viewer-pass', roles: [{ role: 'read', db: 'app' }], $db: 'app' })
+    equal(created.ok, { $numberDouble: '1.0' }, 'a read-only user is created')
+
+    const viewer = await connect(authAddress.port)
+    await scram(viewer, 'viewer', 'viewer-pass', 'SCRAM-SHA-256', 'app')
+    const plain = await command(viewer, { aggregate: 'items', pipeline: [{ $match: {} }], cursor: {}, $db: 'app' })
+    equal(plain.ok, { $numberDouble: '1.0' }, 'a read-only pipeline still runs')
+    const out = await command(viewer, { aggregate: 'items', pipeline: [{ $match: {} }, { $out: 'copied' }], cursor: {}, $db: 'app' })
+    equal(out.code, { $numberInt: '13' }, 'a read-only user cannot run $out')
+    const merge = await command(viewer, { aggregate: 'items', pipeline: [{ $merge: { into: 'copied' } }], cursor: {}, $db: 'app' })
+    equal(merge.code, { $numberInt: '13' }, 'a read-only user cannot run $merge')
+    viewer.socket.destroy()
+
+    await command(login, { createUser: 'writer', pwd: 'writer-pass', roles: [{ role: 'readWrite', db: 'app' }], $db: 'app' })
+    const writer = await connect(authAddress.port)
+    await scram(writer, 'writer', 'writer-pass', 'SCRAM-SHA-256', 'app')
+    const written = await command(writer, { aggregate: 'items', pipeline: [{ $match: {} }, { $out: 'copied' }], cursor: {}, $db: 'app' })
+    equal(written.ok, { $numberDouble: '1.0' }, 'a read-write user may run $out')
+    const foreign = await command(writer, { aggregate: 'items', pipeline: [{ $merge: { into: { db: 'admin', coll: 'copied' } } }], cursor: {}, $db: 'app' })
+    equal(foreign.code, { $numberInt: '13' }, '$merge into another database needs privileges there')
+    writer.socket.destroy()
+}
+
 {
     const out = await command(login, { logout: 1, $db: 'admin' })
     equal(out.ok, { $numberDouble: '1.0' }, 'logout is acknowledged')
