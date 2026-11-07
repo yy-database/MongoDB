@@ -8,11 +8,11 @@ use std::{
 
 use mongo_core::{
     bson::{BsonDocument, BsonValue, encode_bson, parse_bson},
-    wire::{decode_op_msg_command, encode_op_msg_body},
     commands::{self, CommandError},
     cursor::CursorStore,
     json,
     store::Store,
+    wire::{decode_op_msg_command, encode_op_msg_body},
 };
 use serde_json::json;
 
@@ -506,7 +506,8 @@ fn unique_index_rejects_duplicate_keys_on_insert_and_update() {
     );
     commands::create_indexes(&index_command("items", 1, "a_1", true), &store).expect("createIndexes");
 
-    let duplicate = insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(3)), ("a", BsonValue::Int32(7))])]);
+    let duplicate =
+        insert_documents(&store, "items", vec![document(&[("_id", BsonValue::Int32(3)), ("a", BsonValue::Int32(7))])]);
     assert_eq!(int(&duplicate, "n"), 0);
     let errors = array(&duplicate, "writeErrors");
     assert_eq!(int(&errors[0], "code"), 11000);
@@ -519,7 +520,8 @@ fn unique_index_rejects_duplicate_keys_on_insert_and_update() {
     let mut update = command("update", "items", "app");
     let mut specification = BsonDocument::new();
     specification.push("q", BsonValue::Document(document(&[("_id", BsonValue::Int32(2))])));
-    specification.push("u", BsonValue::Document(document(&[("$set", BsonValue::Document(document(&[("a", BsonValue::Int32(7))]))) ])));
+    specification
+        .push("u", BsonValue::Document(document(&[("$set", BsonValue::Document(document(&[("a", BsonValue::Int32(7))])))])));
     update.push("updates", BsonValue::Array(vec![BsonValue::Document(specification)]));
     let reply = commands::update(&update, &store).expect("update");
     assert_eq!(int(&reply, "n"), 0);
@@ -536,8 +538,8 @@ fn create_indexes_rejects_conflicting_definitions() {
     let same_name = commands::create_indexes(&index_command("items", -1, "a_1", false), &store).expect_err("name conflict");
     assert_eq!(same_name.code, 86);
 
-    let equivalent = commands::create_indexes(&index_command("items", 1, "a_second", false), &store)
-        .expect_err("equivalent key conflict");
+    let equivalent =
+        commands::create_indexes(&index_command("items", 1, "a_second", false), &store).expect_err("equivalent key conflict");
     assert_eq!(equivalent.code, 85);
 }
 
@@ -590,8 +592,8 @@ fn ttl_monitor_removes_expired_documents_only_on_scan_ticks() {
     insert_documents(
         &store,
         "ttl",
-        vec![document(&[("_id", BsonValue::Int32(4)), ("expireAt", BsonValue::DateTime(now - 59_999))]),
-    ]);
+        vec![document(&[("_id", BsonValue::Int32(4)), ("expireAt", BsonValue::DateTime(now - 59_999))])],
+    );
 
     let mut cursors = CursorStore::new();
     let early = commands::ttl_monitor(&store, now + 2_000).expect("early pass");
@@ -656,7 +658,7 @@ fn aggregate_pipeline(collection: &str, stages: Vec<BsonValue>) -> BsonDocument 
 }
 
 fn stage(name: &str, body: BsonValue) -> BsonValue {
-    BsonValue::Document(document(&[(name, body)]) )
+    BsonValue::Document(document(&[(name, body)]))
 }
 
 #[test]
@@ -674,12 +676,10 @@ fn union_with_appends_documents_from_the_other_collection() {
 
     let mut union = BsonDocument::new();
     union.push("coll", text("other"));
-    union.push(
-        "pipeline",
-        BsonValue::Array(vec![stage("$match", BsonValue::Document(document(&[("kind", text("b"))])))]),
-    );
-    let reply = commands::aggregate(&aggregate_pipeline("items", vec![stage("$unionWith", BsonValue::Document(union))]), &store)
-        .expect("aggregate");
+    union.push("pipeline", BsonValue::Array(vec![stage("$match", BsonValue::Document(document(&[("kind", text("b"))])))]));
+    let reply =
+        commands::aggregate(&aggregate_pipeline("items", vec![stage("$unionWith", BsonValue::Document(union))]), &store)
+            .expect("aggregate");
     let documents = batch(&reply, "firstBatch");
 
     assert_eq!(documents.len(), 2);
@@ -866,11 +866,7 @@ fn merge_applies_writes_one_by_one_and_keeps_earlier_ones_on_failure() {
     assert_eq!(target_documents.len(), 1);
     let merged = &target_documents[0];
     assert_eq!(merged.get("_id"), Some(&BsonValue::Int32(1)));
-    assert_eq!(
-        merged.get("extra"),
-        Some(&BsonValue::Bool(true)),
-        "the write before the failing document is not rolled back"
-    );
+    assert_eq!(merged.get("extra"), Some(&BsonValue::Bool(true)), "the write before the failing document is not rolled back");
 }
 
 #[test]
@@ -937,4 +933,3 @@ fn wildcard_and_hashed_indexes_follow_the_real_server_rules() {
         "text indexes are rejected explicitly instead of being served incorrectly"
     );
 }
-

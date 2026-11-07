@@ -84,7 +84,9 @@ impl MongoCursors {
 /// Decodes an `OP_MSG` body into extended JSON.
 #[napi]
 pub fn decode_op_msg(body: Buffer) -> Result<String> {
-    decode_op_msg_command(&body).map(|document| reply(&document)).map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
+    decode_op_msg_command(&body)
+        .map(|document| reply(&document))
+        .map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
 }
 
 /// Encodes an extended-JSON command into an `OP_MSG` body.
@@ -110,7 +112,9 @@ pub fn decode_document(bytes: Buffer) -> Result<String> {
 /// Decodes a legacy `OP_QUERY` body into extended JSON.
 #[napi]
 pub fn decode_op_query(body: Buffer) -> Result<String> {
-    decode_op_query_command(&body).map(|document| reply(&document)).map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
+    decode_op_query_command(&body)
+        .map(|document| reply(&document))
+        .map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
 }
 
 /// Name of the command in an extended-JSON document.
@@ -319,18 +323,15 @@ fn wall_clock_millis() -> i64 {
 /// Configures the persistent replica-set oplog and its capped size.
 #[napi]
 pub fn enable_oplog(store: &MongoStore, namespace: String, max_bytes: i64) -> Result<()> {
-    store_of(store)
-        .enable_oplog(&namespace, max_bytes)
-        .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))
+    store_of(store).enable_oplog(&namespace, max_bytes).map_err(|error| Error::new(Status::GenericFailure, error.to_string()))
 }
 
 /// Persists the entries a write command staged; returns the last `{t,i}` as
 /// JSON, or `null` when nothing was staged.
 #[napi]
 pub fn commit_oplog(store: &MongoStore, wall_millis: i64) -> Result<Option<String>> {
-    let last = store_of(store)
-        .commit_oplog(wall_millis)
-        .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?;
+    let last =
+        store_of(store).commit_oplog(wall_millis).map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?;
     Ok(last.map(|(t, i)| format!("{{\"t\":{t},\"i\":{i}}}")))
 }
 

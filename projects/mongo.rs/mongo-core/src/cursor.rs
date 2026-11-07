@@ -98,8 +98,10 @@ impl CursorStore {
         let first_batch: Vec<BsonValue> = documents.drain(..batch_size).collect();
         let id = self.next_id;
         self.next_id += 1;
-        self.cursors
-            .insert(id, Cursor { namespace: namespace.to_string(), remaining: documents, killed: false, last_used: Instant::now() });
+        self.cursors.insert(
+            id,
+            Cursor { namespace: namespace.to_string(), remaining: documents, killed: false, last_used: Instant::now() },
+        );
         (id, first_batch)
     }
 

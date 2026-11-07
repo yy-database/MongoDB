@@ -114,10 +114,12 @@ pub fn from_json(value: &Value) -> Result<BsonValue, String> {
             // `CodeWithScope` is the only extended-JSON form that is not a
             // single-key wrapper: it carries `$code` and `$scope` side by side.
             if object.contains_key("$scope") {
-                let code = object.get("$code").and_then(Value::as_str)
+                let code = object
+                    .get("$code")
+                    .and_then(Value::as_str)
                     .ok_or_else(|| "`$code` is required next to `$scope`".to_string())?;
-                let scope = object.get("$scope").and_then(Value::as_object)
-                    .ok_or_else(|| "`$scope` must be an object".to_string())?;
+                let scope =
+                    object.get("$scope").and_then(Value::as_object).ok_or_else(|| "`$scope` must be an object".to_string())?;
                 return Ok(BsonValue::CodeWithScope { code: code.to_string(), scope: from_json_document(scope)? });
             }
             if object.len() == 1 {
@@ -229,9 +231,10 @@ fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String>
             let object = payload.as_object().ok_or_else(|| "`$binary` must be an object".to_string())?;
             let encoded =
                 object.get("base64").and_then(Value::as_str).ok_or_else(|| "`$binary.base64` is required".to_string())?;
-            let subtype = object.get("subType").and_then(Value::as_str).ok_or_else(|| "`$binary.subType` is required".to_string())?;
-            let subtype = u8::from_str_radix(subtype, 16)
-                .map_err(|_| format!("invalid `$binary.subType` value `{subtype}`"))?;
+            let subtype =
+                object.get("subType").and_then(Value::as_str).ok_or_else(|| "`$binary.subType` is required".to_string())?;
+            let subtype =
+                u8::from_str_radix(subtype, 16).map_err(|_| format!("invalid `$binary.subType` value `{subtype}`"))?;
             Ok(Some(BsonValue::Binary(BinaryData::new(subtype, base64_decode(encoded)?))))
         }
         "$date" => {
@@ -280,9 +283,13 @@ fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String>
         }
         "$regularExpression" => {
             let object = payload.as_object().ok_or_else(|| "`$regularExpression` must be an object".to_string())?;
-            let pattern = object.get("pattern").and_then(Value::as_str)
+            let pattern = object
+                .get("pattern")
+                .and_then(Value::as_str)
                 .ok_or_else(|| "`$regularExpression.pattern` is required".to_string())?;
-            let options = object.get("options").and_then(Value::as_str)
+            let options = object
+                .get("options")
+                .and_then(Value::as_str)
                 .ok_or_else(|| "`$regularExpression.options` is required".to_string())?;
             Ok(Some(BsonValue::Regex { pattern: pattern.to_string(), options: options.to_string() }))
         }
@@ -294,7 +301,9 @@ fn parse_tagged(tag: &str, payload: &Value) -> Result<Option<BsonValue>, String>
             let object = payload.as_object().ok_or_else(|| "`$dbPointer` must be an object".to_string())?;
             let namespace =
                 object.get("$ref").and_then(Value::as_str).ok_or_else(|| "`$dbPointer.$ref` is required".to_string())?;
-            let identifier = object.get("$id").and_then(Value::as_object)
+            let identifier = object
+                .get("$id")
+                .and_then(Value::as_object)
                 .and_then(|identifier| identifier.get("$oid"))
                 .and_then(Value::as_str)
                 .ok_or_else(|| "`$dbPointer.$id` must hold `$oid`".to_string())?;

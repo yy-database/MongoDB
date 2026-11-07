@@ -69,20 +69,8 @@ impl OplogEntry {
     }
 
     /// `op: "c"` for a collection or database command.
-    pub fn command(
-        namespace: &str,
-        uuid: Option<BsonValue>,
-        object: BsonDocument,
-        old_object: Option<BsonDocument>,
-    ) -> Self {
-        Self {
-            namespace: namespace.to_string(),
-            uuid,
-            operation: 'c',
-            object,
-            old_object,
-            from_migrate: None,
-        }
+    pub fn command(namespace: &str, uuid: Option<BsonValue>, object: BsonDocument, old_object: Option<BsonDocument>) -> Self {
+        Self { namespace: namespace.to_string(), uuid, operation: 'c', object, old_object, from_migrate: None }
     }
 
     /// `dropDatabase` carries `fromMigrate: false`, so it is rendered here.
@@ -117,14 +105,7 @@ impl OplogEntry {
         }
         let mut object = BsonDocument::new();
         object.push("applyOps".to_string(), BsonValue::Array(array));
-        Self {
-            namespace: "admin.$cmd".to_string(),
-            uuid: None,
-            operation: 'c',
-            object,
-            old_object: None,
-            from_migrate: None,
-        }
+        Self { namespace: "admin.$cmd".to_string(), uuid: None, operation: 'c', object, old_object: None, from_migrate: None }
     }
 
     /// Renders the full entry in `mongod`'s field order:
@@ -143,10 +124,7 @@ impl OplogEntry {
         if let Some(from_migrate) = self.from_migrate {
             entry.push("fromMigrate".to_string(), BsonValue::Bool(from_migrate));
         }
-        entry.push(
-            "ts".to_string(),
-            BsonValue::Timestamp { t: seconds, i: increment },
-        );
+        entry.push("ts".to_string(), BsonValue::Timestamp { t: seconds, i: increment });
         entry.push("t".to_string(), BsonValue::Int64(i64::from(term)));
         entry.push("v".to_string(), BsonValue::Int32(2));
         entry.push("wall".to_string(), BsonValue::DateTime(wall_millis));
@@ -190,13 +168,7 @@ fn document_diff(old: &BsonDocument, new: &BsonDocument) -> BsonDocument {
     diff
 }
 
-fn diff_fields(
-    prefix: &str,
-    old: &BsonDocument,
-    new: &BsonDocument,
-    updated: &mut BsonDocument,
-    deleted: &mut BsonDocument,
-) {
+fn diff_fields(prefix: &str, old: &BsonDocument, new: &BsonDocument, updated: &mut BsonDocument, deleted: &mut BsonDocument) {
     for (field, value) in &new.fields {
         let path = if prefix.is_empty() { field.clone() } else { format!("{prefix}.{field}") };
         match old.get(field) {
@@ -252,10 +224,7 @@ mod tests {
         let rendered = entry.render(100, 1, 1, 1000);
         assert_eq!(keys(&rendered), ["op", "ns", "ui", "o", "o2", "ts", "t", "v", "wall"]);
         assert_eq!(rendered.get("op"), Some(&BsonValue::String("i".to_string())));
-        assert_eq!(
-            rendered.get("o2"),
-            Some(&BsonValue::Document(document(vec![("_id", BsonValue::Int32(1))])))
-        );
+        assert_eq!(rendered.get("o2"), Some(&BsonValue::Document(document(vec![("_id", BsonValue::Int32(1))]))));
         assert_eq!(rendered.get("ts"), Some(&BsonValue::Timestamp { t: 100, i: 1 }));
         assert_eq!(rendered.get("t"), Some(&BsonValue::Int64(1)));
         assert_eq!(rendered.get("v"), Some(&BsonValue::Int32(2)));
@@ -268,23 +237,14 @@ mod tests {
         let entry = OplogEntry::delete("db.c", BsonValue::String("uuid".to_string()), &BsonValue::Int32(2));
         let rendered = entry.render(100, 2, 1, 1000);
         assert_eq!(keys(&rendered), ["op", "ns", "ui", "o", "ts", "t", "v", "wall"]);
-        assert_eq!(
-            rendered.get("o"),
-            Some(&BsonValue::Document(document(vec![("_id", BsonValue::Int32(2))])))
-        );
+        assert_eq!(rendered.get("o"), Some(&BsonValue::Document(document(vec![("_id", BsonValue::Int32(2))]))));
     }
 
     #[test]
     fn update_entry_carries_a_version_two_diff() {
         let old = document(vec![
             ("_id", BsonValue::Int32(1)),
-            (
-                "a",
-                BsonValue::Document(document(vec![
-                    ("b", BsonValue::Int32(1)),
-                    ("c", BsonValue::Int32(2)),
-                ])),
-            ),
+            ("a", BsonValue::Document(document(vec![("b", BsonValue::Int32(1)), ("c", BsonValue::Int32(2))]))),
         ]);
         let new = document(vec![
             ("_id", BsonValue::Int32(1)),
@@ -298,10 +258,7 @@ mod tests {
                 "diff",
                 BsonValue::Document(document(vec![
                     ("u", BsonValue::Document(document(vec![("a.b", BsonValue::Int32(3))]))),
-                    (
-                        "d",
-                        BsonValue::Document(document(vec![("a.c", BsonValue::Bool(false))])),
-                    ),
+                    ("d", BsonValue::Document(document(vec![("a.c", BsonValue::Bool(false))]))),
                 ])),
             ),
         ]);
@@ -310,23 +267,18 @@ mod tests {
 
     #[test]
     fn apply_ops_entry_lands_on_admin_cmd() {
-        let first = OplogEntry::insert(
-            "db.c",
-            BsonValue::String("uuid".to_string()),
-            &document(vec![("_id", BsonValue::Int32(1))]),
-        );
-        let second = OplogEntry::insert(
-            "db.c",
-            BsonValue::String("uuid".to_string()),
-            &document(vec![("_id", BsonValue::Int32(2))]),
-        );
+        let first =
+            OplogEntry::insert("db.c", BsonValue::String("uuid".to_string()), &document(vec![("_id", BsonValue::Int32(1))]));
+        let second =
+            OplogEntry::insert("db.c", BsonValue::String("uuid".to_string()), &document(vec![("_id", BsonValue::Int32(2))]));
         let entry = OplogEntry::apply_ops(vec![first, second]);
         assert_eq!(entry.namespace(), "admin.$cmd");
         let rendered = entry.render(100, 1, 1, 1000);
         let Some(BsonValue::Array(operations)) = rendered.get("o").and_then(|value| match value {
             BsonValue::Document(object) => object.get("applyOps"),
             _ => None,
-        }) else {
+        })
+        else {
             panic!("applyOps must be an array");
         };
         assert_eq!(operations.len(), 2);

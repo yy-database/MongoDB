@@ -26,7 +26,7 @@ use std::{
 use database::{
     cluster::catalog,
     storage::cluster_kv::{FileShard, InlineValue, Key, KvStore, ShardChange, StoredValue},
-    types::cluster::{CatalogSchema, Namespace, ShardId, CATALOG_SUFFIX},
+    types::cluster::{CATALOG_SUFFIX, CatalogSchema, Namespace, ShardId},
 };
 
 use crate::{
@@ -230,12 +230,14 @@ fn parse_namespaces(document: &str) -> Result<BTreeSet<String>, StoreError> {
             "catalog schema document version {version:?}, expected {CATALOG_DOCUMENT_VERSION}"
         )));
     }
-    let Some(entries) = value.get("namespaces").and_then(serde_json::Value::as_array) else {
+    let Some(entries) = value.get("namespaces").and_then(serde_json::Value::as_array)
+    else {
         return Err(StoreError::Catalog("catalog schema document has no `namespaces` array".to_string()));
     };
     let mut namespaces = BTreeSet::new();
     for entry in entries {
-        let Some(label) = entry.as_str() else {
+        let Some(label) = entry.as_str()
+        else {
             return Err(StoreError::Catalog("catalog schema document has a non-string namespace".to_string()));
         };
         namespaces.insert(label.to_string());
@@ -262,8 +264,12 @@ fn collection_options_json(namespace: &str, options: &CollectionOptions) -> Stri
 fn parse_collections(document: &str) -> Result<BTreeMap<String, CollectionOptions>, StoreError> {
     let value: serde_json::Value = serde_json::from_str(document)
         .map_err(|error| StoreError::Catalog(format!("catalog schema document is not JSON: {error}")))?;
-    let Some(entries) = value.get("collections") else { return Ok(BTreeMap::new()) };
-    let Some(entries) = entries.as_array() else {
+    let Some(entries) = value.get("collections")
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let Some(entries) = entries.as_array()
+    else {
         return Err(StoreError::Catalog("catalog schema document has a non-array `collections` field".to_string()));
     };
     let mut collections = BTreeMap::new();
@@ -342,8 +348,12 @@ impl IndexSpec {
 fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
     let value: serde_json::Value = serde_json::from_str(document)
         .map_err(|error| StoreError::Catalog(format!("catalog schema document is not JSON: {error}")))?;
-    let Some(entries) = value.get("indexes") else { return Ok(Vec::new()) };
-    let Some(entries) = entries.as_array() else {
+    let Some(entries) = value.get("indexes")
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(entries) = entries.as_array()
+    else {
         return Err(StoreError::Catalog("catalog schema document has a non-array `indexes` field".to_string()));
     };
     let mut indexes = Vec::with_capacity(entries.len());
@@ -358,40 +368,43 @@ fn parse_indexes(document: &str) -> Result<Vec<IndexSpec>, StoreError> {
             .ok_or_else(|| StoreError::Catalog("catalog index entry has no name".to_string()))?;
         let sparse = entry.get("sparse").and_then(serde_json::Value::as_bool);
         let hidden = entry.get("hidden").and_then(serde_json::Value::as_bool).unwrap_or(false);
-        let expire_after_seconds = entry
-            .get("expireAfterSeconds")
-            .and_then(serde_json::Value::as_i64)
-            .map(|seconds| seconds as i32);
+        let expire_after_seconds =
+            entry.get("expireAfterSeconds").and_then(serde_json::Value::as_i64).map(|seconds| seconds as i32);
         let collation = match entry.get("collation") {
-            Some(value) => Some(document_option(value).map_err(|error| StoreError::Catalog(format!("catalog index `{name}` collation is invalid: {error}")))?),
-            None => None,
-        };
-        let partial_filter_expression = match entry.get("partialFilterExpression") {
             Some(value) => Some(
                 document_option(value)
-                    .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` partial filter is invalid: {error}")))?,
+                    .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` collation is invalid: {error}")))?,
             ),
             None => None,
         };
+        let partial_filter_expression =
+            match entry.get("partialFilterExpression") {
+                Some(value) => Some(document_option(value).map_err(|error| {
+                    StoreError::Catalog(format!("catalog index `{name}` partial filter is invalid: {error}"))
+                })?),
+                None => None,
+            };
         let wildcard_projection = match entry.get("wildcardProjection") {
-            Some(value) => Some(
-                document_option(value)
-                    .map_err(|error| StoreError::Catalog(format!("catalog index `{name}` wildcard projection is invalid: {error}")))?,
-            ),
+            Some(value) => Some(document_option(value).map_err(|error| {
+                StoreError::Catalog(format!("catalog index `{name}` wildcard projection is invalid: {error}"))
+            })?),
             None => None,
         };
-        let Some(pairs) = entry.get("key").and_then(serde_json::Value::as_array) else {
+        let Some(pairs) = entry.get("key").and_then(serde_json::Value::as_array)
+        else {
             return Err(StoreError::Catalog(format!("catalog index `{name}` has no key array")));
         };
         let mut key = BsonDocument::new();
         for pair in pairs {
-            let Some(fields) = pair.as_array() else {
+            let Some(fields) = pair.as_array()
+            else {
                 return Err(StoreError::Catalog(format!("catalog index `{name}` has a malformed key entry")));
             };
             if fields.len() != 2 {
                 return Err(StoreError::Catalog(format!("catalog index `{name}` has a malformed key entry")));
             }
-            let Some(field) = fields[0].as_str() else {
+            let Some(field) = fields[0].as_str()
+            else {
                 return Err(StoreError::Catalog(format!("catalog index `{name}` has a non-string key field")));
             };
             let value = json::from_json(&fields[1])
@@ -425,10 +438,7 @@ fn document_option(value: &serde_json::Value) -> Result<BsonDocument, String> {
 
 fn legacy_namespaces(shard: &FileShard) -> Vec<String> {
     match shard.scan(&Namespace(CATALOG_NAMESPACE.to_string()), b"", None, None, 0) {
-        Ok(records) => records
-            .into_iter()
-            .filter_map(|record| String::from_utf8(record.key.bytes).ok())
-            .collect(),
+        Ok(records) => records.into_iter().filter_map(|record| String::from_utf8(record.key.bytes).ok()).collect(),
         Err(_) => Vec::new(),
     }
 }
@@ -668,11 +678,7 @@ impl Store {
 
         let mut catalog = if catalog_exists { load_catalog(&catalog_path)? } else { new_catalog(&requested, &catalog_path)? };
 
-        let shard_path = if catalog_exists {
-            shard_path_for(&catalog_path, &catalog.shard_id)
-        } else {
-            requested
-        };
+        let shard_path = if catalog_exists { shard_path_for(&catalog_path, &catalog.shard_id) } else { requested };
         if catalog_exists && !shard_path.exists() {
             return Err(StoreError::Catalog(format!(
                 "catalog `{}` points at missing shard `{}`",
@@ -939,10 +945,9 @@ impl Store {
             }
         }
         let start_version = registry.version;
-        registry.transactions.insert(
-            session.to_string(),
-            TransactionState { start_version, writes: BTreeMap::new(), aborted: false },
-        );
+        registry
+            .transactions
+            .insert(session.to_string(), TransactionState { start_version, writes: BTreeMap::new(), aborted: false });
         registry.last_numbers.insert(session.to_string(), txn_number);
         registry.last_states.insert(session.to_string(), SessionState::Active);
         TransactionBegin::Started
@@ -952,7 +957,8 @@ impl Store {
     /// without `startTransaction`.
     pub fn session_write_state(&self, session: &str, txn_number: i64) -> SessionWriteState {
         let registry = self.sessions_lock();
-        let Some(&last) = registry.last_numbers.get(session) else {
+        let Some(&last) = registry.last_numbers.get(session)
+        else {
             return SessionWriteState::NoTransaction { active: -1 };
         };
         if txn_number < last {
@@ -1044,7 +1050,8 @@ impl Store {
     /// Applies every staged write, or reports the conflict that prevents it.
     pub fn transaction_commit(&self, session: &str, txn_number: i64) -> TransactionCommit {
         let mut registry = self.sessions_lock();
-        let Some(&last) = registry.last_numbers.get(session) else {
+        let Some(&last) = registry.last_numbers.get(session)
+        else {
             return TransactionCommit::NoTransaction { active: -1 };
         };
         if txn_number < last {
@@ -1062,7 +1069,8 @@ impl Store {
             _ => {}
         }
         let (start_version, aborted, writes) = {
-            let Some(state) = registry.transactions.get(session) else {
+            let Some(state) = registry.transactions.get(session)
+            else {
                 return TransactionCommit::NoTransaction { active: last };
             };
             (state.start_version, state.aborted, state.writes.clone())
@@ -1092,7 +1100,8 @@ impl Store {
             if !replaced.is_empty() {
                 let _ = self.replace(&namespace, &replaced);
             }
-            let deleted: Vec<Vec<u8>> = entries.iter().filter(|(_, value)| value.is_none()).map(|(key, _)| key.clone()).collect();
+            let deleted: Vec<Vec<u8>> =
+                entries.iter().filter(|(_, value)| value.is_none()).map(|(key, _)| key.clone()).collect();
             if !deleted.is_empty() {
                 let _ = self.delete(&namespace, &deleted);
             }
@@ -1107,7 +1116,8 @@ impl Store {
     /// committed or aborted.
     pub fn transaction_abort(&self, session: &str, txn_number: i64) -> TransactionAbort {
         let mut registry = self.sessions_lock();
-        let Some(&last) = registry.last_numbers.get(session) else {
+        let Some(&last) = registry.last_numbers.get(session)
+        else {
             return TransactionAbort::NoTransaction { active: -1 };
         };
         if txn_number < last {
@@ -1241,7 +1251,11 @@ impl Store {
                     }
                     continue;
                 }
-                changes.push(ShardChange::Put { key, value: StoredValue::Inline(InlineValue(payload.clone())), expires_at: None });
+                changes.push(ShardChange::Put {
+                    key,
+                    value: StoredValue::Inline(InlineValue(payload.clone())),
+                    expires_at: None,
+                });
                 written.push(key_bytes.clone());
                 report.inserted += 1;
             }

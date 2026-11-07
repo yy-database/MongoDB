@@ -293,19 +293,13 @@ fn ttl_monitor(store: PyRef<'_, MongoStore>, now_ms: Option<i64>) -> String {
 /// Configures the persistent replica-set oplog and its capped size.
 #[pyfunction]
 fn enable_oplog(store: PyRef<'_, MongoStore>, namespace: &str, max_bytes: i64) -> PyResult<()> {
-    store
-        .inner
-        .enable_oplog(namespace, max_bytes)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+    store.inner.enable_oplog(namespace, max_bytes).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 /// Persists staged oplog entries; returns the last `{t,i}` as JSON.
 #[pyfunction]
 fn commit_oplog(store: PyRef<'_, MongoStore>, wall_millis: i64) -> PyResult<Option<String>> {
-    let last = store
-        .inner
-        .commit_oplog(wall_millis)
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let last = store.inner.commit_oplog(wall_millis).map_err(|error| PyValueError::new_err(error.to_string()))?;
     Ok(last.map(|(t, i)| format!("{{\"t\":{t},\"i\":{i}}}")))
 }
 
