@@ -13,3 +13,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 mongo = { workspace = true }
 wasm-bindgen = { workspace = true }
+
+# The upstream `mongo` facade pulls getrandom twice (0.2 through `ahash`,
+# 0.4 through `twox-hash` / `uuid`). Both refuse to build for
+# `wasm32-unknown-unknown` until their wasm backend is switched on, and the
+# feature must be requested somewhere in the graph. Nothing else is added: the
+# aliases only turn on features of crates that are already dependencies.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
