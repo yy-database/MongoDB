@@ -1061,6 +1061,31 @@ function requirementsFor(name: string, command: any, database: string): Requirem
     }
 }
 
+/**
+ * `createUser` requirements: the action that creates the user plus, for every
+ * role it hands out, `grantRole` on the database that role lives on.
+ *
+ * Without the per-role check a `userAdmin@app` user could mint a `root@admin`
+ * user and then use it, which is a privilege escalation rather than a delegated
+ * administration.
+ */
+function createUserTargets(command: any, database: string): Requirement[] {
+    const requirements: Requirement[] = [{ action: 'createUser', db: database, collection: '' }]
+    const roles = Array.isArray(command.roles) ? command.roles : []
+    for (const role of roles) {
+        // Malformed role entries are left to the command validator, which
+        // answers them with `BadValue` rather than an authorization failure.
+        if (typeof role === 'string') {
+            requirements.push({ action: 'grantRole', db: database, collection: '' })
+            continue
+        }
+        if (role !== null && typeof role === 'object' && typeof role.role === 'string' && typeof role.db === 'string') {
+            requirements.push({ action: 'grantRole', db: role.db, collection: '' })
+        }
+    }
+    return requirements
+}
+
 /** `usersInfo` databases the caller must be allowed to inspect. */
 function usersInfoTargets(command: any, database: string): Requirement[] {
     if (command.usersInfo && typeof command.usersInfo === 'object' && command.usersInfo.forAllDBs === true) {
@@ -1106,7 +1131,12 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
     }
     const database = typeof command.$db === 'string' ? command.$db : 'admin'
     const privileges = privilegesForRoles(session.auth.roles)
-    const requirements = name === 'usersInfo' ? usersInfoTargets(command, database) : requirementsFor(name, command, database)
+    const requirements =
+        name === 'usersInfo'
+            ? usersInfoTargets(command, database)
+            : name === 'createUser'
+              ? createUserTargets(command, database)
+              : requirementsFor(name, command, database)
     if (requirements === null) return null
     for (const requirement of requirements) {
         if (!check(privileges, requirement)) return notAuthorized(command)

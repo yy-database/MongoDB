@@ -566,6 +566,32 @@ const login = await connect(authAddress.port)
     rolesConnection.socket.destroy()
 }
 
+// A database-scoped `userAdmin` may only hand out roles it can grant on that
+// database. Handing out `root@admin` would turn delegated administration into
+// full control over every database.
+{
+    const created = await command(login, { createUser: 'appadmin', pwd: 'app-pass', roles: [{ role: 'userAdmin', db: 'app' }], $db: 'app' })
+    equal(created.ok, { $numberDouble: '1.0' }, 'a database-scoped userAdmin is created')
+
+    const delegated = await connect(authAddress.port)
+    const session = await scram(delegated, 'appadmin', 'app-pass', 'SCRAM-SHA-256', 'app')
+    equal(session.finished.done, true, 'the database-scoped administrator logs in')
+
+    const scoped = await command(delegated, { createUser: 'appreader', pwd: 'reader-pass', roles: [{ role: 'readWrite', db: 'app' }], $db: 'app' })
+    equal(scoped.ok, { $numberDouble: '1.0' }, 'a role on its own database may be granted')
+
+    const escalated = await command(delegated, { createUser: 'backdoor', pwd: 'backdoor-pass', roles: [{ role: 'root', db: 'admin' }], $db: 'app' })
+    equal(escalated.code, { $numberInt: '13' }, 'granting root on admin is refused')
+    equal(escalated.codeName, 'Unauthorized', 'the escalation is an authorization failure')
+
+    const foreign = await command(delegated, { createUser: 'foreign', pwd: 'foreign-pass', roles: [{ role: 'readWrite', db: 'other' }], $db: 'app' })
+    equal(foreign.code, { $numberInt: '13' }, 'a role on another database is refused')
+
+    const lookup = await command(delegated, { usersInfo: { user: 'backdoor', db: 'app' }, $db: 'app' })
+    equal(lookup.users.length, 0, 'the refused user is never written')
+    delegated.socket.destroy()
+}
+
 {
     const out = await command(login, { logout: 1, $db: 'admin' })
     equal(out.ok, { $numberDouble: '1.0' }, 'logout is acknowledged')
