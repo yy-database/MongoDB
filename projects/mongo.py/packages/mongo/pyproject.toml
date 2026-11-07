@@ -7,11 +7,16 @@ name = "yydb-mongo"
 version = "0.0.1"
 description = "MongoDB protocol primitives assembled from the Rust mongo-pyo3 bindings"
 license = { text = "MPL-2.0" }
+authors = [{ name = "yy-database" }]
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yy-database/MongoDB"
+Repository = "https://github.com/yy-database/MongoDB.git"
 
 [tool.maturin]
 manifest-path = "../../../mongo.rs/mongo-pyo3/Cargo.toml"

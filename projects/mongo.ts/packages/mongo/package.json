@@ -5,6 +5,17 @@
     "type": "module",
     "description": "TypeScript acceptance surface and minimal shell for the Rust MongoDB primitives",
     "license": "MPL-2.0",
+    "homepage": "https://github.com/yy-database/MongoDB#readme",
+    "bugs": {
+        "url": "https://github.com/yy-database/MongoDB/issues"
+    },
+    "keywords": [
+        "mongodb",
+        "database",
+        "wire-protocol",
+        "napi",
+        "yydb"
+    ],
     "bin": {
         "yydb-mongo": "bin/mongo.mjs",
         "yydb-mongod": "bin/serve.mjs"

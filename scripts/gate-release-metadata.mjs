@@ -24,6 +24,10 @@ const platformDirs = readdirSync(platformRoot, { withFileTypes: true })
 
 check(main.version === rootVersion, `npm main version ${main.version} != workspace ${rootVersion}`)
 check(main.private === true, 'npm main package is not marked private')
+check(main.license === 'MPL-2.0', `npm main license is ${main.license}`)
+check(typeof main.homepage === 'string' && main.homepage.startsWith('https://github.com/yy-database/MongoDB'), 'npm main homepage is missing or points elsewhere')
+check(typeof main.bugs?.url === 'string' && main.bugs.url.includes('github.com/yy-database/MongoDB'), 'npm main bugs url is missing or points elsewhere')
+check(Array.isArray(main.keywords) && main.keywords.length > 0, 'npm main keywords are missing')
 check((main.files ?? []).includes('dist'), 'npm main `files` does not include `dist`')
 check((main.files ?? []).includes('bin'), 'npm main `files` does not include `bin`')
 
@@ -57,6 +61,7 @@ for (const dir of platformDirs) {
     check(platform.version === rootVersion, `${dir}: version ${platform.version} != workspace ${rootVersion}`)
     check(optional[platform.name] === rootVersion, `${dir}: optionalDependencies pins ${optional[platform.name]} instead of ${rootVersion}`)
     check(platform.private === main.private, `${dir}: private flag differs from the main package`)
+    check(platform.license === main.license, `${dir}: license ${platform.license} differs from the main package`)
     if (!dir.includes('unknown-wasm32')) {
         const [, os, cpu] = dir.split('-')
         check((platform.os ?? []).join(',') === os, `${dir}: os ${JSON.stringify(platform.os)} != ${os}`)
@@ -68,6 +73,10 @@ const pyproject = readText('projects/mongo.py/packages/mongo/pyproject.toml')
 const pyVersion = pyproject.match(/^version = "([^"]+)"/m)?.[1]
 check(pyVersion === rootVersion, `pyproject version ${pyVersion} != workspace ${rootVersion}`)
 check(pyproject.includes('manifest-path = "../../../mongo.rs/mongo-pyo3/Cargo.toml"'), 'pyproject manifest-path does not point at mongo-pyo3')
+check(/^authors = \[{ name = "([^"]+)" }\]/m.test(pyproject), 'pyproject authors are missing')
+const pyUrls = pyproject.match(/^\[project\.urls\]\n([^\[]*)/m)?.[1] ?? ''
+check(pyUrls.includes('Homepage = "https://github.com/yy-database/MongoDB"'), 'pyproject Homepage url is missing or points elsewhere')
+check(pyUrls.includes('Repository = "https://github.com/yy-database/MongoDB.git"'), 'pyproject Repository url is missing or points elsewhere')
 
 const cargo = readText('projects/mongo.rs/Cargo.toml')
 const cargoVersion = cargo.match(/\[workspace\.package\][^\[]*?version = "([^"]+)"/s)?.[1]
