@@ -591,6 +591,15 @@ def run_case(case):
         if op == "ttlMonitor":
             # `now_ms` is the caller-supplied clock that compresses the window.
             return json.loads(mongo.ttl_monitor(store_of(step.get("store")), step.get("nowMs")))
+        if op == "enableOplog":
+            mongo.enable_oplog(store_of(step.get("store")), step.get("namespace", "local.oplog.rs"), step.get("maxBytes", 64 * 1024 * 1024))
+            return None
+        if op == "commitOplog":
+            last = mongo.commit_oplog(store_of(step.get("store")), step.get("wallMillis", 0))
+            return None if last is None else json.loads(last)
+        if op == "discardOplog":
+            mongo.discard_oplog(store_of(step.get("store")))
+            return None
         if op == "dropDatabase":
             command = {"dropDatabase": step.get("argument", 1)}
             reply = mongo.drop_database(store_of(step.get("store")), json.dumps(command_of(case, step, command)))

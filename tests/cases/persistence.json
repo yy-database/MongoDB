@@ -241,6 +241,77 @@
                 { "at": "/r/cursor/firstBatch/#", "equals": 1 },
                 { "at": "/r/cursor/firstBatch/0/_id", "equals": { "$numberLong": "1" } }
             ]
+        },
+        {
+            "id": "persist.oplog.commit_positions",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "enableOplog", "store": "s", "namespace": "local.oplog.rs", "maxBytes": 1048576 },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "n": "a" }, { "_id": 2, "n": "b" }], "as": "r1" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 1000, "as": "r2" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 1001, "as": "r3" },
+                { "op": "find", "collection": "oplog.rs", "db": "local", "filter": {}, "as": "r4" },
+                { "op": "update", "collection": "items", "updates": [{ "q": { "_id": 1 }, "u": { "$set": { "n": "c" } } }], "as": "r5" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 1002, "as": "r6" },
+                { "op": "delete", "collection": "items", "deletes": [{ "q": { "_id": 2 }, "limit": 1 }], "as": "r7" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 1003, "as": "r8" }
+            ],
+            "checks": [
+                { "at": "/r2/t", "equals": 1 },
+                { "at": "/r2/i", "equals": 1 },
+                { "at": "/r3", "equals": null },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 1 },
+                { "at": "/r4/cursor/firstBatch/0/ns", "equals": "admin.$cmd" },
+                { "at": "/r4/cursor/firstBatch/0/op", "equals": "c" },
+                { "at": "/r4/cursor/firstBatch/0/t", "equals": { "$numberLong": "1" } },
+                { "at": "/r4/cursor/firstBatch/0/wall", "equals": { "$date": { "$numberLong": "1000" } } },
+                { "at": "/r4/cursor/firstBatch/0/o/applyOps/#", "equals": 2 },
+                { "at": "/r4/cursor/firstBatch/0/o/applyOps/0/ns", "equals": "app.items" },
+                { "at": "/r4/cursor/firstBatch/0/o/applyOps/0/op", "equals": "i" },
+                { "at": "/r4/cursor/firstBatch/0/o/applyOps/0/o", "equals": { "_id": { "$numberInt": "1" }, "n": "a" } },
+                { "at": "/r6/t", "equals": 1 },
+                { "at": "/r6/i", "equals": 2 },
+                { "at": "/r8/t", "equals": 1 },
+                { "at": "/r8/i", "equals": 3 }
+            ]
+        },
+        {
+            "id": "persist.oplog.discard_drops_the_buffer",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "enableOplog", "store": "s", "namespace": "local.oplog.rs", "maxBytes": 1048576 },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "discardOplog", "store": "s", "as": "r2" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 2000, "as": "r3" },
+                { "op": "find", "collection": "oplog.rs", "db": "local", "filter": {}, "as": "r4" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 2 }], "as": "r5" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 2001, "as": "r6" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 2002, "as": "r7" }
+            ],
+            "checks": [
+                { "at": "/r2", "equals": null },
+                { "at": "/r3", "equals": null },
+                { "at": "/r4/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r6/t", "equals": 2 },
+                { "at": "/r6/i", "equals": 1 },
+                { "at": "/r7", "equals": null }
+            ]
+        },
+        {
+            "id": "persist.oplog.disabled_store_keeps_no_entries",
+            "surface": "persistence",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "as": "r1" },
+                { "op": "commitOplog", "store": "s", "wallMillis": 3000, "as": "r2" },
+                { "op": "find", "collection": "oplog.rs", "db": "local", "filter": {}, "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r2", "equals": null },
+                { "at": "/r3/cursor/firstBatch/#", "equals": 0 }
+            ]
         }
     ]
 }

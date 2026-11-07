@@ -284,6 +284,16 @@ function runCase(testCase) {
                 return JSON.parse(binding.ttlMonitor(storeOf(step.store), step.nowMs ?? null))
             case 'listDatabases':
                 return JSON.parse(binding.listDatabases(storeOf(step.store)))
+            case 'enableOplog':
+                binding.enableOplog(storeOf(step.store), step.namespace ?? 'local.oplog.rs', step.maxBytes ?? 64 * 1024 * 1024)
+                return null
+            case 'commitOplog': {
+                const last = binding.commitOplog(storeOf(step.store), step.wallMillis ?? 0)
+                return last === null || last === undefined ? null : JSON.parse(last)
+            }
+            case 'discardOplog':
+                binding.discardOplog(storeOf(step.store))
+                return null
             case 'dropDatabase': {
                 const command = { dropDatabase: step.argument === undefined ? 1 : step.argument }
                 return JSON.parse(binding.dropDatabase(storeOf(step.store), commandText(testCase, step, command)))
