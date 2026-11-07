@@ -52,21 +52,26 @@ for (const name of compilerPackages) {
 }
 
 const optional = main.optionalDependencies ?? {}
-check(Object.keys(optional).length === platformDirs.length, `optionalDependencies has ${Object.keys(optional).length} entries for ${platformDirs.length} platform packages`)
+const nativeDirs = platformDirs.filter((dir) => !dir.includes('unknown-wasm32'))
+check(Object.keys(optional).length === nativeDirs.length, `optionalDependencies has ${Object.keys(optional).length} entries for ${nativeDirs.length} native platform packages`)
 
 for (const dir of platformDirs) {
     const manifestPath = `projects/mongo.ts/platforms/${dir}/package.json`
     const platform = readJson(manifestPath)
     check(platform.name === `@yydb/mongodb-${dir.slice('mongo-'.length)}`, `${dir}: package name is ${platform.name}`)
     check(platform.version === rootVersion, `${dir}: version ${platform.version} != workspace ${rootVersion}`)
-    check(optional[platform.name] === rootVersion, `${dir}: optionalDependencies pins ${optional[platform.name]} instead of ${rootVersion}`)
     check(platform.private === main.private, `${dir}: private flag differs from the main package`)
     check(platform.license === main.license, `${dir}: license ${platform.license} differs from the main package`)
-    if (!dir.includes('unknown-wasm32')) {
-        const [, os, cpu] = dir.split('-')
-        check((platform.os ?? []).join(',') === os, `${dir}: os ${JSON.stringify(platform.os)} != ${os}`)
-        check((platform.cpu ?? []).join(',') === cpu, `${dir}: cpu ${JSON.stringify(platform.cpu)} != ${cpu}`)
+    if (dir.includes('unknown-wasm32')) {
+        // The wasm package holds a placeholder binding, so npm must never pull
+        // it automatically: without os/cpu it would be installed everywhere.
+        check(optional[platform.name] === undefined, `${dir}: placeholder package must not be listed in optionalDependencies`)
+        continue
     }
+    check(optional[platform.name] === rootVersion, `${dir}: optionalDependencies pins ${optional[platform.name]} instead of ${rootVersion}`)
+    const [, os, cpu] = dir.split('-')
+    check((platform.os ?? []).join(',') === os, `${dir}: os ${JSON.stringify(platform.os)} != ${os}`)
+    check((platform.cpu ?? []).join(',') === cpu, `${dir}: cpu ${JSON.stringify(platform.cpu)} != ${cpu}`)
 }
 
 const pyproject = readText('projects/mongo.py/packages/mongo/pyproject.toml')

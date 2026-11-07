@@ -39,7 +39,6 @@
         "@yydb/mongodb-darwin-arm64": "0.0.1",
         "@yydb/mongodb-darwin-x64": "0.0.1",
         "@yydb/mongodb-linux-x64": "0.0.1",
-        "@yydb/mongodb-unknown-wasm32": "0.0.1",
         "@yydb/mongodb-win32-x64": "0.0.1"
     },
     "engines": {
