@@ -1089,7 +1089,8 @@ impl Store {
             registry.last_states.insert(session.to_string(), SessionState::Aborted);
             return TransactionCommit::Conflict;
         }
-        let mut by_namespace: BTreeMap<String, Vec<(Vec<u8>, Option<Vec<u8>>)>> = BTreeMap::new();
+        type NamespaceWriteSet = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+        let mut by_namespace: BTreeMap<String, NamespaceWriteSet> = BTreeMap::new();
         for ((namespace, key), value) in writes {
             by_namespace.entry(namespace).or_default().push((key, value));
         }
@@ -1418,13 +1419,13 @@ impl Store {
         catalog.indexes.retain(|index| !index.namespace.starts_with(&prefix));
         catalog.collections.retain(|namespace, _| !namespace.starts_with(&prefix));
 
-        if removed > 0 {
-            if let Err(error) = catalog.flush() {
-                catalog.namespaces = namespaces;
-                catalog.indexes = indexes;
-                catalog.collections = collections;
-                return Err(error);
-            }
+        if removed > 0
+            && let Err(error) = catalog.flush()
+        {
+            catalog.namespaces = namespaces;
+            catalog.indexes = indexes;
+            catalog.collections = collections;
+            return Err(error);
         }
 
         // Restoring the snapshot keeps a failed shard commit from leaving a
@@ -1470,12 +1471,12 @@ impl Store {
         };
         changes.extend(mirror.into_iter().map(|record| ShardChange::Delete { key: record.key }));
 
-        if !changes.is_empty() {
-            if let Err(error) = shard.commit_changes(changes) {
-                drop(shard);
-                restore(&mut catalog);
-                return Err(StoreError::Shard(error.to_string()));
-            }
+        if !changes.is_empty()
+            && let Err(error) = shard.commit_changes(changes)
+        {
+            drop(shard);
+            restore(&mut catalog);
+            return Err(StoreError::Shard(error.to_string()));
         }
         Ok(removed)
     }

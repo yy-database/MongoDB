@@ -45,7 +45,7 @@ pub fn import_bson_documents(store: &Store, namespace: &str, bytes: &[u8]) -> Re
         let length = bytes
             .get(offset..offset + 4)
             .and_then(|head| <[u8; 4]>::try_from(head).ok())
-            .map(|head| i32::from_le_bytes(head))
+            .map(i32::from_le_bytes)
             .filter(|length| *length >= 5)
             .ok_or_else(|| format!("invalid BSON length at offset {offset}"))? as usize;
         let end = offset

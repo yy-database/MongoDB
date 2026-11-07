@@ -726,10 +726,10 @@ fn index_entries(document: &BsonDocument, specification: &IndexSpec) -> Vec<Vec<
         // indexed fields. An explicit `null` counts as present.
         return Vec::new();
     }
-    if let Some(filter) = &specification.partial_filter_expression {
-        if !document_matches(document, filter).unwrap_or(false) {
-            return Vec::new();
-        }
+    if let Some(filter) = &specification.partial_filter_expression
+        && !document_matches(document, filter).unwrap_or(false)
+    {
+        return Vec::new();
     }
     let mut tuples: Vec<Vec<BsonValue>> = vec![Vec::new()];
     for (field, _) in &specification.key.fields {
@@ -778,7 +778,7 @@ fn parallel_array_error(document: &BsonDocument, indexes: &[IndexSpec]) -> Optio
             .fields
             .iter()
             .map(|(field, _)| field.as_str())
-            .filter(|field| field_array_valued(document, *field))
+            .filter(|field| field_array_valued(document, field))
             .collect();
         if array_fields.len() >= 2 {
             return Some(CommandError::new(
@@ -907,12 +907,11 @@ fn resolve_hint(
                 return Ok(Hint::None);
             }
             if let Some(direction) = document.get("$natural") {
-                if document.fields.len() == 1 {
-                    if let Some(number) = int_value(direction) {
-                        if number == 1 || number == -1 {
-                            return Ok(Hint::Natural(number as i32));
-                        }
-                    }
+                if document.fields.len() == 1
+                    && let Some(number) = int_value(direction)
+                    && (number == 1 || number == -1)
+                {
+                    return Ok(Hint::Natural(number as i32));
                 }
                 return Err(CommandError::new(2, "$natural hint cannot be set to a value other than -1 or 1."));
             }
@@ -1211,12 +1210,12 @@ fn build_hinted_plan(
             if let KeyBound::Eq(value) = &plan.bound {
                 let mut probe = BsonDocument::new();
                 probe.push(plan.field.clone(), value.clone());
-                if !document_matches(&probe, partial).unwrap_or(false) {
-                    if let Some(predicate) = filter.get(&plan.field) {
-                        plan.bound = KeyBound::Full;
-                        plan.count = full_count_range();
-                        plan.residual = Some(normalized_clause(&plan.field, predicate));
-                    }
+                if !document_matches(&probe, partial).unwrap_or(false)
+                    && let Some(predicate) = filter.get(&plan.field)
+                {
+                    plan.bound = KeyBound::Full;
+                    plan.count = full_count_range();
+                    plan.residual = Some(normalized_clause(&plan.field, predicate));
                 }
             }
         }
@@ -1790,17 +1789,17 @@ pub fn explain(command: &BsonDocument, store: &Store) -> Result<BsonDocument, Co
                 hinted_find_stats(plan, &all_documents, &filter, skip, limit, verbosity == "allPlansExecution")
             }
             (Some(plan), _) => hinted_count_stats(plan, &all_documents, &filter, skip, limit, verbosity == "allPlansExecution"),
-            (None, _) => explain_execution_stats(
-                name,
-                &normalized,
+            (None, _) => explain_execution_stats(ExecutionStats {
+                command: name,
+                filter: &normalized,
                 total,
                 matched,
                 skip,
                 limit,
                 counted,
-                verbosity == "allPlansExecution",
+                all_plans: verbosity == "allPlansExecution",
                 direction,
-            ),
+            }),
         };
         reply.push("executionStats".to_string(), BsonValue::Document(stats));
     }
@@ -1913,17 +1912,20 @@ fn winning_plan(command: &str, filter: &BsonDocument, skip: usize, limit: usize,
     cached
 }
 
-fn explain_execution_stats(
-    command: &str,
-    filter: &BsonDocument,
+struct ExecutionStats<'a> {
+    command: &'a str,
+    filter: &'a BsonDocument,
     total: usize,
     matched: usize,
     skip: usize,
     limit: usize,
     counted: usize,
     all_plans: bool,
-    direction: &str,
-) -> BsonDocument {
+    direction: &'a str,
+}
+
+fn explain_execution_stats(request: ExecutionStats<'_>) -> BsonDocument {
+    let ExecutionStats { command, filter, total, matched, skip, limit, counted, all_plans, direction } = request;
     let works = (total + 1) as i64;
     let returned = if command == "count" { 0 } else { counted };
     let scan = execution_stage("COLLSCAN", matched as i64, works, total as i64, filter, direction);
@@ -2499,10 +2501,10 @@ fn upsert_base(filter: &BsonDocument) -> BsonDocument {
         if field.starts_with('$') {
             continue;
         }
-        if let BsonValue::Document(operators) = value {
-            if has_operator(operators) {
-                continue;
-            }
+        if let BsonValue::Document(operators) = value
+            && has_operator(operators)
+        {
+            continue;
         }
         let segments: Vec<&str> = field.split('.').collect();
         let _ = set_segments(&mut base, &segments, value.clone());
@@ -2515,16 +2517,16 @@ fn upsert_base(filter: &BsonDocument) -> BsonDocument {
 /// rejected with code `66`. Other fields are replaced wholesale.
 fn build_replacement(specification: &BsonDocument, identifier: Option<&BsonValue>) -> Result<BsonDocument, CommandError> {
     let replacement_identifier = specification.get("_id");
-    if let (Some(current), Some(replacement)) = (identifier, replacement_identifier) {
-        if !values_equal(Some(current), replacement) {
-            return Err(CommandError::new(
-                66,
-                format!(
-                    "After applying the update, the (immutable) field '_id' was found to have been altered to _id: {}",
-                    describe_id(replacement)
-                ),
-            ));
-        }
+    if let (Some(current), Some(replacement)) = (identifier, replacement_identifier)
+        && !values_equal(Some(current), replacement)
+    {
+        return Err(CommandError::new(
+            66,
+            format!(
+                "After applying the update, the (immutable) field '_id' was found to have been altered to _id: {}",
+                describe_id(replacement)
+            ),
+        ));
     }
     let chosen = identifier.cloned().or_else(|| replacement_identifier.cloned());
     let mut result = BsonDocument::new();
@@ -2737,26 +2739,26 @@ fn positional_index(document: &BsonDocument, prefix: &[String], filter: &BsonDoc
     };
     let key = prefix.join(".");
     if let Some(predicate) = filter.get(&key) {
-        if let BsonValue::Document(operators) = predicate {
-            if has_operator(operators) {
-                if let Some(BsonValue::Document(specification)) = operators.get("$elemMatch") {
-                    for (index, item) in items.iter().enumerate() {
-                        if let BsonValue::Document(element) = item {
-                            if document_matches(element, specification).unwrap_or(false) {
-                                return index;
-                            }
-                        }
+        if let BsonValue::Document(operators) = predicate
+            && has_operator(operators)
+        {
+            if let Some(BsonValue::Document(specification)) = operators.get("$elemMatch") {
+                for (index, item) in items.iter().enumerate() {
+                    if let BsonValue::Document(element) = item
+                        && document_matches(element, specification).unwrap_or(false)
+                    {
+                        return index;
                     }
                 }
-                else {
-                    for (index, item) in items.iter().enumerate() {
-                        if operator_matches(&[item], operators, &key, 0).unwrap_or(false) {
-                            return index;
-                        }
-                    }
-                }
-                return 0;
             }
+            else {
+                for (index, item) in items.iter().enumerate() {
+                    if operator_matches(&[item], operators, &key, 0).unwrap_or(false) {
+                        return index;
+                    }
+                }
+            }
+            return 0;
         }
         for (index, item) in items.iter().enumerate() {
             if values_equal(Some(item), predicate) {
@@ -2774,10 +2776,10 @@ fn positional_index(document: &BsonDocument, prefix: &[String], filter: &BsonDoc
     }
     if has_clause {
         for (index, item) in items.iter().enumerate() {
-            if let BsonValue::Document(element) = item {
-                if document_matches(element, &clauses).unwrap_or(false) {
-                    return index;
-                }
+            if let BsonValue::Document(element) = item
+                && document_matches(element, &clauses).unwrap_or(false)
+            {
+                return index;
             }
         }
     }
@@ -3031,7 +3033,7 @@ fn unset_segments(document: &mut BsonDocument, segments: &[&str]) {
     }
 }
 
-fn unset_array_segments(items: &mut Vec<BsonValue>, segments: &[&str]) {
+fn unset_array_segments(items: &mut [BsonValue], segments: &[&str]) {
     let Ok(index) = segments[0].parse::<usize>()
     else {
         return;
@@ -3136,59 +3138,59 @@ fn push_path(
     identifier: &str,
 ) -> Result<(), CommandError> {
     let items = ensure_array(document, segments, path, identifier)?;
-    if let BsonValue::Document(modifiers) = value {
-        if has_operator(modifiers) {
-            let values = match modifiers.get("$each") {
-                Some(BsonValue::Array(values)) => values.clone(),
-                Some(_) => return Err(CommandError::new(2, "$each requires an array")),
-                None => return Err(CommandError::new(2, "$slice and $position require $each")),
-            };
-            for (key, _) in &modifiers.fields {
-                if !matches!(key.as_str(), "$each" | "$slice" | "$position") {
-                    return Err(CommandError::new(9, format!("Unrecognized clause in $push: {key}")));
-                }
+    if let BsonValue::Document(modifiers) = value
+        && has_operator(modifiers)
+    {
+        let values = match modifiers.get("$each") {
+            Some(BsonValue::Array(values)) => values.clone(),
+            Some(_) => return Err(CommandError::new(2, "$each requires an array")),
+            None => return Err(CommandError::new(2, "$slice and $position require $each")),
+        };
+        for (key, _) in &modifiers.fields {
+            if !matches!(key.as_str(), "$each" | "$slice" | "$position") {
+                return Err(CommandError::new(9, format!("Unrecognized clause in $push: {key}")));
             }
-            let position = match modifiers.get("$position") {
-                Some(operand) => match integer_of(operand) {
-                    Some(position) => {
-                        if position < 0 {
-                            let from_end = items.len() as i128 + position;
-                            Some(from_end.max(0) as usize)
-                        }
-                        else {
-                            Some((position as usize).min(items.len()))
-                        }
-                    }
-                    None => return Err(CommandError::new(2, "$position must be an integer")),
-                },
-                None => None,
-            };
-            match position {
-                Some(position) => {
-                    let tail = items.split_off(position);
-                    items.extend(values);
-                    items.extend(tail);
-                }
-                None => items.extend(values),
-            }
-            if let Some(operand) = modifiers.get("$slice") {
-                let Some(slice) = integer_of(operand)
-                else {
-                    return Err(CommandError::new(2, "$slice must be an integer"));
-                };
-                if slice >= 0 {
-                    items.truncate(slice as usize);
-                }
-                else {
-                    let keep = (-slice) as usize;
-                    if items.len() > keep {
-                        let drop = items.len() - keep;
-                        items.drain(0..drop);
-                    }
-                }
-            }
-            return Ok(());
         }
+        let position = match modifiers.get("$position") {
+            Some(operand) => match integer_of(operand) {
+                Some(position) => {
+                    if position < 0 {
+                        let from_end = items.len() as i128 + position;
+                        Some(from_end.max(0) as usize)
+                    }
+                    else {
+                        Some((position as usize).min(items.len()))
+                    }
+                }
+                None => return Err(CommandError::new(2, "$position must be an integer")),
+            },
+            None => None,
+        };
+        match position {
+            Some(position) => {
+                let tail = items.split_off(position);
+                items.extend(values);
+                items.extend(tail);
+            }
+            None => items.extend(values),
+        }
+        if let Some(operand) = modifiers.get("$slice") {
+            let Some(slice) = integer_of(operand)
+            else {
+                return Err(CommandError::new(2, "$slice must be an integer"));
+            };
+            if slice >= 0 {
+                items.truncate(slice as usize);
+            }
+            else {
+                let keep = (-slice) as usize;
+                if items.len() > keep {
+                    let drop = items.len() - keep;
+                    items.drain(0..drop);
+                }
+            }
+        }
+        return Ok(());
     }
     items.push(value.clone());
     Ok(())
@@ -3205,24 +3207,24 @@ fn add_to_set_path(
         format!("Cannot apply $addToSet to non-array field. Field named '{field}' has non-array type {kind}")
     })
     .and_then(|items| {
-        if let BsonValue::Document(modifiers) = value {
-            if has_operator(modifiers) {
-                for (key, _) in &modifiers.fields {
-                    if key != "$each" {
-                        return Err(CommandError::new(9, format!("Found unexpected fields after $each in $addToSet: {key}")));
-                    }
+        if let BsonValue::Document(modifiers) = value
+            && has_operator(modifiers)
+        {
+            for (key, _) in &modifiers.fields {
+                if key != "$each" {
+                    return Err(CommandError::new(9, format!("Found unexpected fields after $each in $addToSet: {key}")));
                 }
-                let Some(BsonValue::Array(values)) = modifiers.get("$each")
-                else {
-                    return Err(CommandError::new(2, "$each requires an array"));
-                };
-                for item in values {
-                    if !items.iter().any(|existing| values_equal(Some(existing), item)) {
-                        items.push(item.clone());
-                    }
-                }
-                return Ok(());
             }
+            let Some(BsonValue::Array(values)) = modifiers.get("$each")
+            else {
+                return Err(CommandError::new(2, "$each requires an array"));
+            };
+            for item in values {
+                if !items.iter().any(|existing| values_equal(Some(existing), item)) {
+                    items.push(item.clone());
+                }
+            }
+            return Ok(());
         }
         if !items.iter().any(|existing| values_equal(Some(existing), value)) {
             items.push(value.clone());
@@ -3530,16 +3532,16 @@ pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDoc
         }
         None => false,
     };
-    if let Some(other) = command.get("authorizedCollections") {
-        if !matches!(other, BsonValue::Bool(_)) {
-            return Err(CommandError::new(
-                14,
-                format!(
-                    "BSON field 'listCollections.authorizedCollections' is the wrong type '{}', expected type 'bool'",
-                    bson_type_name(other)
-                ),
-            ));
-        }
+    if let Some(other) = command.get("authorizedCollections")
+        && !matches!(other, BsonValue::Bool(_))
+    {
+        return Err(CommandError::new(
+            14,
+            format!(
+                "BSON field 'listCollections.authorizedCollections' is the wrong type '{}', expected type 'bool'",
+                bson_type_name(other)
+            ),
+        ));
     }
     let filter = match command.get("filter") {
         Some(BsonValue::Document(filter)) => {
@@ -3559,10 +3561,10 @@ pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDoc
         entry.push("name".to_string(), BsonValue::String(collection.to_string()));
         entry.push("type".to_string(), BsonValue::String("collection".to_string()));
         if name_only {
-            if let Some(filter) = filter {
-                if !document_matches(&entry, filter)? {
-                    continue;
-                }
+            if let Some(filter) = filter
+                && !document_matches(&entry, filter)?
+            {
+                continue;
             }
             entries.push(BsonValue::Document(entry));
             continue;
@@ -3602,10 +3604,10 @@ pub fn list_collections(command: &BsonDocument, store: &Store) -> Result<BsonDoc
             id_index.push("name".to_string(), BsonValue::String("_id_".to_string()));
             entry.push("idIndex".to_string(), BsonValue::Document(id_index));
         }
-        if let Some(filter) = filter {
-            if !document_matches(&entry, filter)? {
-                continue;
-            }
+        if let Some(filter) = filter
+            && !document_matches(&entry, filter)?
+        {
+            continue;
         }
         entries.push(BsonValue::Document(entry));
     }
@@ -3651,10 +3653,10 @@ fn collection_uuid_text(namespace: &str) -> String {
 /// stored ones and quotes the stored options in the message, uuid first.
 fn create_conflict_message(namespace: &str, options: &CollectionOptions) -> String {
     let mut rendered = vec![format!("uuid: UUID(\"{}\")", collection_uuid_text(namespace))];
-    if let Some(validator) = &options.validator {
-        if let Ok(value) = json::from_json(validator) {
-            rendered.push(format!("validator: {}", render_shell_value(&value)));
-        }
+    if let Some(validator) = &options.validator
+        && let Ok(value) = json::from_json(validator)
+    {
+        rendered.push(format!("validator: {}", render_shell_value(&value)));
     }
     if let Some(level) = &options.validation_level {
         rendered.push(format!("validationLevel: \"{level}\""));
@@ -3689,17 +3691,17 @@ fn collection_schema(store: &Store, namespace: &str) -> Option<(BsonDocument, St
 
 fn schema_rules(schema: &BsonDocument, document: &BsonDocument) -> Vec<BsonValue> {
     let mut rules = Vec::new();
-    if let Some(BsonValue::String(expected)) = schema.get("bsonType") {
-        if expected != "object" {
-            let mut specified = BsonDocument::new();
-            specified.push("$jsonSchema".to_string(), BsonValue::Document(schema.clone()));
-            let mut rule = BsonDocument::new();
-            rule.push("operatorName".to_string(), BsonValue::String("$jsonSchema".to_string()));
-            rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
-            rule.push("reason".to_string(), BsonValue::String("expression did not evaluate to true".to_string()));
-            rules.push(BsonValue::Document(rule));
-            return rules;
-        }
+    if let Some(BsonValue::String(expected)) = schema.get("bsonType")
+        && expected != "object"
+    {
+        let mut specified = BsonDocument::new();
+        specified.push("$jsonSchema".to_string(), BsonValue::Document(schema.clone()));
+        let mut rule = BsonDocument::new();
+        rule.push("operatorName".to_string(), BsonValue::String("$jsonSchema".to_string()));
+        rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+        rule.push("reason".to_string(), BsonValue::String("expression did not evaluate to true".to_string()));
+        rules.push(BsonValue::Document(rule));
+        return rules;
     }
     if let Some(BsonValue::Bool(false)) = schema.get("additionalProperties") {
         let properties = match schema.get("properties") {
@@ -3787,33 +3789,31 @@ fn schema_details(schema: &BsonDocument, value: &BsonValue) -> Vec<BsonDocument>
             return details;
         }
     }
-    if let Some(minimum) = schema.get("minimum") {
-        if let (Some(current), Some(limit)) = (number_of(value), number_of(minimum)) {
-            if current < limit {
-                let mut specified = BsonDocument::new();
-                specified.push("minimum".to_string(), minimum.clone());
-                let mut rule = BsonDocument::new();
-                rule.push("operatorName".to_string(), BsonValue::String("minimum".to_string()));
-                rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
-                rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
-                rule.push("consideredValue".to_string(), value.clone());
-                details.push(rule);
-            }
-        }
+    if let Some(minimum) = schema.get("minimum")
+        && let (Some(current), Some(limit)) = (number_of(value), number_of(minimum))
+        && current < limit
+    {
+        let mut specified = BsonDocument::new();
+        specified.push("minimum".to_string(), minimum.clone());
+        let mut rule = BsonDocument::new();
+        rule.push("operatorName".to_string(), BsonValue::String("minimum".to_string()));
+        rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+        rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
+        rule.push("consideredValue".to_string(), value.clone());
+        details.push(rule);
     }
-    if let Some(maximum) = schema.get("maximum") {
-        if let (Some(current), Some(limit)) = (number_of(value), number_of(maximum)) {
-            if current > limit {
-                let mut specified = BsonDocument::new();
-                specified.push("maximum".to_string(), maximum.clone());
-                let mut rule = BsonDocument::new();
-                rule.push("operatorName".to_string(), BsonValue::String("maximum".to_string()));
-                rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
-                rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
-                rule.push("consideredValue".to_string(), value.clone());
-                details.push(rule);
-            }
-        }
+    if let Some(maximum) = schema.get("maximum")
+        && let (Some(current), Some(limit)) = (number_of(value), number_of(maximum))
+        && current > limit
+    {
+        let mut specified = BsonDocument::new();
+        specified.push("maximum".to_string(), maximum.clone());
+        let mut rule = BsonDocument::new();
+        rule.push("operatorName".to_string(), BsonValue::String("maximum".to_string()));
+        rule.push("specifiedAs".to_string(), BsonValue::Document(specified));
+        rule.push("reason".to_string(), BsonValue::String("comparison failed".to_string()));
+        rule.push("consideredValue".to_string(), value.clone());
+        details.push(rule);
     }
     if let (Some(BsonValue::Document(items)), BsonValue::Array(values)) = (schema.get("items"), value) {
         for (index, item) in values.iter().enumerate() {
@@ -4323,10 +4323,10 @@ fn namespace_documents(store: &Store, namespace: &str, session: Option<&str>) ->
 /// One document as seen by the session, including staged inserts, updates, and
 /// deletes.
 fn namespace_document(store: &Store, namespace: &str, key: &[u8], session: Option<&str>) -> Option<Vec<u8>> {
-    if let Some(session) = session {
-        if let Some(staged) = store.transaction_get(session, namespace, key) {
-            return staged;
-        }
+    if let Some(session) = session
+        && let Some(staged) = store.transaction_get(session, namespace, key)
+    {
+        return staged;
     }
     store.get(namespace, key)
 }
@@ -5724,7 +5724,7 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
         let collation = requested_collation(specification)?;
         let partial_filter_expression = partial_filter_from(specification)?;
         let wildcard_projection = requested_wildcard_projection(specification)?;
-        validate_index_key(&key, specification, &namespace, unique, sparse)?;
+        validate_index_key(key, specification, &namespace, unique, sparse)?;
 
         let mut candidate = IndexSpec {
             namespace: namespace.clone(),
@@ -5756,16 +5756,14 @@ pub fn create_indexes(command: &BsonDocument, store: &Store) -> Result<BsonDocum
             skipped += 1;
             continue;
         }
-        if candidate.expire_after_seconds.is_some() {
-            if candidate.key.fields.len() != 1 {
-                return Err(CommandError::new(
-                    67,
-                    format!(
-                        "TTL indexes are single-field indexes, compound indexes do not support TTL. Index spec: {}",
-                        render_shell_value(&BsonValue::Document(specification.clone()))
-                    ),
-                ));
-            }
+        if candidate.expire_after_seconds.is_some() && candidate.key.fields.len() != 1 {
+            return Err(CommandError::new(
+                67,
+                format!(
+                    "TTL indexes are single-field indexes, compound indexes do not support TTL. Index spec: {}",
+                    render_shell_value(&BsonValue::Document(specification.clone()))
+                ),
+            ));
         }
 
         if let Some(hit) = known.iter().find(|index| index.name == *name) {
@@ -6081,7 +6079,7 @@ pub struct TtlReport {
 /// element is a date past the deadline.
 pub fn ttl_monitor(store: &Store, now_ms: i64) -> Result<TtlReport, CommandError> {
     let mut report = TtlReport::default();
-    if store.claim_ttl_pass(now_ms) == false {
+    if !store.claim_ttl_pass(now_ms) {
         return Ok(report);
     }
     report.scanned = true;
@@ -6110,10 +6108,10 @@ pub fn ttl_monitor(store: &Store, now_ms: i64) -> Result<TtlReport, CommandError
                 else {
                     continue;
                 };
-                if let Some(filter) = &specification.partial_filter_expression {
-                    if document_matches(&document, filter).unwrap_or(false) == false {
-                        continue;
-                    }
+                if let Some(filter) = &specification.partial_filter_expression
+                    && !document_matches(&document, filter).unwrap_or(false)
+                {
+                    continue;
                 }
                 let expired = field_values(&document, field).iter().any(|value| match value {
                     BsonValue::DateTime(milliseconds) => *milliseconds <= threshold,
@@ -6228,10 +6226,10 @@ fn collect_matching(
 
     let mut documents = Vec::new();
     for (_key, value) in namespace_documents(store, namespace, session) {
-        if let Ok(candidate) = parse_bson(&value) {
-            if document_matches(&candidate, filter)? {
-                documents.push(candidate);
-            }
+        if let Ok(candidate) = parse_bson(&value)
+            && document_matches(&candidate, filter)?
+        {
+            documents.push(candidate);
         }
     }
     Ok(documents)
@@ -6573,7 +6571,7 @@ fn graph_lookup_stage(
         return Err(CommandError::new(40105, "$graphLookup requires a document"));
     };
     let required = ["from", "as", "startWith", "connectFromField", "connectToField"];
-    if required.iter().any(|field| specification.get(*field).is_none()) {
+    if required.iter().any(|field| specification.get(field).is_none()) {
         return Err(CommandError::new(
             40105,
             "$graphLookup requires 'from', 'as', 'startWith', 'connectFromField', and 'connectToField' to be specified.",
@@ -6704,10 +6702,10 @@ fn graph_lookup_stage(
                 if !equality_candidates(&fields, &value) {
                     continue;
                 }
-                if let Some(filter) = &restrict {
-                    if !document_matches_vars(candidate, filter, variables)? {
-                        continue;
-                    }
+                if let Some(filter) = &restrict
+                    && !document_matches_vars(candidate, filter, variables)?
+                {
+                    continue;
                 }
                 let identity = candidate.get("_id").map(value_to_key).unwrap_or_else(|| encode_bson(candidate));
                 if !seen.insert(identity) {
@@ -6855,10 +6853,10 @@ fn reject_stage_outside(stages: &[BsonValue], code: i32, within: &str) -> Result
         else {
             continue;
         };
-        if let Some((name, _)) = document.fields.first() {
-            if matches!(name.as_str(), "$out" | "$merge") {
-                return Err(CommandError::new(code, format!("{name} {within}")));
-            }
+        if let Some((name, _)) = document.fields.first()
+            && matches!(name.as_str(), "$out" | "$merge")
+        {
+            return Err(CommandError::new(code, format!("{name} {within}")));
         }
     }
     Ok(())
@@ -7160,10 +7158,10 @@ fn densify_value_as_number(value: &BsonValue) -> Option<f64> {
 fn densify_number_value(value: f64, hint: &BsonValue) -> BsonValue {
     match hint {
         BsonValue::Int32(_) => {
-            if let Ok(integer) = i32::try_from(value as i64) {
-                if value == integer as f64 {
-                    return BsonValue::Int32(integer);
-                }
+            if let Ok(integer) = i32::try_from(value as i64)
+                && value == integer as f64
+            {
+                return BsonValue::Int32(integer);
             }
             BsonValue::Double(value)
         }
@@ -7334,13 +7332,13 @@ fn parse_densify(body: &BsonValue) -> Result<DensifySpecification, CommandError>
                     "A bounding array must be an ascending array of either two dates or two numbers",
                 ));
             }
-            else if let (BsonValue::DateTime(lower), BsonValue::DateTime(upper)) = (lower, upper) {
-                if *lower >= *upper {
-                    return Err(CommandError::new(
-                        5733402,
-                        "A bounding array must be an ascending array of either two dates or two numbers",
-                    ));
-                }
+            else if let (BsonValue::DateTime(lower), BsonValue::DateTime(upper)) = (lower, upper)
+                && *lower >= *upper
+            {
+                return Err(CommandError::new(
+                    5733402,
+                    "A bounding array must be an ascending array of either two dates or two numbers",
+                ));
             }
             DensifyBounds::Array(lower.clone(), upper.clone())
         }
@@ -7774,10 +7772,8 @@ fn fill_stage(
 
     let mut working = documents;
     let ordered = fills.iter().any(|fill| !matches!(fill.method, FillMethod::Value(_)));
-    if ordered {
-        if let Some(sort) = &sort_by {
-            sort_documents(&mut working, sort);
-        }
+    if ordered && let Some(sort) = &sort_by {
+        sort_documents(&mut working, sort);
     }
 
     // Group indices by partition while preserving the document order.
@@ -8487,10 +8483,10 @@ fn merge_unique_index(store: &Store, namespace: &str, on_fields: &[String]) -> O
 }
 
 fn merge_document(existing: &BsonDocument, incoming: &BsonDocument) -> Result<BsonDocument, CommandError> {
-    if let (Some(left), Some(right)) = (existing.get("_id"), incoming.get("_id")) {
-        if value_to_key(left) != value_to_key(right) {
-            return Err(merge_immutable_field_error());
-        }
+    if let (Some(left), Some(right)) = (existing.get("_id"), incoming.get("_id"))
+        && value_to_key(left) != value_to_key(right)
+    {
+        return Err(merge_immutable_field_error());
     }
     let mut merged = existing.clone();
     for (field, value) in &incoming.fields {
@@ -8716,7 +8712,7 @@ fn bucket_auto_stage(
     // Stable sort keeps equal values in input order.
     keys.sort_by(|left, right| compare_values(&left.0, &right.0));
 
-    let target = (keys.len() + buckets - 1) / buckets;
+    let target = keys.len().div_ceil(buckets);
     let mut output_documents = Vec::new();
     let mut start = 0_usize;
     while start < keys.len() {
@@ -9024,7 +9020,7 @@ fn sort_by_count_stage(documents: &[BsonDocument], body: &BsonValue) -> Result<V
     }
     // Descending count, ties in first-appearance order. `mongod` leaves equal
     // counts in hash order, so equal counts are never asserted.
-    groups.sort_by(|left, right| right.1.cmp(&left.1));
+    groups.sort_by_key(|left| std::cmp::Reverse(left.1));
     Ok(groups
         .into_iter()
         .map(|(value, count)| {
@@ -9355,11 +9351,11 @@ fn set_field_path(document: &mut BsonDocument, path: &str, value: BsonValue) {
             return;
         }
     };
-    if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head) {
-        if let BsonValue::Document(inner) = &mut entry.1 {
-            set_field_path(inner, tail, value);
-            return;
-        }
+    if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head)
+        && let BsonValue::Document(inner) = &mut entry.1
+    {
+        set_field_path(inner, tail, value);
+        return;
     }
     let mut nested = BsonDocument::new();
     set_field_path(&mut nested, tail, value);
@@ -9370,10 +9366,10 @@ fn remove_field_path(document: &mut BsonDocument, path: &str) {
     match path.split_once('.') {
         None => document.fields.retain(|(key, _)| key != path),
         Some((head, tail)) => {
-            if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head) {
-                if let BsonValue::Document(inner) = &mut entry.1 {
-                    remove_field_path(inner, tail);
-                }
+            if let Some(entry) = document.fields.iter_mut().find(|(key, _)| key == head)
+                && let BsonValue::Document(inner) = &mut entry.1
+            {
+                remove_field_path(inner, tail);
             }
         }
     }
@@ -10111,7 +10107,7 @@ fn type_candidates(candidates: &[&BsonValue], operand: &BsonValue) -> Result<boo
             return true;
         }
         match candidate {
-            BsonValue::Array(items) => items.iter().any(|item| wanted(item)),
+            BsonValue::Array(items) => items.iter().any(&wanted),
             _ => false,
         }
     }))

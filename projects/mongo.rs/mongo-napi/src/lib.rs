@@ -79,6 +79,18 @@ impl MongoCursors {
     pub fn len(&self) -> u32 {
         self.inner.len() as u32
     }
+
+    /// Whether the cursor table holds no live cursors.
+    #[napi]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
+impl Default for MongoCursors {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Decodes an `OP_MSG` body into extended JSON.

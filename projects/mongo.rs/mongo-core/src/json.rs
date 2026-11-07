@@ -122,12 +122,11 @@ pub fn from_json(value: &Value) -> Result<BsonValue, String> {
                     object.get("$scope").and_then(Value::as_object).ok_or_else(|| "`$scope` must be an object".to_string())?;
                 return Ok(BsonValue::CodeWithScope { code: code.to_string(), scope: from_json_document(scope)? });
             }
-            if object.len() == 1 {
-                if let Some(tag) = object.keys().next() {
-                    if let Some(parsed) = parse_tagged(tag, object.values().next().unwrap())? {
-                        return Ok(parsed);
-                    }
-                }
+            if object.len() == 1
+                && let Some(tag) = object.keys().next()
+                && let Some(parsed) = parse_tagged(tag, object.values().next().unwrap())?
+            {
+                return Ok(parsed);
             }
             let mut document = BsonDocument::new();
             for (key, item) in object {
@@ -369,7 +368,7 @@ fn parse_iso8601_millis(text: &str) -> Result<i64, String> {
         let minutes: i64 = take_digits(&mut rest, 2, &bad)?.parse().map_err(|_| bad())?;
         sign * (hours * 60 + minutes)
     };
-    if rest.is_empty() == false {
+    if !rest.is_empty() {
         return Err(bad());
     }
     if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 60 {
@@ -386,7 +385,7 @@ fn take_digits<'a>(rest: &mut &'a str, count: usize, bad: &dyn Fn() -> String) -
         return Err(bad());
     }
     let (head, tail) = rest.split_at(count);
-    if head.bytes().all(|byte| byte.is_ascii_digit()) == false {
+    if !head.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(bad());
     }
     *rest = tail;
@@ -420,7 +419,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 fn hex_decode(text: &str) -> Result<Vec<u8>, String> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err("hex string must have an even length".to_string());
     }
     let mut bytes = Vec::with_capacity(text.len() / 2);
