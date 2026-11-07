@@ -5,7 +5,7 @@
 // package with a bare `node` process (no TypeScript loader) and executes a
 // real call. This catches `exports` that only work inside the workspace.
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -38,8 +38,84 @@ if (tarballs.length !== 2) {
     console.error(`expected 2 tarballs, found ${tarballs.join(', ')}`)
     process.exit(1)
 }
+
+// The gates above only inspect manifests on disk. Listing the packed archives
+// proves the license text and the entry points really make it into the tarball
+// that users would download.
+const readManifest = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+const tarName = (manifest) => `${manifest.name.replace(/^@/, '').replace('/', '-')}-${manifest.version}.tgz`
+const listEntries = (tarball) => {
+    const result = spawnSync('tar', ['-tzf', tarball], { cwd: work, encoding: 'utf8' })
+    if (result.status !== 0) {
+        console.error(`failed: tar -tzf ${tarball}: ${result.stderr}`)
+        process.exit(result.status ?? 1)
+    }
+    return result.stdout.split(/\r?\n/).filter(Boolean)
+}
+
+const failures = []
+const requireEntries = (label, entries, required) => {
+    const listed = new Set(entries)
+    for (const entry of required) {
+        if (!listed.has(entry)) failures.push(`${label}: packed archive is missing ${entry}`)
+    }
+}
+
+const mainManifest = readManifest(packageDir)
+const platformManifest = readManifest(platformDir)
+const mainTarball = join(work, tarName(mainManifest))
+const platformTarball = join(work, tarName(platformManifest))
+for (const file of [mainTarball, platformTarball]) {
+    if (!existsSync(file)) failures.push(`packed archive ${file} is missing`)
+}
+
+if (failures.length === 0) {
+    const mainEntries = listEntries(mainTarball)
+    requireEntries('@yydb/mongodb', mainEntries, [
+        'package/package.json',
+        'package/License.md',
+        'package/dist/index.js',
+        'package/dist/index.d.ts',
+        'package/bin/mongo.mjs',
+        'package/bin/serve.mjs',
+    ])
+    const sources = mainEntries.filter((entry) => entry.startsWith('package/src/'))
+    if (sources.length > 0) failures.push(`@yydb/mongodb: packed archive carries TypeScript sources ${sources.join(', ')}`)
+
+    const platformEntries = listEntries(platformTarball)
+    requireEntries(platformManifest.name, platformEntries, ['package/package.json', 'package/License.md'])
+    if (!platformEntries.some((entry) => entry.endsWith('.node'))) {
+        failures.push(`${platformManifest.name}: packed archive carries no .node binding`)
+    }
+}
+
+if (failures.length > 0) {
+    for (const failure of failures) console.error(`install ts: ${failure}`)
+    process.exit(1)
+}
+
 writeFileSync(join(work, 'package.json'), JSON.stringify({ name: 'install-probe', private: true, type: 'module' }))
 run(npm, ['install', '--no-audit', '--no-fund', ...tarballs], work)
+
+// The installed manifest is what npm would act on: it must list exactly the
+// native platform packages and never the wasm placeholder.
+const installedMain = JSON.parse(readFileSync(join(work, 'node_modules', '@yydb', 'mongodb', 'package.json'), 'utf8'))
+const installedOptional = installedMain.optionalDependencies ?? {}
+const nativeNames = readdirSync(join(root, 'projects', 'mongo.ts', 'platforms'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.includes('unknown-wasm32'))
+    .map((entry) => `@yydb/mongodb-${entry.name.slice('mongo-'.length)}`)
+    .sort()
+const installedNames = Object.keys(installedOptional).sort()
+if (installedNames.join(',') !== nativeNames.join(',')) {
+    console.error(`install ts: installed optionalDependencies ${installedNames.join(', ')} != native platforms ${nativeNames.join(', ')}`)
+    process.exit(1)
+}
+for (const [name, version] of Object.entries(installedOptional)) {
+    if (version !== installedMain.version) {
+        console.error(`install ts: installed optionalDependencies pins ${name} at ${version} instead of ${installedMain.version}`)
+        process.exit(1)
+    }
+}
 
 writeFileSync(join(work, 'probe.mjs'), `
 import { mkdtempSync } from 'node:fs'
