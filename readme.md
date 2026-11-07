@@ -14,6 +14,18 @@
 | 命令行 | JS/TS 最小入口 `projects/mongo.ts/packages/mongo/bin/mongo.mjs`，只组合 napi 原语；管道模式逐行读命令、逐行输出 JSON |
 | 发布 | 当前阶段**不发布**：所有包 `private: true`，未配置 Trusted Publisher |
 
+## 驱动兼容矩阵
+
+对外契约是 wire protocol，不绑定单个驱动版本。下表是真实跑过的版本，CI 按“安装口径”装驱动后直接连本仓服务端做 handshake、CRUD 与鉴权。
+
+| 客户端 | 已验证版本 | CI 安装口径 | 验收入口 |
+|--------|------------|-------------|----------|
+| Node driver `mongodb` | `6.22.0` | `^6.12.0`（根 `devDependencies`） | `projects/mongo.ts/packages/mongo/tests/server.mjs` |
+| pymongo | `4.19.0` | `>=4.11,<5.0` | `projects/mongo.py/packages/mongo/tests/server_e2e.py` |
+| `mongosh` | 手工冒烟，未固定版本 | 不入 CI | `projects/mongo.ts/packages/mongo/tests/smoke-shell.js` |
+
+`mongosh` 只用来说明脚本可跑，`db.version()` 走 `buildInfo`；它不在 `package.json` 依赖里，也不作为门禁。
+
 ## 存储兼容口径
 
 只有嵌入式库才要求存储格式双工兼容；服务端数据库只需能读。
@@ -191,7 +203,7 @@ npm test                  # Rust + TS + PY + 跨语言门禁
 
 期望值全部以字面量写进 `tests/cases/*.json`：BSON 字节布局来自参考实现的产物，命令与查询语义来自 MongoDB 规则，不调用本实现推导期望值。门禁要求两侧逐 case 输出一致、断言数不低于实测下限、`skipped` 为 0。
 
-真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。最近一次在 `mongod 8.0.9` 上跑了 **138 个探针：138 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 / 重复键条目 / 索引 case 标注同一台真机。回复字段顺序敏感的探针用 `exactOrder` 逐字比较，其余按排序后的键比较。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入 1492 条门禁断言。
+真实 `mongod` 对拍：`scripts/oracle-probe.mjs` 是本地探针，不进门禁、不引入 npm 依赖；回复用仓库内 napi 的 OP_MSG 解码，请求帧由脚本自己按 BSON 字节拼装（真实服务端要求命令名是第一个键，脚本因此绕过 JSON 解析直接构造字节）。最近一次在 `mongod 8.0.9` 上跑了 **138 个探针：138 个一致**。一致项的 case `source` 已追加 `oracle: mongod 8.0.9 ... <命令> 2026-11-05`，2026-11-06 新增的 `$group` / `$project` / `update` / 写命令回复 / 重复键条目 / 索引 case 标注同一台真机。回复字段顺序敏感的探针用 `exactOrder` 逐字比较，其余按排序后的键比较。探针结果只写到本机 `.tmp/oracle-results.json`，不提交、不混入门禁断言（当前两侧各 835 个 case / 2812 条断言，`skipped` 为 0）。
 
 ```bash
 node scripts/oracle-probe.mjs --port 28017   # 需要先自行启动 mongod；退出码非 0 表示有偏差
