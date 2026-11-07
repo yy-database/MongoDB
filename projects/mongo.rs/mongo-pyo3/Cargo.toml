@@ -12,5 +12,5 @@ name = "mongo_pyo3"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-mongo-core = { path = "../mongo-core" }
+mongo = { workspace = true, features = ["storage"] }
 pyo3 = { workspace = true }

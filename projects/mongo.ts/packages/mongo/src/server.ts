@@ -2,7 +2,7 @@
 //
 // The server owns the socket loop, the cursor table and TTL ticks; each command
 // is lowered to one Rust primitive. Compression is transport-only: an
-// `OP_COMPRESSED` frame is unwrapped, the payload is decoded by `mongo-core`,
+// `OP_COMPRESSED` frame is unwrapped, the payload is decoded by `mongo`,
 // and the reply is wrapped in the same compressor the request used (which is
 // what `mongod 8.0.9` does, even when that compressor was not negotiated).
 import { mkdirSync, statfsSync } from 'node:fs'

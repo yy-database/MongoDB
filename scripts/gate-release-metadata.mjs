@@ -101,7 +101,7 @@ check(cargoVersion === rootVersion, `Cargo workspace version ${cargoVersion} != 
 
 // The bindings are not crates.io artifacts: `publish = false` is the only thing
 // that stops an accidental `cargo publish`.
-for (const crate of ['mongo-core', 'mongo-napi', 'mongo-pyo3', 'mongo-wasm']) {
+for (const crate of ['mongo-napi', 'mongo-pyo3', 'mongo-wasm']) {
     const manifest = readText(`projects/mongo.rs/${crate}/Cargo.toml`)
     check(/^publish = false$/m.test(manifest), `${crate}: crates.io publish is not disabled`)
     check(/^version\.workspace = true$/m.test(manifest), `${crate}: version does not inherit the workspace`)

@@ -1,12 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "mongo-core",
     "mongo-napi",
     "mongo-pyo3",
     "mongo-wasm",
 ]
-default-members = ["mongo-core"]
+default-members = ["mongo-napi", "mongo-pyo3", "mongo-wasm"]
 
 [workspace.package]
 version = "0.0.1"
@@ -16,19 +15,11 @@ license = "MPL-2.0"
 repository = "https://github.com/yy-database/MongoDB"
 
 [workspace.dependencies]
-# database.rs dependencies: the `database` facade (.yykv shard storage) and the
-# shared `database-protocol-mongo` BSON / wire codec.
-# Pin full 40-char revs. Local path overrides belong in `.cargo/config.toml`.
-# Both pins must name the same `database.rs` `dev` rev: a split pin compiles
-# `database-types` twice from two sources and lets one dependency drift.
-database = { git = "https://github.com/yy-database/database.rs.git", rev = "6d13fcc45d8aa3b89da6fa473fd4e6a9a7e05079", default-features = false }
-# BSON / OP_MSG codec lives upstream in the shared protocol crate.
-database-protocol-mongo = { git = "https://github.com/yy-database/database.rs.git", rev = "6d13fcc45d8aa3b89da6fa473fd4e6a9a7e05079" }
-# `preserve_order` keeps command documents in the order the caller sent them.
-# MongoDB compares embedded documents and `$addToSet` values by field order, so
-# sorting keys at parse time would silently merge distinct documents.
-serde_json = { version = "1", features = ["preserve_order"] }
-regex = "1"
+# The `mongo` facade owns BSON / wire codecs, the document store, cursors, oplog
+# and command semantics. Bindings below keep only type conversion and error
+# mapping. Pin the full 40-char rev and keep it on the `dev` line.
+# Local path overrides belong in `.cargo/config.toml`.
+mongo = { git = "https://github.com/yy-database/database.rs.git", rev = "d4e0560535c4c76e501a18031abdd479bbd64e31", default-features = false }
 
 napi = { version = "3.14.2", default-features = false, features = ["napi4"] }
 napi-derive = "3.6.12"

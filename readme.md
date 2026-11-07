@@ -184,7 +184,7 @@ catalog 字节直接走共享契约 `yyds::catalog::encode/decode`（`YYDS\x01` 
 ## 目录
 
 ```
-projects/mongo.rs/   Rust 库原语（mongo-core）与绑定（mongo-napi / mongo-pyo3 / mongo-wasm）
+projects/mongo.rs/   Rust 绑定（mongo-napi / mongo-pyo3 / mongo-wasm），命令语义来自上游 `mongo` 门面
 projects/mongo.ts/   TypeScript 绑定、安装态验收 runner 与最小命令行 `packages/mongo/bin/mongo.mjs`
 projects/mongo.py/   Python 包与同一批 case 的验收 runner
 scripts/             构建、BSON case 生成、跨语言门禁、差分语料与独立 `.yyds` 字节校验脚本 `scripts/verify-yyds.mjs`
@@ -192,7 +192,7 @@ tests/cases/         两种语言共用的声明式 case 语料
 tests/diff/          固定种子差分语料与其真机 baseline（含 digest）
 ```
 
-Rust 侧只导出可单独调用的原语：BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数。BSON 与 `OP_MSG` / `OP_QUERY` 编解码直接 re-export 上游 `database-protocol-mongo`（pin 到 `dev` 的完整 40 位 rev），本仓不再维护 `bson.rs` / `codec.rs` / `wire.rs`。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
+Rust 侧只有三个绑定 crate，只做类型转换与错误映射。BSON / extended JSON / `OP_MSG` 编解码、`.yyds` catalog + `.yykv` 文档存储、游标表、每条命令一个函数全部由上游 `mongo` 门面提供（pin 到 `database.rs` `dev` 的完整 40 位 rev），本仓不维护引擎、`bson.rs` / `codec.rs` / `wire.rs`。**没有** `[[bin]]`、没有服务端主循环、没有万能 `run` 入口，游标表由调用方持有而不是全局状态。
 
 平台包目录 = `mongo-<os>-<arch>`，npm 包名为 `@yydb/mongodb-<os>-<arch>`（例如 `mongo-win32-x64` → `@yydb/mongodb-win32-x64`）；WASM 平台包为 `@yydb/mongodb-unknown-wasm32`。主包 `@yydb/mongodb` 的 `optionalDependencies` 只列四个原生平台包，WASM 包当前只承载占位产物且没有 `os` / `cpu` 约束，列入就会被每次安装无条件下载，因此必须显式安装。`0.0.0` 占位经本地 `nifty publish --placeholder` 发布；当前源码版本为 `0.0.1`，各包仍标记 `private`，发布需另行开启。
 

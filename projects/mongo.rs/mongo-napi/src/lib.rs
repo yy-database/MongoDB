@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use mongo_core::{
+use mongo::{
     bson::BsonDocument,
     commands::{self, CommandError},
     cursor::CursorStore,
@@ -110,13 +110,13 @@ pub fn encode_op_msg(command: String) -> Result<Buffer> {
 /// Encodes an extended-JSON document into BSON bytes.
 #[napi]
 pub fn encode_document(document: String) -> Result<Buffer> {
-    Ok(Buffer::from(mongo_core::bson::encode_bson(&decode_command(&document)?)))
+    Ok(Buffer::from(mongo::bson::encode_bson(&decode_command(&document)?)))
 }
 
 /// Decodes BSON bytes into extended JSON.
 #[napi]
 pub fn decode_document(bytes: Buffer) -> Result<String> {
-    mongo_core::bson::parse_bson(&bytes)
+    mongo::bson::parse_bson(&bytes)
         .map(|document| reply(&document))
         .map_err(|error| Error::new(Status::InvalidArg, format!("{error:?}")))
 }
@@ -356,7 +356,7 @@ pub fn discard_oplog(store: &MongoStore) {
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[napi]
 pub fn import_bson(store: &MongoStore, namespace: String, bytes: Buffer) -> Result<u32> {
-    mongo_core::import_bson_documents(store_of(store), &namespace, &bytes)
+    mongo::import::import_bson_documents(store_of(store), &namespace, &bytes)
         .map(|count| count as u32)
         .map_err(|message| Error::new(Status::GenericFailure, message))
 }
@@ -364,7 +364,7 @@ pub fn import_bson(store: &MongoStore, namespace: String, bytes: Buffer) -> Resu
 /// Imports a `mongodump` `.bson` file into one namespace.
 #[napi]
 pub fn import_bson_file(store: &MongoStore, namespace: String, path: String) -> Result<u32> {
-    mongo_core::import_bson_file(store_of(store), &namespace, path)
+    mongo::import::import_bson_file(store_of(store), &namespace, path)
         .map(|count| count as u32)
         .map_err(|message| Error::new(Status::GenericFailure, message))
 }

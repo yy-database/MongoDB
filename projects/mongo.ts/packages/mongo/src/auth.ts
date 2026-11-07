@@ -3,7 +3,7 @@
 // Credentials live in `<db>.system.users` inside this server's own store, in the
 // same document shape `mongod` writes (`_id`, `userId`, `user`, `db`,
 // `credentials`, `roles`). Salts and digests are produced here; the store is
-// only reached through the `mongo-core` primitives, so no authentication state
+// only reached through the `mongo` primitives, so no authentication state
 // leaves the connection that owns it.
 import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { binding } from './binding.ts'

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use mongo_core::{
+use mongo::{
     bson::BsonDocument,
     commands::{self, CommandError},
     cursor::CursorStore,
@@ -88,15 +88,13 @@ fn encode_op_msg<'py>(py: Python<'py>, command: &str) -> PyResult<Bound<'py, PyB
 #[pyfunction]
 fn encode_document<'py>(py: Python<'py>, document: &str) -> PyResult<Bound<'py, PyBytes>> {
     let decoded = decode_command(document)?;
-    Ok(PyBytes::new(py, &mongo_core::bson::encode_bson(&decoded)))
+    Ok(PyBytes::new(py, &mongo::bson::encode_bson(&decoded)))
 }
 
 /// Decodes BSON bytes into extended JSON.
 #[pyfunction]
 fn decode_document(bytes: &[u8]) -> PyResult<String> {
-    mongo_core::bson::parse_bson(bytes)
-        .map(|document| reply(&document))
-        .map_err(|error| PyValueError::new_err(format!("{error:?}")))
+    mongo::bson::parse_bson(bytes).map(|document| reply(&document)).map_err(|error| PyValueError::new_err(format!("{error:?}")))
 }
 
 /// Decodes a legacy `OP_QUERY` body into extended JSON.
@@ -132,44 +130,44 @@ fn ping() -> String {
 /// `insert` reply.
 #[pyfunction]
 fn insert(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::insert(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::insert(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `find` reply.
 #[pyfunction]
 fn find(store: PyRef<'_, MongoStore>, cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<String> {
     let mut cursors = cursors;
-    Ok(command_reply(commands::find(&decode_command(command)?, &store.inner, &mut cursors.inner)))
+    Ok(command_reply(commands::find(&decode_command(command)?, store.inner.as_ref(), &mut cursors.inner)))
 }
 
 /// `count` reply.
 #[pyfunction]
 fn count(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::count(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::count(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `explain` reply.
 #[pyfunction]
 fn explain(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::explain(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::explain(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `aggregate` reply.
 #[pyfunction]
 fn aggregate(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::aggregate(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::aggregate(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `delete` reply.
 #[pyfunction]
 fn delete(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::delete(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::delete(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `update` reply.
 #[pyfunction]
 fn update(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::update(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::update(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `getMore` reply.
@@ -189,85 +187,102 @@ fn kill_cursors(cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<
 /// `findAndModify` reply.
 #[pyfunction]
 fn find_and_modify(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::find_and_modify(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::find_and_modify(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `distinct` reply.
 #[pyfunction]
 fn distinct(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::distinct(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::distinct(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `bulkWrite` reply.
 #[pyfunction]
 fn bulk_write(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::bulk_write(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::bulk_write(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `create` reply.
 #[pyfunction]
 fn create(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::create(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::create(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `drop` reply.
 #[pyfunction]
 fn drop_collection(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::drop(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::drop(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `collMod` reply.
 #[pyfunction]
 fn coll_mod(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::coll_mod(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::coll_mod(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `listCollections` reply.
 #[pyfunction]
 fn list_collections(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::list_collections(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::list_collections(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `commitTransaction` reply.
 #[pyfunction]
 fn commit_transaction(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::commit_transaction(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::commit_transaction(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `abortTransaction` reply.
 #[pyfunction]
 fn abort_transaction(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::abort_transaction(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::abort_transaction(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `listDatabases` reply.
 #[pyfunction]
 fn list_databases(store: PyRef<'_, MongoStore>) -> String {
-    reply(&commands::list_databases(&store.inner))
+    reply(&commands::list_databases(store.inner.as_ref()))
 }
 
 /// `dropDatabase` reply.
 #[pyfunction]
 fn drop_database(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::drop_database(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::drop_database(&decode_command(command)?, store.inner.as_ref())))
+}
+
+/// `dbStats` reply.
+///
+/// `fs_used` / `fs_total` are filesystem bytes measured by the host; omit both
+/// when the database does not exist, which is when `mongod` also reports zero.
+#[pyfunction]
+#[pyo3(signature = (store, command, fs_used=None, fs_total=None))]
+fn db_stats(store: PyRef<'_, MongoStore>, command: &str, fs_used: Option<i64>, fs_total: Option<i64>) -> PyResult<String> {
+    let filesystem = fs_used.zip(fs_total);
+    Ok(command_reply(commands::db_stats(&decode_command(command)?, store.inner.as_ref(), filesystem)))
+}
+
+/// `collStats` reply, the per-collection half of `dbStats`.
+#[pyfunction]
+fn coll_stats(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
+    Ok(command_reply(commands::coll_stats(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `createIndexes` reply.
 #[pyfunction]
 fn create_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::create_indexes(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::create_indexes(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `listIndexes` reply.
 #[pyfunction]
 fn list_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::list_indexes(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::list_indexes(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// `dropIndexes` reply.
 #[pyfunction]
 fn drop_indexes(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
-    Ok(command_reply(commands::drop_indexes(&decode_command(command)?, &store.inner)))
+    Ok(command_reply(commands::drop_indexes(&decode_command(command)?, store.inner.as_ref())))
 }
 
 /// Changes `ttlMonitorSleepSecs` (whole seconds, at least one).
@@ -284,7 +299,7 @@ fn ttl_monitor(store: PyRef<'_, MongoStore>, now_ms: Option<i64>) -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_millis() as i64).unwrap_or(0)
     });
-    match commands::ttl_monitor(&store.inner, now) {
+    match commands::ttl_monitor(store.inner.as_ref(), now) {
         Ok(report) => reply(&commands::ttl_report_document(&report)),
         Err(error) => reply(&commands::error_document(&error)),
     }
@@ -312,13 +327,13 @@ fn discard_oplog(store: PyRef<'_, MongoStore>) {
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[pyfunction]
 fn import_bson(store: PyRef<'_, MongoStore>, namespace: &str, bytes: &[u8]) -> PyResult<usize> {
-    mongo_core::import_bson_documents(&store.inner, namespace, bytes).map_err(PyValueError::new_err)
+    mongo::import::import_bson_documents(store.inner.as_ref(), namespace, bytes).map_err(PyValueError::new_err)
 }
 
 /// Imports a `mongodump` `.bson` file into one namespace.
 #[pyfunction]
 fn import_bson_file(store: PyRef<'_, MongoStore>, namespace: &str, path: &str) -> PyResult<usize> {
-    mongo_core::import_bson_file(&store.inner, namespace, path).map_err(PyValueError::new_err)
+    mongo::import::import_bson_file(store.inner.as_ref(), namespace, path).map_err(PyValueError::new_err)
 }
 
 /// Creates the empty shard a catalog names when only the catalog survived.
@@ -363,6 +378,8 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(abort_transaction, module)?)?;
     module.add_function(wrap_pyfunction!(list_databases, module)?)?;
     module.add_function(wrap_pyfunction!(drop_database, module)?)?;
+    module.add_function(wrap_pyfunction!(db_stats, module)?)?;
+    module.add_function(wrap_pyfunction!(coll_stats, module)?)?;
     module.add_function(wrap_pyfunction!(create_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(list_indexes, module)?)?;
     module.add_function(wrap_pyfunction!(drop_indexes, module)?)?;

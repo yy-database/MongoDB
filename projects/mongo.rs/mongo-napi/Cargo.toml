@@ -11,7 +11,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-mongo-core = { path = "../mongo-core" }
+mongo = { workspace = true, features = ["storage"] }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 

@@ -11,5 +11,5 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-mongo-core = { path = "../mongo-core", default-features = false }
+mongo = { workspace = true }
 wasm-bindgen = { workspace = true }
