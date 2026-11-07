@@ -14,3 +14,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 mongo-core = { path = "../mongo-core" }
 pyo3 = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = { workspace = true }
