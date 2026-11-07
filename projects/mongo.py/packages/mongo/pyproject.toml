@@ -7,7 +7,8 @@ name = "yydb-mongo"
 version = "0.0.1"
 description = "MongoDB protocol primitives assembled from the Rust mongo-pyo3 bindings"
 readme = "README.md"
-license = { text = "MPL-2.0" }
+license = "MPL-2.0"
+license-files = ["License.md"]
 authors = [{ name = "yy-database" }]
 requires-python = ">=3.9"
 classifiers = [

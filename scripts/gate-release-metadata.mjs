@@ -78,6 +78,8 @@ const pyproject = readText('projects/mongo.py/packages/mongo/pyproject.toml')
 const pyVersion = pyproject.match(/^version = "([^"]+)"/m)?.[1]
 check(pyVersion === rootVersion, `pyproject version ${pyVersion} != workspace ${rootVersion}`)
 check(pyproject.includes('manifest-path = "../../../mongo.rs/mongo-pyo3/Cargo.toml"'), 'pyproject manifest-path does not point at mongo-pyo3')
+check(pyproject.includes('license = "MPL-2.0"'), 'pyproject license is not the MPL-2.0 SPDX expression')
+check(pyproject.includes('license-files = ["License.md"]'), 'pyproject license-files does not ship License.md')
 check(/^authors = \[{ name = "([^"]+)" }\]/m.test(pyproject), 'pyproject authors are missing')
 const pyUrls = pyproject.match(/^\[project\.urls\]\n([^\[]*)/m)?.[1] ?? ''
 check(pyUrls.includes('Homepage = "https://github.com/yy-database/MongoDB"'), 'pyproject Homepage url is missing or points elsewhere')
@@ -94,6 +96,21 @@ if (existsSync(join(root, pyReadmePath))) {
 const cargo = readText('projects/mongo.rs/Cargo.toml')
 const cargoVersion = cargo.match(/\[workspace\.package\][^\[]*?version = "([^"]+)"/s)?.[1]
 check(cargoVersion === rootVersion, `Cargo workspace version ${cargoVersion} != workspace ${rootVersion}`)
+
+// Every publishable package must carry the license text: npm only auto-includes
+// LICENSE files that sit in the package directory, and maturin ships whatever
+// `license-files` names.
+const licenseText = readText('License.md')
+const licenseCopies = [
+    'projects/mongo.ts/packages/mongo/License.md',
+    'projects/mongo.py/packages/mongo/License.md',
+    ...platformDirs.map((dir) => `projects/mongo.ts/platforms/${dir}/License.md`),
+]
+for (const relative of licenseCopies) {
+    const present = existsSync(join(root, relative))
+    check(present, `${relative} is missing`)
+    if (present) check(readText(relative) === licenseText, `${relative} differs from the root License.md`)
+}
 
 if (failures.length > 0) {
     for (const failure of failures) console.error(`release metadata: ${failure}`)
