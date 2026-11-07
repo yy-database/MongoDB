@@ -112,6 +112,21 @@ if (existsSync(join(root, changelogPath))) {
     check(section.split('\n').some((line) => line.startsWith('### ')), `CHANGELOG.md ${rootVersion} section has no subsections`)
 }
 
+// The release checklist is the single place that names the gates to run, so
+// every script it tells a maintainer to run must still exist.
+const releasePath = 'RELEASE.md'
+check(existsSync(join(root, releasePath)), `${releasePath} is missing`)
+if (existsSync(join(root, releasePath))) {
+    const release = readText(releasePath)
+    const scripts = readJson('package.json').scripts ?? {}
+    const referenced = [...release.matchAll(/`(?:pnpm|npm) run ([a-z0-9:_-]+)`/g)].map((match) => match[1])
+    check(referenced.length > 0, 'RELEASE.md references no package scripts')
+    for (const name of new Set(referenced)) check(typeof scripts[name] === 'string', `RELEASE.md references missing script ${name}`)
+    for (const name of ['gate:release-metadata', 'gate:install-ts', 'gate:install-py']) {
+        check(referenced.includes(name), `RELEASE.md does not reference ${name}`)
+    }
+}
+
 // Every publishable package must carry the license text: npm only auto-includes
 // LICENSE files that sit in the package directory, and maturin ships whatever
 // `license-files` names.
