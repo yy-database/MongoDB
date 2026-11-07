@@ -55,6 +55,14 @@ equal(decompress(3, zlib.zstdCompressSync(sample), sample.length).equals(sample)
 assert.throws(() => decompress(2, zlib.deflateSync(sample), sample.length + 1), /announced/, 'zlib rejects a size mismatch')
 assertions += 1
 
+// A frame may announce a tiny size while carrying a stream that inflates to
+// megabytes. The decoder has to stop at the announced size instead of
+// materialising the whole stream first.
+const bomb = Buffer.alloc(4 * 1024 * 1024)
+assert.throws(() => decompress(2, zlib.deflateSync(bomb), 32), /past the announced 32 bytes/, 'zlib stops at the announced size')
+assert.throws(() => decompress(3, zlib.zstdCompressSync(bomb), 32), /past the announced 32 bytes/, 'zstd stops at the announced size')
+assertions += 1
+
 // --- wire envelope ---------------------------------------------------------
 
 const pingBody = binding.encodeOpMsg(JSON.stringify({ ping: 1, $db: 'admin' }))
@@ -178,6 +186,20 @@ for (const [name, id, compressor] of [
     const reply = JSON.parse(binding.decodeOpMsg(answer.subarray(16)))
     equal(reply.ok, { $numberDouble: '0.0' }, 'a lying uncompressedSize gets an error reply')
     ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('announced'), 'the error names the announced size')
+    socket.destroy()
+}
+
+// A frame that announces 32 bytes but carries megabytes of deflate output must
+// be cut off at the announced size rather than inflated into memory.
+{
+    const { socket, next } = await connect(address.port)
+    socket.write(encodeMsgFrame(1, 0, frameBody({ hello: 1, compression: ['zlib'], $db: 'admin' })))
+    await next()
+    socket.write(encodeCompressedFrame(2, 0, 2, 32, zlib.deflateSync(Buffer.alloc(4 * 1024 * 1024))))
+    const answer = await next()
+    const reply = JSON.parse(binding.decodeOpMsg(answer.subarray(16)))
+    equal(reply.ok, { $numberDouble: '0.0' }, 'a decompression bomb gets an error reply')
+    ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('past the announced 32 bytes'), 'the error names the announced size')
     socket.destroy()
 }
 

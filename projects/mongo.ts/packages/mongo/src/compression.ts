@@ -53,16 +53,18 @@ export function decompress(id: number, input: Buffer, expectedSize: number): Buf
             break
         case COMPRESSOR_ZLIB:
             try {
-                output = zlib.inflateSync(input)
+                // Cap the output at the announced size so a forged frame cannot
+                // materialise a stream far larger than the bytes it declared.
+                output = zlib.inflateSync(input, { maxOutputLength: Math.max(expectedSize, 1) })
             } catch (error) {
-                throw new CompressionError(`zlib decompression failed: ${(error as Error).message}`)
+                throw decompressionError('zlib', error, expectedSize)
             }
             break
         case COMPRESSOR_ZSTD:
             try {
-                output = zlib.zstdDecompressSync(input)
+                output = zlib.zstdDecompressSync(input, { maxOutputLength: Math.max(expectedSize, 1) })
             } catch (error) {
-                throw new CompressionError(`zstd decompression failed: ${(error as Error).message}`)
+                throw decompressionError('zstd', error, expectedSize)
             }
             break
         default:
@@ -72,6 +74,13 @@ export function decompress(id: number, input: Buffer, expectedSize: number): Buf
         throw new CompressionError(`decompressed ${output.length} bytes, frame announced ${expectedSize}`)
     }
     return output
+}
+
+function decompressionError(codec: string, error: unknown, expectedSize: number): CompressionError {
+    if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+        return new CompressionError(`${codec} stream decompresses past the announced ${expectedSize} bytes`)
+    }
+    return new CompressionError(`${codec} decompression failed: ${(error as Error).message}`)
 }
 
 // ---------------------------------------------------------------------------
