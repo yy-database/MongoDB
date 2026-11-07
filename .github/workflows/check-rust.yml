@@ -25,8 +25,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           components: rustfmt, clippy
+      - run: rustc --version && cargo --version
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/mongo.rs
@@ -42,3 +42,9 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo build --manifest-path projects/mongo.rs/Cargo.toml -p mongo-wasm --target wasm32-unknown-unknown --release
           node scripts/gate-wasm-exports.mjs
+  toolchain-health:
+    name: toolchain health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: rustup show active-toolchain && rustc -vV

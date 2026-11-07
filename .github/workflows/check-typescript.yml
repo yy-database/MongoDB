@@ -24,8 +24,7 @@ jobs:
         with:
           version: 10.18.3
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly
+      - run: rustc --version && cargo --version
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/mongo.rs
@@ -69,8 +68,7 @@ jobs:
         with:
           version: 10.18.3
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly
+      - run: rustc --version && cargo --version
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/mongo.rs

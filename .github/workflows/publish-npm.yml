@@ -58,8 +58,7 @@ jobs:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly
+      - run: rustc --version && cargo --version
       - uses: pnpm/action-setup@v4
         with:
           version: 10.18.3
@@ -94,8 +93,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly
+      - run: rustc --version && cargo --version
       - name: Upgrade npm for Trusted Publisher support
         run: npm install --global npm@11
       - run: pnpm install --no-frozen-lockfile
