@@ -21,6 +21,7 @@
         "gate:corpus": "node scripts/diff-corpus.mjs --check",
         "gate:install-ts": "node scripts/gate-install-ts.mjs",
         "gate:install-py": "node scripts/gate-install-py.mjs",
+        "gate:release-metadata": "node scripts/gate-release-metadata.mjs",
         "test": "npm run test:rust && npm run test:ts && npm run test:py && npm run gate:test-count"
     },
     "packageManager": "pnpm@10.18.3",

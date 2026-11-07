@@ -35,6 +35,8 @@ jobs:
         run: node scripts/build-napi.mjs
       - name: Build TypeScript
         run: pnpm run build:ts
+      - name: Release metadata gate
+        run: pnpm run gate:release-metadata
       - name: TypeScript suite
         run: pnpm run test:ts
       - name: Installation-state gate
