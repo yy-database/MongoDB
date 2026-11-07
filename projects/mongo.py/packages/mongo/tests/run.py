@@ -595,6 +595,29 @@ def run_case(case):
             command = {"dropDatabase": step.get("argument", 1)}
             reply = mongo.drop_database(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
+        if op == "dropCollection":
+            command = {"drop": step.get("argument", step.get("collection"))}
+            reply = mongo.drop_collection(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
+        if op == "dbStats":
+            command = {"dbStats": 1}
+            if "scale" in step:
+                command["scale"] = step["scale"]
+            # `fsUsed` / `fsTotal` are host-measured filesystem bytes; both stay
+            # `None` when the database does not exist.
+            reply = mongo.db_stats(
+                store_of(step.get("store")),
+                json.dumps(command_of(case, step, command)),
+                step.get("fsUsed"),
+                step.get("fsTotal"),
+            )
+            return json.loads(reply)
+        if op == "collStats":
+            command = {"collStats": step["collection"]}
+            if "scale" in step:
+                command["scale"] = step["scale"]
+            reply = mongo.coll_stats(store_of(step.get("store")), json.dumps(command_of(case, step, command)))
+            return json.loads(reply)
         if op == "listDatabases":
             return json.loads(mongo.list_databases(store_of(step.get("store"))))
         if op == "hello":

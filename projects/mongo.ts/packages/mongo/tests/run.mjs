@@ -288,6 +288,24 @@ function runCase(testCase) {
                 const command = { dropDatabase: step.argument === undefined ? 1 : step.argument }
                 return JSON.parse(binding.dropDatabase(storeOf(step.store), commandText(testCase, step, command)))
             }
+            case 'dropCollection': {
+                const command = { drop: step.argument === undefined ? step.collection : step.argument }
+                return JSON.parse(binding.dropCollection(storeOf(step.store), commandText(testCase, step, command)))
+            }
+            case 'dbStats': {
+                const command = { dbStats: 1 }
+                if (step.scale !== undefined) command.scale = step.scale
+                // `fsUsed` / `fsTotal` are host-measured filesystem bytes; both
+                // stay null when the database does not exist.
+                return JSON.parse(
+                    binding.dbStats(storeOf(step.store), commandText(testCase, step, command), step.fsUsed ?? null, step.fsTotal ?? null),
+                )
+            }
+            case 'collStats': {
+                const command = { collStats: step.collection }
+                if (step.scale !== undefined) command.scale = step.scale
+                return JSON.parse(binding.collStats(storeOf(step.store), commandText(testCase, step, command)))
+            }
             case 'hello':
                 return JSON.parse(binding.hello())
             case 'ping':

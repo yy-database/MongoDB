@@ -681,6 +681,186 @@
                 { "at": "/r1/codeName", "equals": "BadValue" },
                 { "at": "/r1/errmsg", "equals": "Enumeration value 'bogus' for field 'explain.verbosity' is not a valid value." }
             ]
+        },
+        {
+            "id": "cmd.drop_collection.with_index",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }], "as": "r1" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "score": 1 }, "name": "score_1" }], "as": "r2" },
+                { "op": "dropCollection", "collection": "items", "as": "r3" },
+                { "op": "count", "collection": "items", "as": "r4" }
+            ],
+            "checks": [
+                { "at": "/r3/ns", "equals": "app.items" },
+                { "at": "/r3/nIndexesWas", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } },
+                { "at": "/r4/n", "equals": { "$numberInt": "0" } }
+            ]
+        },
+        {
+            "id": "cmd.drop_collection.missing",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropCollection", "collection": "missing", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ns", "absent": true },
+                { "at": "/r1/nIndexesWas", "absent": true },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.drop_collection.argument_type",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropCollection", "argument": 1, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "14" } },
+                { "at": "/r1/codeName", "equals": "TypeMismatch" },
+                { "at": "/r1/errmsg", "equals": "collection name has invalid type int" }
+            ]
+        },
+        {
+            "id": "cmd.drop_collection.empty_name",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dropCollection", "argument": "", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "73" } },
+                { "at": "/r1/codeName", "equals": "InvalidNamespace" },
+                { "at": "/r1/errmsg", "equals": "Invalid namespace specified: app" }
+            ]
+        },
+        {
+            "id": "cmd.db_stats.empty",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dbStats", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/db", "equals": "app" },
+                { "at": "/r1/collections", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/objects", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/indexes", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/fsUsedSize", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/fsTotalSize", "equals": { "$numberLong": "0" } },
+                { "at": "/r1/scaleFactor", "equals": { "$numberInt": "1" } },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.db_stats.filesystem_bytes",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dbStats", "fsUsed": 1024, "fsTotal": 4096, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/fsUsedSize", "equals": { "$numberLong": "1024" } },
+                { "at": "/r1/fsTotalSize", "equals": { "$numberLong": "4096" } }
+            ]
+        },
+        {
+            "id": "cmd.db_stats.counts_stored_documents",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }], "as": "r1" },
+                { "op": "insert", "collection": "others", "documents": [{ "_id": 1 }], "as": "r2" },
+                { "op": "dbStats", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/db", "equals": "app" },
+                { "at": "/r3/collections", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/objects", "equals": { "$numberInt": "3" } },
+                { "at": "/r3/indexes", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.db_stats.database_scope",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }], "db": "other", "as": "r1" },
+                { "op": "dbStats", "db": "app", "as": "r2" }
+            ],
+            "checks": [
+                { "at": "/r2/db", "equals": "app" },
+                { "at": "/r2/collections", "equals": { "$numberInt": "0" } },
+                { "at": "/r2/objects", "equals": { "$numberInt": "0" } }
+            ]
+        },
+        {
+            "id": "cmd.db_stats.invalid_scale",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "dbStats", "scale": 0, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/codeName", "equals": "BadValue" },
+                { "at": "/r1/errmsg", "equals": "Scale factor must be greater than zero" }
+            ]
+        },
+        {
+            "id": "cmd.coll_stats.with_index",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "insert", "collection": "items", "documents": [{ "_id": 1, "score": 10 }, { "_id": 2, "score": 20 }], "as": "r1" },
+                { "op": "createIndexes", "collection": "items", "indexes": [{ "key": { "score": 1 }, "name": "score_1" }], "as": "r2" },
+                { "op": "collStats", "collection": "items", "as": "r3" }
+            ],
+            "checks": [
+                { "at": "/r3/ns", "equals": "app.items" },
+                { "at": "/r3/count", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/nindexes", "equals": { "$numberInt": "2" } },
+                { "at": "/r3/indexSizes/#", "equals": 2 },
+                { "at": "/r3/scaleFactor", "equals": { "$numberInt": "1" } },
+                { "at": "/r3/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.coll_stats.missing_collection",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "collStats", "collection": "missing", "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ns", "equals": "app.missing" },
+                { "at": "/r1/count", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/nindexes", "equals": { "$numberInt": "0" } },
+                { "at": "/r1/indexSizes/#", "equals": 0 },
+                { "at": "/r1/ok", "equals": { "$numberDouble": "1.0" } }
+            ]
+        },
+        {
+            "id": "cmd.coll_stats.invalid_scale",
+            "surface": "command",
+            "program": [
+                { "op": "open", "store": "s" },
+                { "op": "collStats", "collection": "items", "scale": 0, "as": "r1" }
+            ],
+            "checks": [
+                { "at": "/r1/ok", "equals": { "$numberDouble": "0.0" } },
+                { "at": "/r1/code", "equals": { "$numberInt": "2" } },
+                { "at": "/r1/codeName", "equals": "BadValue" },
+                { "at": "/r1/errmsg", "equals": "BSON field 'scale' value must be >= 1, actual value '0'" }
+            ]
         }
     ]
 }
