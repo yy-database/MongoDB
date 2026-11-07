@@ -99,6 +99,14 @@ const cargo = readText('projects/mongo.rs/Cargo.toml')
 const cargoVersion = cargo.match(/\[workspace\.package\][^\[]*?version = "([^"]+)"/s)?.[1]
 check(cargoVersion === rootVersion, `Cargo workspace version ${cargoVersion} != workspace ${rootVersion}`)
 
+// The bindings are not crates.io artifacts: `publish = false` is the only thing
+// that stops an accidental `cargo publish`.
+for (const crate of ['mongo-core', 'mongo-napi', 'mongo-pyo3', 'mongo-wasm']) {
+    const manifest = readText(`projects/mongo.rs/${crate}/Cargo.toml`)
+    check(/^publish = false$/m.test(manifest), `${crate}: crates.io publish is not disabled`)
+    check(/^version\.workspace = true$/m.test(manifest), `${crate}: version does not inherit the workspace`)
+}
+
 const changelogPath = 'CHANGELOG.md'
 check(existsSync(join(root, changelogPath)), `${changelogPath} is missing`)
 if (existsSync(join(root, changelogPath))) {
