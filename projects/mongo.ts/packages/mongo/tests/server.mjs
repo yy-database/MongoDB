@@ -941,17 +941,25 @@ async function driverLogin(user, password, db) {
             { label: 'killCursors (killCursors@authz)', build: () => ({ killCursors: 'items', cursors: [{ $numberLong: '999' }], $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_ca', 'z_root') },
             { label: 'killCursors on another database', build: () => ({ killCursors: 'secret', cursors: [{ $numberLong: '999' }], $db: other }), codes: allowOnly('z_ca', 'z_root') },
 
-            // The credential collections are readable only through `viewUser`
-            // and `viewRole`.
-            { label: 'find system.users (viewUser@authz)', build: () => ({ find: 'system.users', filter: {}, $db: database }), codes: allowOnly('z_ua', 'z_root') },
-            { label: 'count system.users (viewUser@authz)', build: () => ({ count: 'system.users', $db: database }), codes: allowOnly('z_ua', 'z_root') },
-            { label: 'find system.roles (viewRole@authz)', build: () => ({ find: 'system.roles', filter: {}, $db: database }), codes: allowOnly('z_ua', 'z_root') },
+            // Direct reads of the credential collections need `find` on that
+            // exact namespace. A database-wide grant does not reach them, so
+            // `userAdmin` cannot read them directly even though it manages the
+            // accounts through `usersInfo` / `createUser`. Measured on
+            // `mongod 8.0.9`: `read` and `userAdmin` answer 13, a role whose
+            // resource is exactly `authz.system.users` is allowed, and `root`
+            // passes through its `.system.users` grant.
+            { label: 'find system.users (find@authz.system.users)', build: () => ({ find: 'system.users', filter: {}, $db: database }), codes: allowOnly('z_root') },
+            { label: 'count system.users (find@authz.system.users)', build: () => ({ count: 'system.users', $db: database }), codes: allowOnly('z_root') },
+            { label: 'find system.roles (find@authz.system.roles)', build: () => ({ find: 'system.roles', filter: {}, $db: database }), codes: allowOnly() },
+            { label: 'find admin.system.roles (find@admin.system.roles)', build: () => ({ find: 'system.roles', filter: {}, $db: 'admin' }), codes: allowOnly('z_root') },
             { label: 'usersInfo (viewUser@authz)', build: () => ({ usersInfo: 1, $db: database }), codes: allowOnly('z_ua', 'z_root') },
             { label: 'usersInfo forAllDBs (cluster viewUser)', build: () => ({ usersInfo: { forAllDBs: true }, $db: database }), codes: allowOnly('z_root') },
 
             // Lookups and unions resolve `from` inside the command's database,
             // so an object namespace is refused and no other database is read.
             { label: '$lookup from its database (find@authz)', build: () => ({ aggregate: 'items', pipeline: [{ $lookup: { from: 'secret', localField: '_id', foreignField: '_id', as: 'joined' } }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: '$graphLookup from its database (find@authz)', build: () => ({ aggregate: 'items', pipeline: [{ $graphLookup: { from: 'secret', startWith: '$_id', connectFromField: '_id', connectToField: '_id', as: 'graph' } }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
+            { label: '$unionWith from its database (find@authz)', build: () => ({ aggregate: 'items', pipeline: [{ $unionWith: 'secret' }], cursor: {}, $db: database }), codes: allowOnly('z_read', 'z_rw', 'z_root') },
             { label: '$lookup with a foreign namespace object', build: () => ({ aggregate: 'items', pipeline: [{ $lookup: { from: { db: other, coll: 'secret' }, localField: '_id', foreignField: '_id', as: 'leak' } }], cursor: {}, $db: database }), codes: { z_read: 9, z_rw: 9, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 9 } },
             { label: '$graphLookup with a foreign namespace object', build: () => ({ aggregate: 'items', pipeline: [{ $graphLookup: { from: { db: other, coll: 'secret' }, startWith: '$_id', connectFromField: '_id', connectToField: '_id', as: 'leak' } }], cursor: {}, $db: database }), codes: { z_read: 40105, z_rw: 40105, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 40105 } },
             { label: '$unionWith with a foreign database field', build: () => ({ aggregate: 'items', pipeline: [{ $unionWith: { db: other, coll: 'secret' } }], cursor: {}, $db: database }), codes: { z_read: 40415, z_rw: 40415, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 40415 } },
@@ -985,14 +993,19 @@ async function driverLogin(user, password, db) {
             { label: 'aggregate $out to its database (insert+remove@authz)', build: (user) => ({ aggregate: 'items', pipeline: [{ $out: `out_${user}` }], cursor: {}, $db: database }), codes: allowOnly('z_rw', 'z_root') },
             { label: 'aggregate $out to another database', build: () => ({ aggregate: 'items', pipeline: [{ $out: { db: other, coll: 'copied' } }], cursor: {}, $db: database }), codes: allowOnly('z_root') },
 
-            // Credential collections have no generic write path at all: `drop`,
-            // `collMod`, `$out`, `$merge` and `bulkWrite` are refused even for
-            // `root`, because only the user-management commands may write them.
-            { label: '$out to system.users', build: () => ({ aggregate: 'items', pipeline: [{ $out: 'system.users' }], cursor: {}, $db: database }), codes: allowOnly() },
-            { label: '$merge into admin.system.users', build: () => ({ aggregate: 'items', pipeline: [{ $merge: { into: { db: 'admin', coll: 'system.users' } } }], cursor: {}, $db: database }), codes: allowOnly() },
-            { label: 'drop system.users', build: () => ({ drop: 'system.users', $db: database }), codes: allowOnly() },
-            { label: 'collMod system.users', build: () => ({ collMod: 'system.users', validator: {}, $db: database }), codes: allowOnly() },
-            { label: 'bulkWrite into system.users', build: () => ({ bulkWrite: 1, ops: [{ insert: 0, document: { _id: 'evil', user: 'evil', db: 'admin', roles: [{ role: 'root', db: 'admin' }] } }], nsInfo: [{ ns: `${database}.system.users` }], $db: 'admin' }), codes: allowOnly() },
+            // Direct writes to a credential collection are authorized against
+            // that exact namespace: `read` / `readWrite` / `dbAdmin` are refused
+            // with 13 because database-wide grants do not reach it, and `root`
+            // passes through `.system.users`. What a passed caller then gets was
+            // measured on `mongod 8.0.9`: `$out` answers 17385, `$merge` 31319,
+            // `drop` 20 IllegalOperation, `collMod` / `insert` run, and `create`
+            // answers 48 when the collection already exists.
+            { label: '$out to system.users (special collection 17385)', build: () => ({ aggregate: 'items', pipeline: [{ $out: 'system.users' }], cursor: {}, $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 17385 } },
+            { label: '$merge into admin.system.users (special collection 31319)', build: () => ({ aggregate: 'items', pipeline: [{ $merge: { into: { db: 'admin', coll: 'system.users' } } }], cursor: {}, $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 31319 } },
+            { label: 'drop system.users (IllegalOperation 20)', build: () => ({ drop: 'system.users', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 20 } },
+            { label: 'collMod system.users (collMod@.system.users)', build: () => ({ collMod: 'system.users', validator: {}, $db: database }), codes: allowOnly('z_root') },
+            { label: 'insert system.users (insert@.system.users)', build: () => ({ insert: 'system.users', documents: [{ _id: 'matrix_credential_probe' }], $db: database }), codes: allowOnly('z_root') },
+            { label: 'create system.users (createCollection@.system.users)', build: () => ({ create: 'system.users', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 48 } },
 
             // Cluster actions.
             { label: 'serverStatus (serverStatus@cluster)', build: () => ({ serverStatus: 1, $db: 'admin' }), codes: allowOnly('z_ca', 'z_root') },
@@ -1000,15 +1013,28 @@ async function driverLogin(user, password, db) {
             { label: 'hostInfo (hostInfo@cluster)', build: () => ({ hostInfo: 1, $db: 'admin' }), codes: allowOnly('z_ca', 'z_root') },
 
             // Commands this server does not implement answer `no such command`
-            // for every role, so none of them can be used to reach another
-            // database by accident.
-            { label: 'renameCollection (unimplemented)', build: () => ({ renameCollection: `${database}.items`, to: `${other}.stolen`, $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'cloneCollection (unimplemented)', build: () => ({ cloneCollection: `${database}.items`, to: `${other}.stolen`, from: '127.0.0.1:1', $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'dbHash (unimplemented)', build: () => ({ dbHash: 1, $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'validate (unimplemented)', build: () => ({ validate: 'items', $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'updateUser (unimplemented)', build: () => ({ updateUser: 'z_read', pwd: 'other', $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'grantPrivilegesToRole (unimplemented)', build: () => ({ grantPrivilegesToRole: 'x', privileges: [], $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
-            { label: 'invalidateUserCache (unimplemented)', build: () => ({ invalidateUserCache: 1, $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } }
+            // (59) once authorization passes. The required actions below are
+            // measured on `mongod 8.0.9`, so a caller without them must be
+            // refused with 13 before the missing implementation is reached.
+            // `cloneCollection` was removed from `mongod`, which answers 59 to
+            // every role and matches the fall-through here.
+            { label: 'renameCollection same database (unimplemented)', build: () => ({ renameCollection: `${database}.items`, to: `${database}.renamed`, $db: 'admin' }), codes: { z_read: 13, z_rw: 59, z_dba: 59, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'renameCollection across databases (unimplemented)', build: () => ({ renameCollection: `${database}.items`, to: `${other}.stolen`, $db: 'admin' }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'cloneCollection (removed in mongod 8.0.9)', build: () => ({ cloneCollection: `${database}.items`, to: `${other}.stolen`, from: '127.0.0.1:1', $db: 'admin' }), codes: { z_read: 59, z_rw: 59, z_dba: 59, z_ua: 59, z_ca: 59, z_root: 59 } },
+            { label: 'dbHash (unimplemented)', build: () => ({ dbHash: 1, $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'validate (unimplemented)', build: () => ({ validate: 'items', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 59, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'updateUser (unimplemented)', build: () => ({ updateUser: 'z_read', pwd: 'other', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'createRole same database (unimplemented)', build: () => ({ createRole: 'matrix_role', roles: [], privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'createRole with a privilege on another database (unimplemented)', build: () => ({ createRole: 'matrix_role_cross', roles: [], privileges: [{ resource: { db: other, collection: '' }, actions: ['find'] }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'updateRole (unimplemented)', build: () => ({ updateRole: 'matrix_role', privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'dropRole (unimplemented)', build: () => ({ dropRole: 'matrix_role', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'grantRolesToUser (unimplemented)', build: () => ({ grantRolesToUser: 'z_read', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'grantRolesToUser with a role on another database (unimplemented)', build: () => ({ grantRolesToUser: 'z_read', roles: [{ role: 'read', db: other }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'revokeRolesFromUser (unimplemented)', build: () => ({ revokeRolesFromUser: 'z_read', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'grantRolesToRole (unimplemented)', build: () => ({ grantRolesToRole: 'matrix_role', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'revokeRolesFromRole (unimplemented)', build: () => ({ revokeRolesFromRole: 'matrix_role', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'grantPrivilegesToRole (unimplemented)', build: () => ({ grantPrivilegesToRole: 'matrix_role', privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'invalidateUserCache (unimplemented)', build: () => ({ invalidateUserCache: 1, $db: 'admin' }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 59, z_root: 59 } }
         ]
 
         const codeOf = (reply) => {
@@ -1029,6 +1055,10 @@ async function driverLogin(user, password, db) {
                 if (expected === 13) equal(reply.codeName, 'Unauthorized', `${row.label}: ${user} is refused as Unauthorized`)
             }
         }
+
+        // The credential probe above is a real document; remove it through the
+        // same `.system.users` grant so the remaining cases see a clean store.
+        equal((await command(matrix.z_root, { delete: 'system.users', deletes: [{ q: { _id: 'matrix_credential_probe' }, limit: 1 }], $db: database })).ok, { $numberDouble: '1.0' }, 'root removes its credential probe document')
 
         // A cursor is bound to the database that authorized it, and the grant
         // does not move with the namespace name in `getMore`.

@@ -891,6 +891,16 @@ export function privilegesForRoles(roles: AuthRole[]): Privilege[] {
     return privileges
 }
 
+/**
+ * Collections `mongod` protects behind explicit namespace grants.
+ *
+ * A database-wide privilege such as `read@authz` does not reach these even
+ * though its resource names the whole database: real `mongod 8.0.9` refuses a
+ * `find` on `authz.system.users` to `read` and to `userAdmin`, and allows it to
+ * a custom role whose resource is exactly `authz.system.users`.
+ */
+const CREDENTIAL_COLLECTIONS = new Set(['system.users', 'system.backup_users', 'system.roles'])
+
 /** Whether a privilege's resource covers a `{db, collection}` target. */
 function covers(resource: Resource, db: string, collection: string): boolean {
     if (resource.anyResource === true) return true
@@ -898,6 +908,7 @@ function covers(resource: Resource, db: string, collection: string): boolean {
     const resourceDb = resource.db ?? ''
     const resourceCollection = resource.collection ?? ''
     if (resourceDb !== '' && resourceDb !== db) return false
+    if (resourceCollection === '' && CREDENTIAL_COLLECTIONS.has(collection)) return false
     if (resourceCollection !== '' && resourceCollection !== collection) return false
     return true
 }
@@ -975,53 +986,8 @@ function renderDocument(command: any): string {
     return renderValue(redacted)
 }
 
-/** Credential collections, whose reads `mongod` gates by `viewUser` / `viewRole`. */
-const CREDENTIAL_READ_ACTIONS: Record<string, string> = {
-    'system.users': 'viewUser',
-    'system.backup_users': 'viewUser',
-    'system.roles': 'viewRole'
-}
-
-/** Commands whose command document names the collection they write. */
-const CREDENTIAL_WRITE_COMMANDS = new Set(['insert', 'update', 'delete', 'bulkWrite', 'findAndModify', 'drop', 'collMod'])
-
-/**
- * Action a read of `collection` needs. A plain `read` role covers every
- * collection in its database, but `mongod` answers `find` on the credential
- * collections only to `viewUser` / `viewRole` holders, so those reads are not
- * satisfiable by `find` alone.
- */
-function readAction(collection: string): string {
-    return CREDENTIAL_READ_ACTIONS[collection] ?? 'find'
-}
-
 function credentialCollection(name: unknown): boolean {
-    return typeof name === 'string' && Object.hasOwn(CREDENTIAL_READ_ACTIONS, name)
-}
-
-/**
- * `true` when the command would write a credential collection, either directly
- * or as the output of an aggregation.
- *
- * `drop` and `collMod` are included because deleting the user collection or
- * changing its validator removes the accounts just as effectively as a raw
- * `delete`, `$out` / `$merge` because their effect is a write even though the
- * command name says `aggregate`, and `bulkWrite` because the namespaces it
- * writes are in `nsInfo` rather than in the command-name field.
- */
-function writesCredentials(name: string, command: any, database: string): boolean {
-    if (name === 'bulkWrite') return bulkWriteNamespaces(command, database).some((target) => credentialCollection(target.collection))
-    if (CREDENTIAL_WRITE_COMMANDS.has(name) && credentialCollection(command[name])) return true
-    if (name !== 'aggregate') return false
-    const pipeline = Array.isArray(command.pipeline) ? command.pipeline : []
-    for (const stage of pipeline) {
-        if (stage === null || typeof stage !== 'object') continue
-        const out = outputTarget(stage.$out, database)
-        if (out !== null && credentialCollection(out.collection)) return true
-        const merge = outputTarget(stage.$merge?.into, database)
-        if (merge !== null && credentialCollection(merge.collection)) return true
-    }
-    return false
+    return typeof name === 'string' && CREDENTIAL_COLLECTIONS.has(name)
 }
 
 /** An integer that may arrive as a plain number or a tagged BSON number. */
@@ -1093,15 +1059,15 @@ function requirementsFor(name: string, command: any, database: string): Requirem
     switch (name) {
         case 'find': {
             const collection = typeof command.find === 'string' ? command.find : ''
-            return [{ action: readAction(collection), db: database, collection }]
+            return [{ action: 'find', db: database, collection }]
         }
         case 'count': {
             const collection = typeof command.count === 'string' ? command.count : ''
-            return [{ action: readAction(collection), db: database, collection }]
+            return [{ action: 'find', db: database, collection }]
         }
         case 'distinct': {
             const collection = typeof command.distinct === 'string' ? command.distinct : ''
-            return [{ action: readAction(collection), db: database, collection }]
+            return [{ action: 'find', db: database, collection }]
         }
         case 'aggregate': {
             const pipeline = Array.isArray(command.pipeline) ? command.pipeline : []
@@ -1109,9 +1075,20 @@ function requirementsFor(name: string, command: any, database: string): Requirem
                 return [{ action: 'inprog', cluster: true }]
             }
             const source = typeof command.aggregate === 'string' ? command.aggregate : ''
-            const requirements: Requirement[] = [{ action: readAction(source), db: database, collection: source }]
+            const requirements: Requirement[] = [{ action: 'find', db: database, collection: source }]
             for (const stage of pipeline) {
                 if (stage === null || typeof stage !== 'object') continue
+                // `$lookup`, `$graphLookup` and `$unionWith` read another
+                // collection of the same database. `mongod` requires `find` on
+                // that collection, so a collection-scoped role that can read the
+                // source cannot use the pipeline to read past its grant.
+                // An object `from` names a foreign database and is rejected by
+                // the pipeline validator, so it is not turned into a grant.
+                for (const value of [stage.$lookup?.from, stage.$graphLookup?.from, stage.$unionWith]) {
+                    if (typeof value === 'string' && value.length > 0) {
+                        requirements.push({ action: 'find', db: database, collection: value })
+                    }
+                }
                 // `$out` and `$merge` write to another collection. Without their
                 // write actions a read-only user could run a pipeline that
                 // rewrites data, so the output target is authorized too.
@@ -1167,7 +1144,7 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             // A view reads its source to answer queries, so `mongod` requires
             // the source's read action on top of creating the view.
             if (typeof command.viewOn === 'string' && command.viewOn.length > 0) {
-                requirements.push({ action: readAction(command.viewOn), db: database, collection: command.viewOn })
+                requirements.push({ action: 'find', db: database, collection: command.viewOn })
             }
             return requirements
         }
@@ -1197,10 +1174,39 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             return [{ action: 'viewUser', db: database, collection: '' }]
         case 'getMore': {
             const collection = typeof command.collection === 'string' ? command.collection : ''
-            return [{ action: readAction(collection), db: database, collection }]
+            return [{ action: 'find', db: database, collection }]
         }
         case 'killCursors':
             return [{ action: 'killCursors', db: database, collection: typeof command.killCursors === 'string' ? command.killCursors : '' }]
+        case 'dbHash':
+            return [{ action: 'dbHash', db: database, collection: '' }]
+        case 'validate':
+            return [{ action: 'validate', db: database, collection: typeof command.validate === 'string' ? command.validate : '' }]
+        case 'renameCollection':
+            return renameCollectionTargets(command, database)
+        case 'createRole':
+            return createRoleTargets(command, database)
+        case 'updateRole':
+            return [{ action: 'updateRole', db: database, collection: '' }]
+        case 'dropRole':
+            return [{ action: 'dropRole', db: database, collection: '' }]
+        case 'grantRolesToUser':
+            return grantRolesTargets(command, database, 'grantRole')
+        case 'revokeRolesFromUser':
+            return grantRolesTargets(command, database, 'revokeRole')
+        case 'grantRolesToRole':
+            return grantRolesTargets(command, database, 'grantRole')
+        case 'revokeRolesFromRole':
+            return grantRolesTargets(command, database, 'revokeRole')
+        case 'grantPrivilegesToRole':
+            return [
+                { action: 'grantRole', db: database, collection: '' },
+                ...privilegeTargets(command.privileges, 'grantRole', database)
+            ]
+        case 'updateUser':
+            return updateUserTargets(command, database)
+        case 'invalidateUserCache':
+            return [{ action: 'invalidateUserCache', cluster: true }]
         case 'serverStatus':
             return [{ action: 'serverStatus', cluster: true }]
         case 'hostInfo':
@@ -1242,6 +1248,92 @@ function createUserTargets(command: any, database: string): Requirement[] {
             requirements.push({ action: 'grantRole', db: role.db, collection: '' })
         }
     }
+    return requirements
+}
+
+/** Roles named by an entry such as `[{ role, db }]`, skipping malformed ones. */
+function roleTargets(roles: unknown): { role: string; db: string }[] {
+    if (!Array.isArray(roles)) return []
+    const targets: { role: string; db: string }[] = []
+    for (const entry of roles) {
+        if (entry !== null && typeof entry === 'object' && typeof entry.role === 'string' && typeof entry.db === 'string') {
+            targets.push({ role: entry.role, db: entry.db })
+        }
+    }
+    return targets
+}
+
+/** Requirements for the resources named by a `privileges` array. */
+function privilegeTargets(privileges: unknown, action: string, database: string): Requirement[] {
+    if (!Array.isArray(privileges)) return []
+    const targets: Requirement[] = []
+    for (const entry of privileges) {
+        if (entry === null || typeof entry !== 'object' || entry.resource === null || typeof entry.resource !== 'object') continue
+        const resource = entry.resource
+        if (typeof resource.db === 'string') {
+            targets.push({ action, db: resource.db, collection: typeof resource.collection === 'string' ? resource.collection : '' })
+        } else if (resource.anyResource === true) {
+            targets.push({ action, db: database, collection: '' })
+        }
+    }
+    return targets
+}
+
+/**
+ * `renameCollection` requirements, measured on `mongod 8.0.9`: the source
+ * needs `renameCollectionSameDB` and the target `dropCollection`. A
+ * `readWrite` grant passes within one database and fails when the target
+ * database is outside its grant, which is the observed behaviour; the exact
+ * privilege name for cross-database renames is not documented, so this pair is
+ * an approximation recorded in AUTHORIZATION-MATRIX.md.
+ */
+function renameCollectionTargets(command: any, database: string): Requirement[] {
+    const from = namespaceTarget(command.renameCollection, database)
+    const to = namespaceTarget(command.to, database)
+    if (from === null || to === null) return [{ action: 'renameCollectionSameDB', db: database, collection: '' }]
+    return [
+        { action: 'renameCollectionSameDB', db: from.db, collection: from.collection },
+        { action: 'dropCollection', db: to.db, collection: to.collection }
+    ]
+}
+
+/** `createRole`: the creation action plus `grantRole` on every granted resource. */
+function createRoleTargets(command: any, database: string): Requirement[] {
+    return [
+        { action: 'createRole', db: database, collection: '' },
+        ...roleTargets(command.roles).map((role) => ({ action: 'grantRole', db: role.db, collection: '' })),
+        ...privilegeTargets(command.privileges, 'grantRole', database)
+    ]
+}
+
+/** `grantRolesToUser` / `revokeRolesFromUser` / `grantRolesToRole` / `revokeRolesFromRole`. */
+function grantRolesTargets(command: any, database: string, action: string): Requirement[] {
+    return [
+        { action, db: database, collection: '' },
+        ...roleTargets(command.roles).map((role) => ({ action, db: role.db, collection: '' }))
+    ]
+}
+
+/**
+ * `updateUser` requirements: a field action for each field it changes and a
+ * role action for each role it hands out or takes away. `userAdmin` holds all
+ * of them on its own database and none on another, which matches the observed
+ * delegation boundary.
+ */
+function updateUserTargets(command: any, database: string): Requirement[] {
+    const requirements: Requirement[] = []
+    if (typeof command.pwd === 'string') requirements.push({ action: 'changePassword', db: database, collection: '' })
+    if (command.customData !== undefined) requirements.push({ action: 'changeCustomData', db: database, collection: '' })
+    if (command.authenticationRestrictions !== undefined) {
+        requirements.push({ action: 'setAuthenticationRestriction', db: database, collection: '' })
+    }
+    if (Array.isArray(command.roles)) {
+        requirements.push({ action: 'revokeRole', db: database, collection: '' })
+        for (const role of roleTargets(command.roles)) {
+            requirements.push({ action: 'grantRole', db: role.db, collection: '' })
+        }
+    }
+    if (requirements.length === 0) requirements.push({ action: 'changeCustomData', db: database, collection: '' })
     return requirements
 }
 
@@ -1289,13 +1381,11 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
         return null
     }
     const database = typeof command.$db === 'string' ? command.$db : 'admin'
-    if (writesCredentials(name, command, database)) {
-        // Credentials are written only by `createUser` / `updateUser` /
-        // `dropUser`, which check the roles being granted. A generic write would
-        // bypass that check, so it is refused even for `root`.
-        return notAuthorized(command)
-    }
     const privileges = privilegesForRoles(session.auth.roles)
+    // `root` answers every privilege question, including actions that its
+    // reported privilege list does not enumerate (`updateRole` on `mongod
+    // 8.0.9` reaches the role lookup instead of being refused).
+    const root = session.auth.roles.some((role) => role.role === 'root' && role.db === 'admin')
     const requirements =
         name === 'usersInfo'
             ? usersInfoTargets(command, database)
@@ -1304,7 +1394,54 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
               : requirementsFor(name, command, database)
     if (requirements === null) return null
     for (const requirement of requirements) {
-        if (!check(privileges, requirement)) return notAuthorized(command)
+        // `root` answers every enumerated action, but the credential
+        // collections stay namespace-scoped even for it: real `mongod` refuses
+        // `root` a `find` on `authz.system.roles` because `root` holds
+        // `admin.system.roles`, not an any-database grant. `.system.users` is
+        // held explicitly and still passes.
+        const rootBypass = root && !(typeof requirement.collection === 'string' && credentialCollection(requirement.collection))
+        if (!rootBypass && !check(privileges, requirement)) return notAuthorized(command)
+    }
+    return credentialRefusal(name, command, database)
+}
+
+/**
+ * Operations real `mongod` authorizes and then refuses with a dedicated error
+ * instead of executing: a credential collection cannot be the target of
+ * `$out` / `$merge`, and it cannot be dropped. Authorized callers see these
+ * codes; callers that miss the privileges are refused earlier with 13.
+ */
+function credentialRefusal(name: string, command: any, database: string): any | null {
+    if (name === 'drop' && credentialCollection(command.drop)) {
+        return {
+            ok: { $numberDouble: '0.0' },
+            errmsg: `cannot drop system collection ${database}.${command.drop}`,
+            code: { $numberInt: '20' },
+            codeName: 'IllegalOperation'
+        }
+    }
+    if (name !== 'aggregate') return null
+    const pipeline = Array.isArray(command.pipeline) ? command.pipeline : []
+    for (const stage of pipeline) {
+        if (stage === null || typeof stage !== 'object') continue
+        const out = outputTarget(stage.$out, database)
+        if (out !== null && credentialCollection(out.collection)) {
+            return {
+                ok: { $numberDouble: '0.0' },
+                errmsg: `Can't $out to special collection: ${out.collection}`,
+                code: { $numberInt: '17385' },
+                codeName: 'Location17385'
+            }
+        }
+        const merge = outputTarget(stage.$merge?.into, database)
+        if (merge !== null && credentialCollection(merge.collection)) {
+            return {
+                ok: { $numberDouble: '0.0' },
+                errmsg: `Cannot $merge to special collection: ${merge.collection}`,
+                code: { $numberInt: '31319' },
+                codeName: 'Location31319'
+            }
+        }
     }
     return null
 }
