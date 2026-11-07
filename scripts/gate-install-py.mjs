@@ -2,7 +2,7 @@
 // into a fresh virtualenv under the system temp directory, then import and
 // execute a real call from that installed copy.
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -72,23 +72,55 @@ run(python, ['-m', 'venv', venv], work)
 const venvPython = join(venv, process.platform === 'win32' ? 'Scripts' : 'bin', process.platform === 'win32' ? 'python.exe' : 'python')
 run(venvPython, ['-m', 'pip', 'install', '--quiet', '--no-deps', join(wheels, wheel)], work)
 
+// The napi addon is the reference surface: the two hosts wrap the same Rust
+// primitives, so Python must expose exactly what Node does. Every function
+// napi registers under its camelCase name maps to the snake_case name pyo3
+// registers; classes keep their name.
+const platform = `${process.platform}-${process.arch}`
+const addon = join(root, 'projects', 'mongo.ts', 'platforms', `mongo-${platform}`, `mongodb.${platform}.node`)
+if (!existsSync(addon)) {
+    console.error(`missing napi addon ${addon}, run build-napi first`)
+    process.exit(1)
+}
+const listed = spawnSync(
+    process.execPath,
+    ['-e', 'console.log(JSON.stringify(Object.keys(require(process.argv[1]))))', addon],
+    { encoding: 'utf8' },
+)
+if (listed.status !== 0) {
+    console.error(listed.stderr)
+    process.exit(1)
+}
+const expected = JSON.parse(listed.stdout)
+    .map((name) => (name[0] === name[0].toUpperCase() ? name : name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)))
+    .sort()
+
 writeFileSync(join(work, 'probe.py'), `
 import json
 import os
+import sys
 import tempfile
 
 import mongo
 
+expected = ${JSON.stringify(expected)}
 assert mongo.__file__.startswith(${JSON.stringify(venv)}), mongo.__file__
+public = sorted(mongo.__all__)
+assert public == expected, "public surface differs from napi: " + repr(sorted(set(expected) - set(public))) + " missing, " + repr(sorted(set(public) - set(expected))) + " extra"
+extension = dir(mongo.mongo_pyo3)
+absent = [name for name in expected if name not in extension]
+assert not absent, "mongo_pyo3 does not register " + repr(absent)
 encoded = mongo.encode_document(json.dumps({"a": 1}))
 assert mongo.decode_document(encoded) == '{"a":{"$numberInt":"1"}}'
 assert json.loads(mongo.ping())["ok"]["$numberDouble"] == "1.0"
 
 store = mongo.MongoStore(os.path.join(tempfile.mkdtemp(prefix="mongo-installed-"), "mongo.yykv"))
-assert json.loads(mongo.create(store, json.dumps({"create": "probe"})))["ok"]["$numberDouble"] == "1.0"
-mongo.insert(store, json.dumps({"insert": "probe", "documents": [{"_id": 1, "score": 10}]}))
-reply = json.loads(mongo.update(store, json.dumps({"update": "probe", "updates": [{"q": {"_id": 1}, "u": {"$min": {"score": 3}}}]})))
+assert json.loads(mongo.create(store, json.dumps({"create": "probe", "$db": "app"})))["ok"]["$numberDouble"] == "1.0"
+mongo.insert(store, json.dumps({"insert": "probe", "documents": [{"_id": 1, "score": 10}], "$db": "app"}))
+reply = json.loads(mongo.update(store, json.dumps({"update": "probe", "updates": [{"q": {"_id": 1}, "u": {"$min": {"score": 3}}}], "$db": "app"})))
 assert reply["nModified"]["$numberInt"] == "1", reply
+stats = json.loads(mongo.db_stats(store, json.dumps({"dbStats": 1, "$db": "app"})))
+assert stats["objects"]["$numberInt"] == "1", stats
 print("install-state ok: package at", mongo.__file__)
 `)
 run(venvPython, ['probe.py'], work)
