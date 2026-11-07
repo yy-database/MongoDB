@@ -975,6 +975,30 @@ function renderDocument(command: any): string {
     return renderValue(redacted)
 }
 
+/** Credential collections, whose reads `mongod` gates by `viewUser` / `viewRole`. */
+const CREDENTIAL_READ_ACTIONS: Record<string, string> = {
+    'system.users': 'viewUser',
+    'system.backup_users': 'viewUser',
+    'system.roles': 'viewRole'
+}
+
+/** Commands that would write a credential collection directly. */
+const CREDENTIAL_WRITE_COMMANDS = new Set(['insert', 'update', 'delete', 'bulkWrite', 'findAndModify'])
+
+/**
+ * Action a read of `collection` needs. A plain `read` role covers every
+ * collection in its database, but `mongod` answers `find` on the credential
+ * collections only to `viewUser` / `viewRole` holders, so those reads are not
+ * satisfiable by `find` alone.
+ */
+function readAction(collection: string): string {
+    return CREDENTIAL_READ_ACTIONS[collection] ?? 'find'
+}
+
+function credentialCollection(name: unknown): boolean {
+    return typeof name === 'string' && Object.hasOwn(CREDENTIAL_READ_ACTIONS, name)
+}
+
 /** The collection a `$out` or `$merge.into` value names, defaulting to the command database. */
 function outputTarget(value: any, database: string): { db: string; collection: string } | null {
     if (typeof value === 'string') return value.length > 0 ? { db: database, collection: value } : null
@@ -986,20 +1010,25 @@ function outputTarget(value: any, database: string): { db: string; collection: s
 /** Actions `mongod` requires for a command this server answers. */
 function requirementsFor(name: string, command: any, database: string): Requirement[] | null {
     switch (name) {
-        case 'find':
-            return [{ action: 'find', db: database, collection: typeof command.find === 'string' ? command.find : '' }]
-        case 'count':
-            return [{ action: 'find', db: database, collection: typeof command.count === 'string' ? command.count : '' }]
-        case 'distinct':
-            return [{ action: 'find', db: database, collection: typeof command.distinct === 'string' ? command.distinct : '' }]
+        case 'find': {
+            const collection = typeof command.find === 'string' ? command.find : ''
+            return [{ action: readAction(collection), db: database, collection }]
+        }
+        case 'count': {
+            const collection = typeof command.count === 'string' ? command.count : ''
+            return [{ action: readAction(collection), db: database, collection }]
+        }
+        case 'distinct': {
+            const collection = typeof command.distinct === 'string' ? command.distinct : ''
+            return [{ action: readAction(collection), db: database, collection }]
+        }
         case 'aggregate': {
             const pipeline = Array.isArray(command.pipeline) ? command.pipeline : []
             if (pipeline.length > 0 && typeof pipeline[0] === 'object' && pipeline[0] !== null && Object.hasOwn(pipeline[0], '$currentOp')) {
                 return [{ action: 'inprog', cluster: true }]
             }
-            const requirements: Requirement[] = [
-                { action: 'find', db: database, collection: typeof command.aggregate === 'string' ? command.aggregate : '' }
-            ]
+            const source = typeof command.aggregate === 'string' ? command.aggregate : ''
+            const requirements: Requirement[] = [{ action: readAction(source), db: database, collection: source }]
             for (const stage of pipeline) {
                 if (stage === null || typeof stage !== 'object') continue
                 // `$out` and `$merge` write to another collection. Without their
@@ -1022,10 +1051,18 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             }
             return requirements
         }
-        case 'explain':
-            // `explain` requires the privileges of the explained command; every
-            // command this server explains is a read of the database.
+        case 'explain': {
+            // `explain` requires the privileges of the explained command.
+            const explained = command.explain
+            if (explained !== null && typeof explained === 'object') {
+                const inner = Object.keys(explained)[0]
+                if (typeof inner === 'string' && inner !== 'explain') {
+                    const innerRequirements = requirementsFor(inner, explained, database)
+                    if (innerRequirements !== null) return innerRequirements
+                }
+            }
             return [{ action: 'find', db: database, collection: '' }]
+        }
         case 'insert':
             return [{ action: 'insert', db: database, collection: typeof command.insert === 'string' ? command.insert : '' }]
         case 'update':
@@ -1069,8 +1106,10 @@ function requirementsFor(name: string, command: any, database: string): Requirem
             return [{ action: 'dropUser', db: database, collection: '' }]
         case 'usersInfo':
             return [{ action: 'viewUser', db: database, collection: '' }]
-        case 'getMore':
-            return [{ action: 'find', db: database, collection: typeof command.collection === 'string' ? command.collection : '' }]
+        case 'getMore': {
+            const collection = typeof command.collection === 'string' ? command.collection : ''
+            return [{ action: readAction(collection), db: database, collection }]
+        }
         case 'killCursors':
             return [{ action: 'killCursors', db: database, collection: typeof command.killCursors === 'string' ? command.killCursors : '' }]
         case 'serverStatus':
@@ -1161,6 +1200,12 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
         return null
     }
     const database = typeof command.$db === 'string' ? command.$db : 'admin'
+    if (CREDENTIAL_WRITE_COMMANDS.has(name) && credentialCollection(command[name])) {
+        // Credentials are written only by `createUser` / `updateUser` /
+        // `dropUser`, which check the roles being granted. A generic write would
+        // bypass that check, so it is refused even for `root`.
+        return notAuthorized(command)
+    }
     const privileges = privilegesForRoles(session.auth.roles)
     const requirements =
         name === 'usersInfo'

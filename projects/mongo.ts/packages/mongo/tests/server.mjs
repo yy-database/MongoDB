@@ -618,6 +618,25 @@ const login = await connect(authAddress.port)
     writer.socket.destroy()
 }
 
+// Credentials live in `system.users`, which only the user-management commands
+// write. Neither a read nor a raw write may reach the password hashes.
+{
+    const reader = await connect(authAddress.port)
+    await scram(reader, 'viewer', 'viewer-pass', 'SCRAM-SHA-256', 'app')
+    const leaked = await command(reader, { find: 'system.users', filter: {}, $db: 'app' })
+    equal(leaked.code, { $numberInt: '13' }, 'a read user cannot dump system.users')
+    equal(leaked.errmsg.includes('system.users'), true, 'the refusal echoes the command')
+    reader.socket.destroy()
+
+    const writer = await connect(authAddress.port)
+    await scram(writer, 'writer', 'writer-pass', 'SCRAM-SHA-256', 'app')
+    const forged = await command(writer, { insert: 'system.users', documents: [{ user: 'forged', db: 'app', roles: [{ role: 'root', db: 'admin' }] }], $db: 'app' })
+    equal(forged.code, { $numberInt: '13' }, 'a read-write user cannot write system.users')
+    const removed = await command(writer, { delete: 'system.users', deletes: [{ q: { user: 'victim' }, limit: 1 }], $db: 'app' })
+    equal(removed.code, { $numberInt: '13' }, 'a read-write user cannot delete a user through a raw delete')
+    writer.socket.destroy()
+}
+
 {
     const out = await command(login, { logout: 1, $db: 'admin' })
     equal(out.ok, { $numberDouble: '1.0' }, 'logout is acknowledged')
