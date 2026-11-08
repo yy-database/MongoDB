@@ -83,6 +83,14 @@
                         "_id": 1
                     },
                     "as": "r8"
+                },
+                {
+                    "op": "getMore",
+                    "id": {
+                        "$numberLong": "1"
+                    },
+                    "collection": "items",
+                    "as": "r9"
                 }
             ],
             "checks": [
@@ -130,7 +138,17 @@
                 },
                 {
                     "at": "/r8/cursor/firstBatch/#",
-                    "equals": 2000
+                    "equals": 101
+                },
+                {
+                    "at": "/r9/cursor/nextBatch/#",
+                    "equals": 1899
+                },
+                {
+                    "at": "/r9/cursor/id",
+                    "equals": {
+                        "$numberLong": "0"
+                    }
                 },
                 {
                     "elapsedLt": 60000
@@ -434,6 +452,14 @@
                         "_id": 1
                     },
                     "as": "r3"
+                },
+                {
+                    "op": "getMore",
+                    "id": {
+                        "$numberLong": "1"
+                    },
+                    "collection": "items",
+                    "as": "r4"
                 }
             ],
             "checks": [
@@ -449,7 +475,17 @@
                 },
                 {
                     "at": "/r3/cursor/firstBatch/#",
-                    "equals": 2000
+                    "equals": 101
+                },
+                {
+                    "at": "/r4/cursor/nextBatch/#",
+                    "equals": 1899
+                },
+                {
+                    "at": "/r4/cursor/id",
+                    "equals": {
+                        "$numberLong": "0"
+                    }
                 },
                 {
                     "at": "/r3/cursor/firstBatch/0/_id",

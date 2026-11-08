@@ -375,11 +375,14 @@
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }, { "_id": 2 }, { "_id": 3 }, { "_id": 4 }], "as": "r1" },
-                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 0, "as": "r2" }
+                { "op": "find", "collection": "items", "filter": {}, "sort": { "_id": 1 }, "batchSize": 0, "as": "r2" },
+                { "op": "getMore", "id": { "$numberLong": "1" }, "collection": "items", "as": "r3" }
             ],
             "checks": [
-                { "at": "/r2/cursor/firstBatch/#", "equals": 4 },
-                { "at": "/r2/cursor/id", "equals": { "$numberLong": "0" } }
+                { "at": "/r2/cursor/firstBatch/#", "equals": 0 },
+                { "at": "/r2/cursor/id", "equals": { "$numberLong": "1" } },
+                { "at": "/r3/cursor/nextBatch/#", "equals": 4 },
+                { "at": "/r3/cursor/id", "equals": { "$numberLong": "0" } }
             ]
         },
         {

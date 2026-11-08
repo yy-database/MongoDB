@@ -19,7 +19,7 @@ repository = "https://github.com/yy-database/MongoDB"
 # and command semantics. Bindings below keep only type conversion and error
 # mapping. Pin the full 40-char rev and keep it on the `dev` line.
 # Local path overrides belong in `.cargo/config.toml`.
-mongo = { git = "https://github.com/yy-database/database.rs.git", rev = "d4e0560535c4c76e501a18031abdd479bbd64e31", default-features = false }
+mongo = { git = "https://github.com/yy-database/database.rs.git", rev = "78c4f4a03c7bf03a3bbe5dad3f7a574c06f1e21a", default-features = false }
 
 napi = { version = "3.14.2", default-features = false, features = ["napi4"] }
 napi-derive = "3.6.12"

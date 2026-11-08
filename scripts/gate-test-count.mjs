@@ -23,7 +23,7 @@ const ts = summaries.ts
 const py = summaries.py
 
 // Measured floors: keep this number in sync with reality, never lower it.
-const MIN_ASSERTIONS = 2888
+const MIN_ASSERTIONS = 2894
 const MIN_CASES = 850
 
 const problems = []
