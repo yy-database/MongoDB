@@ -270,7 +270,7 @@ pub fn abort_transaction(store: &MongoStore, command: String) -> Result<String> 
 /// `listDatabases` reply.
 #[napi]
 pub fn list_databases(store: &MongoStore) -> String {
-    reply(&commands::list_databases(store_of(store)))
+    command_reply(commands::list_databases(store_of(store)))
 }
 
 /// `dropDatabase` reply.
