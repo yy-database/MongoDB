@@ -108,12 +108,12 @@
             ]
         },
         {
-            "id": "filter.reject.mod_find",
+            "id": "filter.reject.unknown_find",
             "surface": "error",
-            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$mod": [2, 0] } }, "as": "r" }],
+            "program": [{ "op": "open", "store": "s" }, { "op": "find", "collection": "items", "filter": { "n": { "$foo": 1 } }, "as": "r" }],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "2" } },
-                { "at": "/r/errmsg", "equals": "unknown operator: $mod (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
+                { "at": "/r/errmsg", "equals": "unknown operator: $foo (operation: find, field: \"n\", fieldIndex: 0, operatorIndex: 0)" }
             ]
         },
         {
@@ -162,12 +162,12 @@
             ]
         },
         {
-            "id": "filter.reject.mod_delete",
+            "id": "filter.reject.unknown_delete",
             "surface": "error",
-            "program": [{ "op": "open", "store": "s" }, { "op": "delete", "collection": "items", "deletes": [{ "q": { "name": { "$mod": [2, 0] } }, "limit": 0 }], "as": "r" }],
+            "program": [{ "op": "open", "store": "s" }, { "op": "delete", "collection": "items", "deletes": [{ "q": { "name": { "$foo": 1 } }, "limit": 0 }], "as": "r" }],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "2" } },
-                { "at": "/r/errmsg", "equals": "unknown operator: $mod (operation: delete, field: \"name\", fieldIndex: 0, operatorIndex: 0)" }
+                { "at": "/r/errmsg", "equals": "unknown operator: $foo (operation: delete, field: \"name\", fieldIndex: 0, operatorIndex: 0)" }
             ]
         },
         {

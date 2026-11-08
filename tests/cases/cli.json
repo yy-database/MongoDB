@@ -350,12 +350,12 @@
                 {
                     "op": "cli",
                     "as": "out",
-                    "commands": ["use app", "find(items, {\"n\": {\"$mod\": [2, 0]}})"]
+                    "commands": ["use app", "find(items, {\"n\": {\"$foo\": 1}})"]
                 }
             ],
             "checks": [
                 { "at": "/out/lines/1/code", "equals": { "$numberInt": "2" } },
-                { "at": "/out/lines/1/errmsg", "matches": "\\$mod" }
+                { "at": "/out/lines/1/errmsg", "matches": "\\$foo" }
             ]
         },
         {
