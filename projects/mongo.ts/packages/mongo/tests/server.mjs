@@ -398,6 +398,26 @@ ok(server.stats.compressedReplies > 0, 'the server actually sent compressed repl
     }
     equal(gone?.code, 43, 'a second getMore after drop is CursorNotFound')
 
+    // A cursor is bound to the namespace that opened it, even without users.
+    await lived.collection('scoped').insertMany(Array.from({ length: 4 }, (_, index) => ({ _id: index })))
+    const opened = await lived.command({ find: 'scoped', filter: {}, batchSize: 2 })
+    equal(opened.cursor.firstBatch.length, 2, 'the scoped cursor starts with two documents')
+    let foreign = null
+    try {
+        await client.db('drop_acceptance_other').command({ getMore: opened.cursor.id, collection: 'scoped', batchSize: 2 })
+    } catch (error) {
+        foreign = error
+    }
+    equal(foreign?.code, 13, 'getMore cannot read a cursor through another namespace')
+    equal(foreign?.codeName, 'Unauthorized', 'the refusal is Unauthorized')
+    equal(
+        foreign?.message,
+        "Requested getMore on namespace 'drop_acceptance_other.scoped', but cursor belongs to a different namespace drop_acceptance.scoped",
+        'the refusal names both namespaces'
+    )
+    const remaining = await lived.command({ getMore: opened.cursor.id, collection: 'scoped', batchSize: 2 })
+    equal(remaining.cursor.nextBatch.length, 2, 'the refusal leaves the cursor intact for its owner')
+
     // Drop guards and argument validation.
     let restricted = null
     try {
