@@ -1,0 +1,11 @@
+{
+  "name": "@yydb/mongo-example-with-express",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Express 5 REST API backed by the product server through the official mongodb driver",
+  "scripts": {
+    "start": "node ./src/server.mjs",
+    "test": "node ./tests/api.mjs"
+  }
+}

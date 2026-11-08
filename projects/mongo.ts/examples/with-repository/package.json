@@ -1,0 +1,11 @@
+{
+  "name": "@yydb/mongo-example-with-repository",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Repository layer over the official mongodb driver against the product server",
+  "scripts": {
+    "demo": "node ./src/demo.mjs",
+    "test": "node ./tests/repository.mjs"
+  }
+}

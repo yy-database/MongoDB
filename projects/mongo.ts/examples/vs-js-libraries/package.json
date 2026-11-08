@@ -1,0 +1,12 @@
+{
+  "name": "@yydb/mongo-example-vs-js-libraries",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Conformance and benchmark of the product server against the official mongodb driver",
+  "scripts": {
+    "test": "node ./tests/conformance.mjs",
+    "conformance": "node ./tests/conformance.mjs",
+    "benchmark": "node ./tests/benchmark.mjs"
+  }
+}
