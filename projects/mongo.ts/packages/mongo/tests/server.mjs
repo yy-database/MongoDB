@@ -347,6 +347,33 @@ ok(server.stats.compressedReplies > 0, 'the server actually sent compressed repl
     }
     equal(later?.code, 43, 'a second getMore is CursorNotFound')
 
+    // `drop` kills the cursors of that namespace only, matching `mongod 8.0.9`:
+    // one `QueryPlanKilled`, then `CursorNotFound`.
+    await lived.collection('dropped_cursors').insertMany(Array.from({ length: 20 }, (_, index) => ({ _id: index })))
+    const onDrop = lived.collection('dropped_cursors').find({}, { batchSize: 2 })
+    await onDrop.next()
+    await onDrop.next()
+    const onDropId = onDrop.id
+    ok(onDropId !== undefined && !onDropId.isZero(), 'the namespace cursor is still open before the drop')
+    const dropped = await lived.command({ drop: 'dropped_cursors' })
+    equal(dropped.nIndexesWas, 1, 'drop reports the id index it removed')
+    equal(dropped.ns, 'drop_acceptance.dropped_cursors', 'drop names the namespace it removed')
+    let planKilled = null
+    try {
+        await onDrop.next()
+    } catch (error) {
+        planKilled = error
+    }
+    equal(planKilled?.code, 175, 'getMore after drop answers QueryPlanKilled')
+    equal(planKilled?.codeName, 'QueryPlanKilled', 'drop QueryPlanKilled carries its code name')
+    let gone = null
+    try {
+        await lived.command({ getMore: onDropId, collection: 'dropped_cursors', batchSize: 2 })
+    } catch (error) {
+        gone = error
+    }
+    equal(gone?.code, 43, 'a second getMore after drop is CursorNotFound')
+
     // Drop guards and argument validation.
     let restricted = null
     try {

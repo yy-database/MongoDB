@@ -74,6 +74,12 @@ impl MongoCursors {
         self.inner.drop_database(&database) as u32
     }
 
+    /// Marks the cursors of one `db.collection` namespace as killed by a drop.
+    #[napi]
+    pub fn drop_collection(&mut self, namespace: String) -> u32 {
+        self.inner.drop_collection(&namespace) as u32
+    }
+
     /// Number of live cursors.
     #[napi]
     pub fn len(&self) -> u32 {

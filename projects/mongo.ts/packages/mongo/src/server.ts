@@ -236,6 +236,17 @@ function dropDatabaseCommand(session: Session, command: any, view: ServerView): 
     return reply
 }
 
+/** `drop`: a successful drop also kills the cursors on that namespace. */
+function dropCollectionCommand(session: Session, command: any, view: ServerView): any {
+    const reply = document(binding.dropCollection(session.store, commandText(command)))
+    if (replyOk(reply)) {
+        const database = command.$db ?? 'admin'
+        const collection = typeof command.drop === 'string' ? command.drop : ''
+        for (const cursors of view.cursorTables) cursors.dropCollection(`${database}.${collection}`)
+    }
+    return reply
+}
+
 /** Unwraps an extended-JSON numeric value. */
 function scalarNumber(value: unknown): number {
     if (typeof value === 'number') return value
@@ -424,7 +435,7 @@ function dispatch(
         case 'create':
             return document(binding.create(session.store, text))
         case 'drop':
-            return document(binding.dropCollection(session.store, text))
+            return dropCollectionCommand(session, command, view)
         case 'collMod':
             return document(binding.collMod(session.store, text))
         case 'listCollections':

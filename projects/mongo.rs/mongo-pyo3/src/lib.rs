@@ -69,6 +69,11 @@ impl MongoCursors {
     fn drop_database(&mut self, database: &str) -> usize {
         self.inner.drop_database(database)
     }
+
+    /// Marks the cursors of one `db.collection` namespace as killed by a drop.
+    fn drop_collection(&mut self, namespace: &str) -> usize {
+        self.inner.drop_collection(namespace)
+    }
 }
 
 /// Decodes an `OP_MSG` body into extended JSON.
