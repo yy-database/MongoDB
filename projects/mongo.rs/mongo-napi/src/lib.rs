@@ -13,6 +13,9 @@ use mongo::{
     store::Store,
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
+use database::harness::{
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, check_baseline, render_json,
+};
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
 
@@ -381,4 +384,35 @@ pub fn repair_shard(path: String) -> Result<String> {
     Store::repair_shard(path)
         .map(|report| report.to_json())
         .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))
+}
+
+fn harness_error(error: impl std::fmt::Display) -> Error {
+    Error::from_reason(error.to_string())
+}
+
+/// 对给定字节取 SHA-256，返回小写十六进制。
+#[napi]
+pub fn harness_digest(bytes: Buffer) -> String {
+    Digest::of(bytes.as_ref()).to_hex()
+}
+
+/// 按已知差异台账判定一次语料运行。
+#[napi]
+pub fn harness_check_baseline(
+    baseline_json: String,
+    current_json: String,
+    observed_json: String,
+) -> Result<String> {
+    let baseline: Baseline = serde_json::from_str(&baseline_json).map_err(harness_error)?;
+    let current: BaselineIdentity = serde_json::from_str(&current_json).map_err(harness_error)?;
+    let observed: Vec<DifferenceObservation> = serde_json::from_str(&observed_json).map_err(harness_error)?;
+    let verdict = check_baseline(&baseline, &current, &observed);
+    serde_json::to_string(&verdict).map_err(harness_error)
+}
+
+/// 将报告信封渲染为稳定 JSON 文本。
+#[napi]
+pub fn harness_render_report(report_json: String) -> Result<String> {
+    let report: ReportEnvelope = serde_json::from_str(&report_json).map_err(harness_error)?;
+    render_json(&report).map_err(harness_error)
 }
