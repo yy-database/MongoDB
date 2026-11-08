@@ -169,20 +169,44 @@ const address = await server.listening
     socket.destroy()
 }
 
-// A frame that announces more than the 48 MB ceiling is rejected on its header,
-// before any payload is buffered.
-{
-    const { socket, next } = await connect(address.port)
+// `mongod 8.0.9` accepts frame lengths in [17, 48 000 000] and destroys the
+// connection, without any reply document, for a length outside that range. The
+// header alone is enough: no payload is waited for.
+for (const [label, total] of [
+    ['zero', 0],
+    ['exactly the header size', 16],
+    ['over the 48 MB ceiling', 48_000_001]
+]) {
+    const socket = net.connect(address.port, '127.0.0.1')
+    await new Promise((resolvePromise, rejectPromise) => {
+        socket.once('connect', resolvePromise)
+        socket.once('error', rejectPromise)
+    })
+    let received = 0
+    let closed = false
+    const settled = new Promise((resolvePromise) => {
+        socket.on('data', (chunk) => {
+            received += chunk.length
+        })
+        socket.on('close', () => {
+            closed = true
+            resolvePromise()
+        })
+        socket.on('error', () => resolvePromise())
+        setTimeout(() => {
+            socket.destroy()
+            resolvePromise()
+        }, 3000).unref()
+    })
     const header = Buffer.alloc(16)
-    header.writeInt32LE(48_000_001, 0)
+    header.writeInt32LE(total, 0)
     header.writeInt32LE(7, 4)
     header.writeInt32LE(0, 8)
     header.writeInt32LE(OP_MSG, 12)
     socket.write(header)
-    const reply = JSON.parse(binding.decodeOpMsg((await next()).subarray(16)))
-    equal(reply.ok, { $numberDouble: '0.0' }, 'an oversized frame is rejected from its header')
-    ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('outside the accepted range'), 'the error names the accepted range')
-    socket.destroy()
+    await settled
+    equal(closed, true, `a ${label} frame destroys the connection`)
+    equal(received, 0, `a ${label} frame is dropped without a reply`)
 }
 
 // Each codec: echoed in hello, accepted inbound, mirrored outbound.

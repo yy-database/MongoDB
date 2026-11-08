@@ -562,8 +562,9 @@ export function createServer(options: ServerOptions): MongoServer {
             while (!closed) {
                 if (buffer.length < 16) return
                 const total = buffer.readInt32LE(0)
-                if (total < 16 || total > DEFAULT_MAX_FRAME_SIZE) {
-                    sendProtocolError(socket, buffer, `frame length ${total} is outside the accepted range`)
+                if (total <= 16 || total > DEFAULT_MAX_FRAME_SIZE) {
+                    // `mongod 8.0.9` drops the connection for a frame outside
+                    // [17, 48 000 000] without sending any reply document.
                     socket.destroy()
                     return
                 }
