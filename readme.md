@@ -327,6 +327,41 @@ field:   $eq $ne $gt $gte $lt $lte $in $nin $exists $regex $options $size $type 
 - `.yyds` 只读自己的口径：catalog 由本仓写出，读取时按共享契约的小端字段解析。已验证能读 Redis 仓产出的 catalog；PostgreSQL 仓的 `encode_catalog` 用大端 `u32`，与共享契约不一致，本仓按契约解析并拒绝该字节流（跨仓只报告、不修改）。
 - `.yyds` 格式无校验和，`tests/cases/catalog.json` 里的“校验和错”用尾部多余字节代替，其余损坏面覆盖魔法、版本、截断、schema 版本与文档形态。
 
+### 性能口径（服务端 benchmark）
+
+`projects/mongo.ts/examples/vs-js-libraries/tests/benchmark-server.mjs`（`pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server`）只测服务端每条命令的成本，报告写在 `examples/vs-js-libraries/reports/benchmark-server.md`。
+
+口径：1000 篇文档、固定 seed；`ping` 作协议 + 解析 + 回包编码地板；每项 1 轮热身 + 5 轮测量取中位数并记 p95；另做 200 / 1000 / 5000 篇的规模扩展。真机列需要 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 指向一台 `mongod`，连不上直接失败；本机没有 `mongod` 也没有 Docker，该列记为 CI-only，不伪造真机数字。
+
+最近一次本机结果（1000 篇，按耗时排序的头部）：
+
+| 工作负载 | 本仓 ms/op | p95 ms/op | 观测 |
+|---------|-----------:|----------:|------|
+| `find-all` | 43.364 | 45.859 | 整集合扫描 + 解码 + 回包 |
+| `find-order-limit` | 5.521 | 6.184 | 全集合读 + 内存排序 |
+| `insert-single` | 4.952 | 10.499 | 每条命令一次整快照落盘 |
+| `aggregate-group` | 4.505 | 4.968 | 全集合读 + 内存聚合 |
+| `find-point-uk` | 3.387 | 3.553 | 唯一索引探针，随规模线性增长 |
+| `connect` | 1.024 | 1.267 | TCP + `hello` |
+| `find-point-pk` | 0.233 | 0.267 | `_id` 按键直取，不随规模变化 |
+| `update-many` | 0.197/行 | 0.208 | 每条命令扫 1000 篇再整快照提交，约 19.6ms/命令 |
+
+规模扩展（同一份实现只改文档数）：
+
+| 文档数 | `_id` 单查 ms/op | 唯一索引单查 ms/op | `updateOne` ms/op | 未命中 `delete` ms/op |
+|------:|-----------------:|-------------------:|------------------:|----------------------:|
+| 200 | 0.217 | 0.721 | 6.540 | 0.193 |
+| 1000 | 0.272 | 3.370 | 13.308 | 0.205 |
+| 5000 | 0.267 | 16.340 | 59.668 | 0.215 |
+
+根因与归属，三条都在上游 `database.rs`，本仓只有绑定与监听，不在这一层写第二份实现：
+
+1. **每条写命令整快照落盘**：`database.storage::cluster_kv::FileShard::commit_changes` 每次提交重新编码整份 `.yykv` 快照、`sync_all` 后原子替换文件。单条写命令因此有约 4.8ms 地板，与集合规模基本无关；一条命令写 200 篇的 `insert-multi` 摊到每篇约 0.1ms。上游 `mongo::commands::bulk_write` 逐条调用 `insert` / `update` / `delete`，不合并提交，`bulkWrite` 省不掉这个地板。
+2. **二级索引探针线性遍历**：`choose_access` 已把唯一索引选为访问路径，但 `database.storage::cluster_kv::collect_scan` 从整张 `BTreeMap` 的第一条开始按命名空间过滤，没有按命名空间建子索引，所以每次索引探针都要遍历全部记录（文档 + 索引项）。`_id` 直取走按键查找，所以恒定。
+3. **`update` 不做定位**：`mongo::commands::update` 用 `namespace_documents`（整命名空间扫描）匹配，不按 `_id` 直取也不复用索引访问，命中后再提交一次整快照。
+
+预计收益（按差分估算）：写路径改追加或增量落盘可把单条写省约 4.8ms/命令；给命名空间建子索引可把 1000 篇的唯一索引点查省约 3.1ms/命令（5000 篇约 16.1ms）；`update` 复用定位后 1000 篇下单条更新约省 8ms/命令。以上是方向性估算，真正的改造在上游，本仓不越界实现。
+
 ### 本地 `database.rs` 联调（可选）
 
 默认不需要任何本地配置：`Cargo.toml` 锁定 `database.rs` 的 git revision，`cargo test` 直接按该 revision 解析。只有在你自己也检出 `database.rs` 源码时才需要本地覆盖：

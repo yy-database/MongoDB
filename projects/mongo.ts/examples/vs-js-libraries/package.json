@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node ./tests/conformance.mjs",
     "conformance": "node ./tests/conformance.mjs",
-    "benchmark": "node ./tests/benchmark.mjs"
+    "benchmark": "node ./tests/benchmark.mjs",
+    "benchmark:server": "node ./tests/benchmark-server.mjs"
   }
 }
