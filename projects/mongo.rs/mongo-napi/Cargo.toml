@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 mongo = { workspace = true, features = ["storage"] }
-database = { git = "https://github.com/yy-database/database.rs.git", rev = "1c950f333c09b7d27de284f30a4957480117935e", default-features = false, features = ["harness"] }
+database = { git = "https://github.com/yy-database/database.rs.git", rev = "382a408623166924dbd0fcfbb7f438170ad3a0e9", default-features = false, features = ["harness"] }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 serde_json = "1"

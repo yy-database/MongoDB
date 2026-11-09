@@ -14,7 +14,7 @@ use mongo::{
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
 use database::harness::{
-    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, check_baseline, render_json,
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, Floor, ReportEnvelope, SuiteSummary, check_baseline, render_json, verdict,
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -415,4 +415,18 @@ pub fn harness_check_baseline(
 pub fn harness_render_report(report_json: String) -> Result<String> {
     let report: ReportEnvelope = serde_json::from_str(&report_json).map_err(harness_error)?;
     render_json(&report).map_err(harness_error)
+}
+
+/// 按 floor 门禁判定套件计数。
+///
+/// `summary_json` 是 `SuiteSummary` 的 serde 形态（`cases` / `assertions` /
+/// `passed` / `failed` / `skipped`）；`floors_json` 是 `Vec<Floor>` 形态
+/// （如 `[{"metric":"assertions","min":2894}]`）。测试计数解析与 floor 数值由
+/// 调用方持有，本函数只做判定：skipped 即红、failed 记问题、逐条 floor 比较。
+#[napi]
+pub fn harness_suite_verdict(summary_json: String, floors_json: String) -> Result<String> {
+    let summary: SuiteSummary = serde_json::from_str(&summary_json).map_err(harness_error)?;
+    let floors: Vec<Floor> = serde_json::from_str(&floors_json).map_err(harness_error)?;
+    let gate = verdict(&summary, &floors);
+    serde_json::to_string(&gate).map_err(harness_error)
 }

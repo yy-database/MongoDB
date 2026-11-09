@@ -18,7 +18,6 @@
 // difference whose signal changed fails, and a baseline entry that no longer
 // differs fails as stale. Regenerate with `--write --emit-cases`.
 import { createRequire } from 'node:module'
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import net from 'node:net'
@@ -218,7 +217,7 @@ function stable(value) {
 }
 
 function digest(value) {
-    return createHash('sha256').update(stable(value)).digest('hex')
+    return binding.harnessDigest(Buffer.from(stable(value)))
 }
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
@@ -2824,9 +2823,20 @@ function corpusIdentityProblems(corpus, baseline, regenerated) {
     }
     if (stable(regenerated) !== stable(corpus.entries)) problems.push('corpus does not match the generator output for this seed')
     if (digest(regenerated) !== corpus.digest) problems.push('corpus digest mismatch')
-    if (baseline.seed !== SEED) problems.push(`baseline seed ${baseline.seed} != ${SEED}`)
-    if (baseline.count !== undefined && baseline.count !== COUNT) problems.push(`baseline count ${baseline.count} != ${COUNT}`)
-    if (baseline.corpusDigest !== corpus.digest) problems.push('baseline does not belong to this corpus')
+    // Baseline identity drift runs in `database.harness` through `harnessCheckBaseline`.
+    const identityVerdict = JSON.parse(binding.harnessCheckBaseline(
+        JSON.stringify({
+            identity: { spec: { version: baseline.version, seed: baseline.seed, count: baseline.count }, digest: baseline.corpusDigest },
+            entries: [],
+        }),
+        JSON.stringify({ spec: { version: baseline.version, seed: SEED, count: COUNT }, digest: corpus.digest }),
+        JSON.stringify([]),
+    ))
+    for (const problem of identityVerdict.problems) {
+        if (problem.kind === 'seed-drift') problems.push(`baseline seed ${problem.baseline} != ${problem.current}`)
+        else if (problem.kind === 'count-drift') problems.push(`baseline count ${problem.baseline} != ${problem.current}`)
+        else if (problem.kind === 'digest-drift') problems.push('baseline does not belong to this corpus')
+    }
     if (digest(baseline.replies) !== baseline.replyDigest) problems.push('baseline reply digest mismatch')
     for (const entry of regenerated) {
         if (!baseline.replies[entry.id]) problems.push(`baseline misses ${entry.id}`)
@@ -2848,20 +2858,29 @@ function differenceSignal(steps) {
     return digest(steps.filter((step) => !step.match).map((step) => ({ index: step.index, oracle: step.oracle, local: step.local })))
 }
 
-/// 旧台账规则：逐条观测按输入顺序检查，最后按基线登记顺序补 stale。
-function ledgerProblems(known, observed) {
+// Ledger matching runs in `database.harness` through `harnessCheckBaseline`;
+// this function only maps verdicts onto the CLI wording. The identity sides are
+// equal by construction here, so the verdict carries ledger problems only.
+function ledgerProblems(baseline, corpus, known, observed) {
+    const identity = { spec: { version: baseline.version, seed: SEED, count: COUNT }, digest: corpus.digest }
+    const entries = Object.entries(known).map(([key, value]) => ({ key, signal: [value.signal], reason: 'known-difference' }))
+    const observations = [...observed].map(([key, signal]) => ({ key, signal: [signal], reason: 'known-difference' }))
+    const verdict = JSON.parse(binding.harnessCheckBaseline(
+        JSON.stringify({ identity, entries }),
+        JSON.stringify(identity),
+        JSON.stringify(observations),
+    ))
     const problems = []
-    for (const [id, signal] of observed) {
-        if (!known[id]) {
-            problems.push(`unexpected difference ${id}; it has no baseline entry (until the corpus labeled it as a known difference)\n  repro: node scripts/diff-corpus.mjs --port ${PORT} --seed ${SEED} --only ${id}`)
-            continue
+    for (const problem of verdict.problems) {
+        if (problem.kind === 'unlisted') {
+            problems.push(`unexpected difference ${problem.key}; it has no baseline entry (until the corpus labeled it as a known difference)\n  repro: node scripts/diff-corpus.mjs --port ${PORT} --seed ${SEED} --only ${problem.key}`)
+        } else if (problem.kind === 'signal-changed') {
+            problems.push(`known difference changed shape: ${problem.key}\n  baseline signal ${problem.baseline[0]}\n  current  signal ${problem.current[0]}`)
+        } else if (problem.kind === 'stale') {
+            problems.push(`stale baseline entry ${problem.key}; the entry no longer differs, remove it from baseline`)
+        } else {
+            problems.push(`ledger identity problem ${problem.kind}`)
         }
-        if (known[id].signal !== signal) {
-            problems.push(`known difference changed shape: ${id}\n  baseline signal ${known[id].signal}\n  current  signal ${signal}`)
-        }
-    }
-    for (const id of Object.keys(known)) {
-        if (!observed.has(id)) problems.push(`stale baseline entry ${id}; the entry no longer differs, remove it from baseline`)
     }
     return problems
 }
@@ -2899,7 +2918,7 @@ async function check() {
         observed.set(entry.id, differenceSignal(result.steps))
     }
 
-    problems.push(...ledgerProblems(known, observed))
+    problems.push(...ledgerProblems(baseline, corpus, known, observed))
 
     console.log(`match ${regenerated.length - observed.size} known-difference ${observed.size} unexpected ${problems.length}`)
     if (problems.length > 0) {
@@ -2908,121 +2927,6 @@ async function check() {
         process.exit(1)
     }
     console.log('CORPUS CHECK OK')
-}
-
-// 影子模式：只比较纯数据层，引擎启动前退出，不替换既有调用路径。
-if (process.env.HARNESS_SHADOW === '1') {
-    const corpus = readJson(CORPUS_PATH)
-    const baseline = readJson(BASELINE_PATH)
-    const regenerated = generate(SEED)
-    const failures = []
-    const compare = (label, legacy, candidate) => {
-        if (legacy !== candidate) failures.push({ label, legacy, candidate })
-    }
-
-    const nodeDigest = digest(regenerated)
-    const candidateDigest = binding.harnessDigest(Buffer.from(stable(regenerated)))
-    compare('digest/node', nodeDigest, candidateDigest)
-    compare('digest/corpus', corpus.digest, candidateDigest)
-    compare('digest/baseline', baseline.corpusDigest, candidateDigest)
-
-    const known = { ...(baseline.knownDifferences ?? {}), 'shadow/known': { signal: digest(['shadow-known']) } }
-    const entries = Object.entries(known).map(([key, value]) => ({ key, signal: [value.signal], reason: 'known-difference' }))
-    const identity = {
-        spec: { version: baseline.version, seed: baseline.seed, count: baseline.count },
-        digest: baseline.corpusDigest,
-    }
-    const harnessBaseline = { identity, entries }
-
-    const legacyIdentityKinds = (current) => {
-        const kinds = []
-        if (baseline.seed !== current.spec.seed) kinds.push('seed-drift')
-        if (baseline.count !== current.spec.count) kinds.push('count-drift')
-        if (baseline.corpusDigest !== current.digest) kinds.push('digest-drift')
-        return kinds
-    }
-    const legacyLedgerKind = (message) => {
-        if (message.startsWith('unexpected difference')) return 'unlisted'
-        if (message.startsWith('known difference changed shape:')) return 'signal-changed'
-        if (message.startsWith('stale baseline entry')) return 'stale'
-        throw new Error(`unknown ledger problem: ${message}`)
-    }
-
-    const scenario = (label, current, observed) => {
-        const legacyProblems = ledgerProblems(known, observed)
-        const matched = observed.size - legacyProblems.filter((problem) =>
-            problem.startsWith('unexpected difference') || problem.startsWith('known difference changed shape:')).length
-        const verdict = JSON.parse(binding.harnessCheckBaseline(
-            JSON.stringify(harnessBaseline),
-            JSON.stringify(current),
-            JSON.stringify([...observed].map(([key, signal]) => ({ key, signal: [signal], reason: 'known-difference' }))),
-        ))
-        const normalizedLegacy = JSON.stringify({
-            matched,
-            problems: [
-                ...legacyIdentityKinds(current),
-                ...legacyProblems.map(legacyLedgerKind),
-            ],
-        })
-        const normalizedCandidate = JSON.stringify({
-            matched: verdict.matched,
-            problems: verdict.problems.map((problem) => problem.kind),
-        })
-        compare(`ledger/${label}`, normalizedLegacy, normalizedCandidate)
-        return normalizedCandidate
-    }
-
-    const allObserved = () => new Map(Object.entries(known).map(([id, value]) => [id, value.signal]))
-    const cleanRun = scenario('clean', identity, allObserved())
-
-    const unlistedObserved = allObserved()
-    unlistedObserved.set('shadow/unlisted', digest(['shadow-unlisted']))
-    const unlistedRun = scenario('unlisted', identity, unlistedObserved)
-
-    const changedObserved = allObserved()
-    changedObserved.set([...changedObserved.keys()][0], digest(['shadow-extra']))
-    const changedRun = scenario('signal-changed', identity, changedObserved)
-
-    const staleObserved = allObserved()
-    staleObserved.delete([...staleObserved.keys()].at(-1))
-    const staleRun = scenario('stale', identity, staleObserved)
-
-    const driftRun = scenario('identity-drift', {
-        spec: { ...identity.spec, seed: identity.spec.seed + 1 },
-        digest: identity.digest,
-    }, allObserved())
-
-    const legacyReport = {
-        version: 1,
-        command: 'corpus',
-        corpus: {
-            spec: identity.spec,
-            digest: candidateDigest,
-            matched: Object.keys(known).length,
-            problems: [],
-            clean: true,
-        },
-    }
-    const legacyText = `${JSON.stringify(legacyReport, null, 2)}\n`
-    const candidateText = binding.harnessRenderReport(JSON.stringify(legacyReport))
-    compare('report/corpus', legacyText, candidateText)
-
-    console.log(JSON.stringify({
-        digest: nodeDigest,
-        scenarios: {
-            clean: cleanRun,
-            unlisted: unlistedRun,
-            'signal-changed': changedRun,
-            stale: staleRun,
-            'identity-drift': driftRun,
-        },
-        failures,
-    }, null, 2))
-    if (failures.length > 0) {
-        console.error(`harness shadow mismatch: ${failures.length} difference(s)`)
-        process.exit(1)
-    }
-    process.exit(0)
 }
 
 async function main() {
