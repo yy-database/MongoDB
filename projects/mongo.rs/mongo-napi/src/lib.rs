@@ -5,6 +5,10 @@
 
 use std::sync::Arc;
 
+use database::harness::{
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, Stats, check_baseline, per_op_ms, render_json,
+    summarize,
+};
 use mongo::{
     bson::BsonDocument,
     commands::{self, CommandError},
@@ -12,9 +16,6 @@ use mongo::{
     json,
     store::Store,
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
-};
-use database::harness::{
-    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, Stats, check_baseline, per_op_ms, render_json, summarize,
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -398,11 +399,7 @@ pub fn harness_digest(bytes: Buffer) -> String {
 
 /// 按已知差异台账判定一次语料运行。
 #[napi]
-pub fn harness_check_baseline(
-    baseline_json: String,
-    current_json: String,
-    observed_json: String,
-) -> Result<String> {
+pub fn harness_check_baseline(baseline_json: String, current_json: String, observed_json: String) -> Result<String> {
     let baseline: Baseline = serde_json::from_str(&baseline_json).map_err(harness_error)?;
     let current: BaselineIdentity = serde_json::from_str(&current_json).map_err(harness_error)?;
     let observed: Vec<DifferenceObservation> = serde_json::from_str(&observed_json).map_err(harness_error)?;
@@ -429,7 +426,13 @@ pub struct BenchStats {
 
 impl From<Stats> for BenchStats {
     fn from(stats: Stats) -> Self {
-        Self { median_ms: stats.median_ms, p95_ms: stats.p95_ms, min_ms: stats.min_ms, max_ms: stats.max_ms, rounds: stats.rounds }
+        Self {
+            median_ms: stats.median_ms,
+            p95_ms: stats.p95_ms,
+            min_ms: stats.min_ms,
+            max_ms: stats.max_ms,
+            rounds: stats.rounds,
+        }
     }
 }
 
@@ -443,7 +446,13 @@ pub fn harness_bench_summary(samples_ms: Vec<f64>) -> Result<BenchStats> {
 #[napi]
 pub fn harness_bench_per_op(stats: BenchStats, ops: u32) -> Result<f64> {
     per_op_ms(
-        &Stats { median_ms: stats.median_ms, p95_ms: stats.p95_ms, min_ms: stats.min_ms, max_ms: stats.max_ms, rounds: stats.rounds },
+        &Stats {
+            median_ms: stats.median_ms,
+            p95_ms: stats.p95_ms,
+            min_ms: stats.min_ms,
+            max_ms: stats.max_ms,
+            rounds: stats.rounds,
+        },
         u64::from(ops),
     )
     .map_err(harness_error)
