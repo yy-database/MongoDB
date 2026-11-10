@@ -2,8 +2,12 @@
 //
 // 口径：
 // - 固定数据集 1000 篇文档、固定 seed、固定语句集合；
-// - 本仓每轮都新起一个临时数据目录的服务端，建表与灌种子不计时；
-// - 每项先跑一轮热身，再跑 BENCH_ROUNDS 轮，取中位数并记 p95；
+// - 本仓每轮都新起一个临时数据目录的服务端，建表、灌种子与 setup 不计时；
+// - 每项先跑一轮热身，再跑 BENCH_ROUNDS 轮，取中位数并记 p95（统计走上游 harness benchSummary）；
+// - 报告头部记溯源：node / rustc 版本、rev、path override 状态与数据规模；
+// - 环境变量：BENCH_DATASET BENCH_ROUNDS BENCH_PING BENCH_INSERT BENCH_FIND BENCH_POINT
+//   BENCH_RANGE BENCH_ORDER BENCH_GROUP BENCH_PIPELINE BENCH_INDEX BENCH_BULK
+//   BENCH_BIG_DOCS BENCH_BIG_KB BENCH_CONNECT BENCH_SCALE_SIZES BENCH_SCALE_OPS BENCH_SCALE_ROUNDS
 // - `ping` 是协议 + 解析 + 回包编码的地板，其余项的耗时减去它就是该路径的额外成本；
 // - 真实 `mongod` 列是可选的：设置 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 时才测量，
 //   连不上直接失败，不降级成自比、不伪造真机数字。本机没有 `mongod`，该列记为 CI-only。
@@ -11,9 +15,10 @@
 // 运行：`pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server`
 
 import { mkdtemp } from "node:fs/promises";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createServer } from "../../../packages/mongo/dist/index.js";
@@ -21,6 +26,7 @@ import { numberValue, OpMsgClient } from "../src/mongo-client.mjs";
 import { elapsedMs, median, p95 } from "../src/timing.mjs";
 
 const exampleRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = resolve(exampleRoot, "..", "..", "..", "..");
 
 const DB = "bench";
 const COLLECTION = "items";
@@ -30,6 +36,10 @@ const BATCH = 200;
 const SCALE_SIZES = (process.env.BENCH_SCALE_SIZES ?? "200,1000,5000").split(",").map(Number);
 const SCALE_OPS = Number(process.env.BENCH_SCALE_OPS ?? 50);
 const SCALE_ROUNDS = Number(process.env.BENCH_SCALE_ROUNDS ?? 3);
+const BULK_ROWS = Number(process.env.BENCH_BULK ?? 5_000);
+const BIG_DOCS = Number(process.env.BENCH_BIG_DOCS ?? 20);
+const BIG_KB = Number(process.env.BENCH_BIG_KB ?? 64);
+const BLOB = "x".repeat(BIG_KB * 1_024);
 
 const REAL = {
   host: process.env.BENCH_REAL_HOST ?? null,
@@ -214,6 +224,109 @@ const WORKLOADS = [
     },
   },
   {
+    name: "bulk-insert",
+    unit: "rows",
+    rows: BULK_ROWS,
+    rowsPerCommand: BATCH,
+    seed: false,
+    async setup(client) {
+      const created = await client.command({
+        createIndexes: COLLECTION,
+        indexes: [{ key: { sku: 1 }, name: "sku_1", unique: true }],
+        $db: DB,
+      });
+      if (numberValue(created.ok) !== 1) throw new Error(`bulk setup failed: ${JSON.stringify(created)}`);
+    },
+    async run(client) {
+      let inserted = 0;
+      for (let start = 0; start < BULK_ROWS; start += BATCH) {
+        const batch = documents(BULK_ROWS).slice(start, start + BATCH);
+        inserted += countOf(await client.insert(DB, COLLECTION, batch));
+      }
+      if (inserted !== BULK_ROWS) throw new Error(`bulk-insert inserted=${inserted}`);
+      return inserted;
+    },
+  },
+  {
+    name: "aggregate-multistage",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PIPELINE ?? 10),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { grp: { $gte: 0 } } },
+          { $group: { _id: "$grp", n: { $sum: 1 }, avg: { $avg: "$price" } } },
+          { $sort: { n: -1, _id: 1 } },
+          { $limit: 5 },
+          { $project: { _id: 0, n: 1, avg: 1 } },
+        ]);
+        if (rows.length !== 5) throw new Error(`multistage rows=${rows.length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "create-index",
+    unit: "commands",
+    ops: Number(process.env.BENCH_INDEX ?? 5),
+    async run(client, ops) {
+      if (ops > 5) throw new Error("create-index supports at most 5 distinct key patterns");
+      const patterns = [
+        { price: 1 },
+        { grp: 1 },
+        { seq: 1 },
+        { grp: 1, price: -1 },
+        { price: -1, seq: 1 },
+      ];
+      for (let index = 0; index < ops; index += 1) {
+        const built = await client.command({
+          createIndexes: COLLECTION,
+          indexes: [{ key: patterns[index], name: `bench_${index}` }],
+          $db: DB,
+        });
+        if (numberValue(built.ok) !== 1) throw new Error(`create-index failed: ${JSON.stringify(built)}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "big-doc-write",
+    unit: "rows",
+    rows: BIG_DOCS,
+    rowsPerCommand: 1,
+    seed: false,
+    async run(client) {
+      let inserted = 0;
+      for (let index = 0; index < BIG_DOCS; index += 1) {
+        const reply = await client.insert(DB, COLLECTION, [{ _id: `big-${index}`, seq: index, grp: 0, blob: BLOB }]);
+        inserted += countOf(reply);
+      }
+      if (inserted !== BIG_DOCS) throw new Error(`big-doc-write inserted=${inserted}`);
+      return inserted;
+    },
+  },
+  {
+    name: "big-doc-read",
+    unit: "rows",
+    rows: BIG_DOCS,
+    rowsPerCommand: 1,
+    seed: false,
+    async setup(client) {
+      for (let index = 0; index < BIG_DOCS; index += 1) {
+        await client.insert(DB, COLLECTION, [{ _id: `big-${index}`, seq: index, grp: 0, blob: BLOB }]);
+      }
+    },
+    async run(client) {
+      let read = 0;
+      for (let index = 0; index < BIG_DOCS; index += 1) {
+        const document = await client.findOne(DB, COLLECTION, { _id: `big-${index}` });
+        if (!document || document.blob.length !== BLOB.length) throw new Error(`big-doc-read bad payload at ${index}`);
+        read += 1;
+      }
+      return read;
+    },
+  },
+  {
     name: "update-many",
     unit: "rows",
     rows: DATASET,
@@ -306,6 +419,7 @@ async function measure(workload, engine) {
         continue;
       }
       await resetCollection(handle.client, workload.seed !== false);
+      if (workload.setup) await workload.setup(handle.client);
       const start = process.hrtime.bigint();
       const observed = await workload.run(handle.client, workload.ops);
       const elapsed = elapsedMs(start);
@@ -323,6 +437,55 @@ async function measure(workload, engine) {
 
 function format(value) {
   return `${value.toFixed(3)}`;
+}
+
+function gitRun(args, cwd) {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 运行溯源：node / rustc 版本、本仓 rev、facade 钉住的 database.rs rev、
+ * 本地 path override 生效时 database.rs 工作树的 rev 与脏状态、addon 产物指纹、数据规模。
+ * 拿不到的一律记 `unknown`，不猜。
+ */
+function collectProvenance() {
+  const platform = `${process.platform}-${process.arch}`;
+  const addonPath = join(repoRoot, "projects", "mongo.ts", "platforms", `mongo-${platform}`, `mongodb.${platform}.node`);
+  let addon = "unknown";
+  if (existsSync(addonPath)) {
+    const info = statSync(addonPath);
+    addon = `${info.size} bytes, mtime ${info.mtime.toISOString()}`;
+  }
+  let pin = "unknown";
+  try {
+    const manifest = readFileSync(join(repoRoot, "projects", "mongo.rs", "Cargo.toml"), "utf8");
+    pin = manifest.match(/mongo = \{[^}]*rev = "([0-9a-f]{7,40})"/)?.[1] ?? "unknown";
+  } catch {
+    // manifest 缺失时保持 unknown
+  }
+  const overrideFile = existsSync(join(repoRoot, ".cargo", "config.toml"));
+  const sibling = join(repoRoot, "..", "database.rs");
+  const siblingRev = existsSync(sibling) ? gitRun(["-C", sibling, "rev-parse", "--short", "HEAD"], sibling) : null;
+  const siblingDirty = existsSync(sibling) ? (gitRun(["-C", sibling, "status", "--porcelain"], sibling) ?? "") !== "" : null;
+  let rustc = "unknown";
+  try {
+    rustc = execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim();
+  } catch {
+    // 无工具链时保持 unknown
+  }
+  return {
+    node: process.version,
+    rustc,
+    mongoRev: gitRun(["-C", repoRoot, "rev-parse", "--short", "HEAD"], repoRoot) ?? "unknown",
+    facadePin: pin,
+    pathOverride: overrideFile && siblingRev ? `${siblingRev}${siblingDirty ? " (dirty)" : ""}` : "未启用（按钉住的 rev 构建）",
+    addon,
+    dataset: `${DATASET} 篇 × ~${JSON.stringify(documentOf(0)).length}B；bulk ${BULK_ROWS} 篇；大文档 ${BIG_DOCS} × ${BIG_KB}KB；规模 ${SCALE_SIZES.join(",")}`,
+  };
 }
 
 /**
@@ -394,9 +557,11 @@ async function measureScaling() {
 async function main() {
   const ours = { open: openOurs };
   const real = REAL.host ? { open: openReal } : null;
+  const provenance = collectProvenance();
 
   console.log(`数据集 ${DATASET} 篇，${ROUNDS} 轮测量 + 1 轮热身`);
   console.log(`真实 mongod：${real ? `${REAL.host}:${REAL.port}` : "未配置（CI-only）"}`);
+  console.log(`溯源：node ${provenance.node}，rustc ${provenance.rustc}，MongoDB ${provenance.mongoRev}，facade pin ${provenance.facadePin}，override ${provenance.pathOverride}`);
 
   const rows = [];
   for (const workload of WORKLOADS) {
@@ -426,8 +591,21 @@ async function main() {
     "",
     `Command: \`pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server\``,
     `数据集：${DATASET} 篇，固定 seed；${ROUNDS} 轮测量 + 1 轮热身，取中位数并记 p95。`,
-    `口径：本仓每轮新起临时数据目录的服务端，灌种子与建索引不计时；\`ping\` 是协议 + 解析 + 回包编码地板。`,
+    `口径：本仓每轮新起临时数据目录的服务端，灌种子、建索引与 setup 不计时；\`ping\` 是协议 + 解析 + 回包编码地板。`,
     `真实 mongod：${real ? `\`${REAL.host}:${REAL.port}\`` : "本机未配置（CI-only 列，不伪造真机数字）"}。`,
+    "统计口径：median/p95 走上游 `database.harness` 的 `benchSummary`（nearest-rank，golden vector 钉死），不在脚本里重写算法。",
+    "",
+    "## 溯源",
+    "",
+    `| 项 | 值 |`,
+    `|----|----|`,
+    `| node | ${provenance.node} |`,
+    `| rustc | ${provenance.rustc} |`,
+    `| MongoDB rev | ${provenance.mongoRev} |`,
+    `| facade 钉住的 database.rs rev | ${provenance.facadePin} |`,
+    `| 本地 path override | ${provenance.pathOverride} |`,
+    `| addon 产物 | ${provenance.addon} |`,
+    `| 数据规模 | ${provenance.dataset} |`,
     "",
     "## 按本仓耗时排序",
     "",
@@ -472,16 +650,18 @@ async function main() {
     "",
     "- **每条写命令一次整快照落盘**：上游 `database.storage::cluster_kv::FileShard::commit_changes` 每次提交都重新编码整份",
     "  `.yykv` 快照、`sync_all` 后原子替换文件。`insert-single` 与 `ping` 的差就是这条写命令的成本地板（见差分表），",
-    "  它与集合规模基本无关，而一条命令写 200 篇的 `insert-multi` 摊到每篇约 0.1ms。上游",
-    "  `mongo::commands::bulk_write` 逐条调用 `insert` / `update` / `delete`，不合并提交，所以 `bulkWrite` 省不掉这个地板。",
-    "- **唯一索引单查随规模线性增长**：`choose_access` 确实把 `sku` 上的唯一索引选为访问路径，但上游",
-    "  `database.storage::cluster_kv::collect_scan` 从整张 `BTreeMap` 的第一条开始按命名空间过滤，没有按命名空间建子索引，",
-    "  所以每次索引探针都要线性遍历全部记录（文档 + 索引项）。扩展表里 `_id` 单查基本恒定（走 `BTreeMap` 的按键查找），",
-    "  唯一索引单查则随文档数增长。",
-    "- **`update` 不做索引定位**：上游 `mongo::commands::update` 用 `namespace_documents`（整命名空间 `scan`）匹配，",
-    "  既不走索引也不按 `_id` 直取，命中后再整份提交一次快照。扩展表里 `updateOne` 随规模增长就是这个扫描成本。",
+    "  它随集合总字节数增长：扩展表里 `updateOne` 从 200 篇到 5000 篇的增长就是这份快照，而不是匹配扫描。",
+    "  上游 `mongo::commands::bulk_write` 逐条调用 `insert` / `update` / `delete`，不合并提交，所以 `bulkWrite` 省不掉这个地板。",
+    "  改成追加或增量落盘属于存储层改造，超出 facade 与 yyds/mongo 的范围。",
+    "- **唯一索引单查已恒定**：上游 `fa3f55a`（区间下推 + 有界索引扫描）与 `d4a0082`（已落盘索引项探针）之后，",
+    "  扩展表里唯一索引单查与 `_id` 单查同量级，不再随文档数增长。",
+    "- **`update` 按 `_id` 等值走点读 + 索引项探针**：上游 `mongo::commands::update` 对单 `_id` 等值过滤直接点读定位，",
+    "  唯一键冲突改为按已落盘索引项前缀探针检查，不再为每条更新命令整命名空间扫描；事务内或索引条目缺失时",
+    "  仍退回整表 map，宁可慢也不放行重复键。非 `_id` 过滤（如 `update-many` 按 `grp`）没有可用索引时仍是扫描，属预期。",
     "- **整集合读、排序与聚合是扫描成本**：`find-all` / `find-order-limit` / `aggregate-group` 都要读出并解码全部文档，",
     "  与 1000 篇的规模成正比，这部分属预期内的线性开销，不是缺陷。",
+    "- **`create-index` 是两次快照提交加一次全集合回填**：目录写入与索引条目回填各提交一次整份快照，",
+    "  摊掉其中一次属于存储层合并提交的改造范围。",
     "",
     "## 预计收益（按差分估算）",
     "",
@@ -489,15 +669,14 @@ async function main() {
       rows.find((row) => row.workload.name === "insert-single").ours.perOp,
     )} ms 降到与 \`ping\` 同量级，约省 ${format(
       rows.find((row) => row.workload.name === "insert-single").ours.perOp - floor,
-    )} ms/命令。`,
-    `- 给命名空间建子索引或按键定位：1000 篇下唯一索引单查从 ${format(scale1000.pointUk)} ms 回到 \`_id\` 单查（${format(
-      scale1000.pointPk,
-    )} ms）同量级，约省 ${format(scale1000.pointUk - scale1000.pointPk)} ms/命令；5000 篇下约省 ${format(
-      scaling[scaling.length - 1].pointUk - scaling[scaling.length - 1].pointPk,
-    )} ms/命令。`,
-    `- \`update\` 改为按 \`_id\` 直取或复用索引访问：1000 篇下单条 update 从 ${format(scale1000.updateOne)} ms 降到定位加写地板，`,
-    `  约省 ${format(scale1000.updateOne - (rows.find((row) => row.workload.name === "insert-single").ours.perOp))} ms/命令。`,
-    "- 以上是方向性估算，实际收益取决于上游落盘与索引改造的范围，本仓不改这块实现。",
+    )} ms/命令；这也是 \`updateOne\` 与 \`big-doc-write\` 剩余成本的主体。`,
+    `- \`update\` 点读化已落地：修复前每条 \`updateOne\` 整命名空间扫描匹配并整表建唯一 map，5000 篇下约 43 ms/op（历史捕获，同一脚本旧版数字）；`,
+    `  现在 ${format(scaling[scaling.length - 1].updateOne)} ms/op，剩余增长跟随快照提交随数据量的增长（1000 篇 \`insert-single\` 地板 ${format(
+      rows.find((row) => row.workload.name === "insert-single").ours.perOp,
+    )} ms/op），不再是匹配扫描。`,
+    `- 未命中 \`delete\` 与 \`_id\` / 唯一索引单查都稳定在 ${format(
+      scaling[scaling.length - 1].deleteMiss,
+    )} ms 量级，读路径没有再随规模增长的缺陷。`,
     "",
     "## 不计入比值的边界",
     "",

@@ -1,17 +1,25 @@
+// 基准计时与统计。median/p95 走上游 `database.harness` 的基准统计（与产品共用 `.node`），
+// 不在本地重写统计算法；空样本等非法输入由上游拒绝，不返回貌似成功的 0/NaN。
+import { binding } from "../../../packages/mongo/dist/binding.js";
+
 export function elapsedMs(start) {
   return Number(process.hrtime.bigint() - start) / 1_000_000;
 }
 
+/** 对一组毫秒样本求 median/p95/极值（nearest-rank，公式由上游 golden vector 钉死）。 */
+export function benchSummary(samples) {
+  if (typeof binding.harnessBenchSummary !== "function") {
+    throw new Error("addon has no `harnessBenchSummary`; rebuild it with `npm run build:napi`");
+  }
+  return binding.harnessBenchSummary([...samples]);
+}
+
 export function median(samples) {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  return benchSummary(samples).medianMs;
 }
 
 export function p95(samples) {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1);
-  return sorted[Math.max(0, index)];
+  return benchSummary(samples).p95Ms;
 }
 
 export function throughput(rows, ms) {

@@ -24,10 +24,13 @@ high-level client, so "our side" is a minimal OP_MSG client in
 
 ## Layout
 
-- `src/timing.mjs` — hrtime elapsed milliseconds, median, p95, throughput
+- `src/timing.mjs` — hrtime elapsed milliseconds, throughput, and median/p95 via
+  the upstream `database.harness` `benchSummary` (native addon export
+  `harnessBenchSummary`; no local re-implementation of the statistics)
 - `src/mongo-client.mjs` — minimal OP_MSG client over the product native codec
 - `tests/conformance.mjs` — both directions, updates, and cursor paging
 - `tests/benchmark.mjs` — insert, full find, point find, and update workloads
+- `tests/benchmark-server.mjs` — per-command server cost, scaling table and provenance
 - `reports/` — captured conformance and benchmark output
 
 ## Conformance (`test`)
@@ -76,6 +79,50 @@ pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark
 Results and the ratio table are captured in
 [reports/benchmark.md](./reports/benchmark.md).
 
+## Server benchmark (`benchmark:server`)
+
+Server-side cost of each command on the product server alone (no client
+comparison). Each measured run gets a fresh `mkdtemp` data directory and a
+fresh server; seeding, index creation and `setup` hooks stay outside the timed
+region. Median and p95 come from the upstream `database.harness`
+`benchSummary` (nearest-rank, golden-vector pinned); the report header also
+records node / rustc versions, repo revs, the local path-override state and
+the data scale.
+
+Workloads:
+
+- `ping` — round-trip floor (protocol + parse + reply encode).
+- `insert-single` — one insert per command.
+- `insert-multi` — 200 documents in one insert command.
+- `find-all` — full collection scan.
+- `find-point-pk` — point read by `_id`.
+- `find-point-uk` — point read by a unique secondary index.
+- `find-range-limit` — range filter + `limit`.
+- `find-order-limit` — `sort` + `limit`.
+- `aggregate-group` — single-stage `$group`.
+- `aggregate-multistage` — `$match` → `$group` → `$sort` → `$limit` → `$project`.
+- `create-index` — build one new secondary index per command.
+- `bulk-insert` — 5000 documents in 200-document batches with a unique index.
+- `big-doc-write` — 20 × 64 KB documents, one per command.
+- `big-doc-read` — point-read the 20 × 64 KB documents.
+- `update-many` — multi-update per group.
+- `delete-many` — multi-delete per group.
+- `connect` — open + close one socket.
+
+Scaling table: `_id` point read, unique-index point read, `updateOne` and
+missed `delete` at 200 / 1000 / 5000 documents, to separate constant-cost
+from linear-cost paths.
+
+Counts are configurable via `BENCH_*` (see the script header for the full
+list).
+
+```shell
+pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
+```
+
+Results and the root-cause analysis are captured in
+[reports/benchmark-server.md](./reports/benchmark-server.md).
+
 ## Intentional deltas
 
 - The official path includes the driver's JS BSON serialization, connection
@@ -88,5 +135,7 @@ Results and the ratio table are captured in
   minimal client so the starting documents are identical for both columns.
 - Extended JSON is normalized only for conformance assertions; benchmark timings
   use the payloads each client normally decodes.
-- `update-one` is dominated by the server's update scan per operation; client
-  stack differences are small compared with the per-operation server cost.
+- `update-one` is dominated by the server's snapshot commit per write command
+  (one whole-image `.yykv` write per command); the update match itself is a
+  point read by `_id`. Client stack differences are small compared with the
+  per-operation server cost.
