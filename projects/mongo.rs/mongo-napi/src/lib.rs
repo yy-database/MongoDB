@@ -14,7 +14,8 @@ use mongo::{
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
 use database::harness::{
-    Baseline, BaselineIdentity, DifferenceObservation, Digest, Floor, ReportEnvelope, SuiteSummary, check_baseline, render_json, verdict,
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, Floor, ReportEnvelope, Stats, SuiteSummary, check_baseline, per_op_ms,
+    render_json, summarize, verdict,
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -429,4 +430,35 @@ pub fn harness_suite_verdict(summary_json: String, floors_json: String) -> Resul
     let floors: Vec<Floor> = serde_json::from_str(&floors_json).map_err(harness_error)?;
     let gate = verdict(&summary, &floors);
     serde_json::to_string(&gate).map_err(harness_error)
+}
+
+/// 基准统计的 JS 形态。字段名由本 DTO 负责 camelCase，核心 `Stats` 说 Rust。
+#[napi(object)]
+pub struct BenchStats {
+    pub median_ms: f64,
+    pub p95_ms: f64,
+    pub min_ms: f64,
+    pub max_ms: f64,
+    pub rounds: u32,
+}
+
+impl From<Stats> for BenchStats {
+    fn from(stats: Stats) -> Self {
+        Self { median_ms: stats.median_ms, p95_ms: stats.p95_ms, min_ms: stats.min_ms, max_ms: stats.max_ms, rounds: stats.rounds }
+    }
+}
+
+/// 对一组毫秒样本求 median/p95/极值（nearest-rank，与 TS 既有实现逐字节一致）。
+#[napi]
+pub fn harness_bench_summary(samples_ms: Vec<f64>) -> BenchStats {
+    summarize(&samples_ms).into()
+}
+
+/// 单次操作的归一毫秒（median / ops）。`ops` 为 0 时返回 NaN。
+#[napi]
+pub fn harness_bench_per_op(stats: BenchStats, ops: u32) -> f64 {
+    per_op_ms(
+        &Stats { median_ms: stats.median_ms, p95_ms: stats.p95_ms, min_ms: stats.min_ms, max_ms: stats.max_ms, rounds: stats.rounds },
+        u64::from(ops),
+    )
 }
