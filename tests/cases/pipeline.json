@@ -563,15 +563,15 @@
         {
             "id": "pipe.project.unknown_expression",
             "surface": "error",
-            "source": "MongoDB manual, Aggregation Pipeline Operators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/); $toUpper is documented but not implemented here",
+            "source": "MongoDB manual, $project rejects unrecognized expression operators (https://www.mongodb.com/docs/manual/reference/operator/aggregation/project/); the stand-in operator is one no engine implements, so the refusal holds across facade versions; the gateway lists its supported expressions inside the message, which is build-specific, so errmsg is matched by prefix; oracle-limitation: no live mongod 8.0.9 on this host, code 59 pinned from the gateway contract and re-checked by the differential corpus where mongod runs",
             "program": [
                 { "op": "open", "store": "s" },
                 { "op": "insert", "collection": "items", "documents": [{ "_id": 1 }] },
-                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "x": { "$toUpper": "$v" } } }], "as": "r" }
+                { "op": "aggregate", "collection": "items", "pipeline": [{ "$project": { "x": { "$yyNoSuchExpression": "$v" } } }], "as": "r" }
             ],
             "checks": [
                 { "at": "/r/code", "equals": { "$numberInt": "59" } },
-                { "at": "/r/errmsg", "equals": "unknown $project expression: $toUpper (supported: $add, $concat, $cond, $ifNull, $size, $literal, $eq, $ne, $gt, $gte, $lt, $lte, $in, $and, $or, $not)" }
+                { "at": "/r/errmsg", "matches": "^unknown \\$project expression: \\$yyNoSuchExpression \\(supported: " }
             ]
         },
         {
