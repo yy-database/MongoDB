@@ -14,8 +14,7 @@ use mongo::{
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
 };
 use database::harness::{
-    Baseline, BaselineIdentity, DifferenceObservation, Digest, Floor, ReportEnvelope, Stats, SuiteSummary, check_baseline, per_op_ms,
-    render_json, summarize, verdict,
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, Stats, check_baseline, per_op_ms, render_json, summarize,
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -418,20 +417,6 @@ pub fn harness_render_report(report_json: String) -> Result<String> {
     render_json(&report).map_err(harness_error)
 }
 
-/// 按 floor 门禁判定套件计数。
-///
-/// `summary_json` 是 `SuiteSummary` 的 serde 形态（`cases` / `assertions` /
-/// `passed` / `failed` / `skipped`）；`floors_json` 是 `Vec<Floor>` 形态
-/// （如 `[{"metric":"assertions","min":2894}]`）。测试计数解析与 floor 数值由
-/// 调用方持有，本函数只做判定：skipped 即红、failed 记问题、逐条 floor 比较。
-#[napi]
-pub fn harness_suite_verdict(summary_json: String, floors_json: String) -> Result<String> {
-    let summary: SuiteSummary = serde_json::from_str(&summary_json).map_err(harness_error)?;
-    let floors: Vec<Floor> = serde_json::from_str(&floors_json).map_err(harness_error)?;
-    let gate = verdict(&summary, &floors);
-    serde_json::to_string(&gate).map_err(harness_error)
-}
-
 /// 基准统计的 JS 形态。字段名由本 DTO 负责 camelCase，核心 `Stats` 说 Rust。
 #[napi(object)]
 pub struct BenchStats {
@@ -450,15 +435,16 @@ impl From<Stats> for BenchStats {
 
 /// 对一组毫秒样本求 median/p95/极值（nearest-rank，与 TS 既有实现逐字节一致）。
 #[napi]
-pub fn harness_bench_summary(samples_ms: Vec<f64>) -> BenchStats {
-    summarize(&samples_ms).into()
+pub fn harness_bench_summary(samples_ms: Vec<f64>) -> Result<BenchStats> {
+    summarize(&samples_ms).map(Into::into).map_err(harness_error)
 }
 
 /// 单次操作的归一毫秒（median / ops）。`ops` 为 0 时返回 NaN。
 #[napi]
-pub fn harness_bench_per_op(stats: BenchStats, ops: u32) -> f64 {
+pub fn harness_bench_per_op(stats: BenchStats, ops: u32) -> Result<f64> {
     per_op_ms(
         &Stats { median_ms: stats.median_ms, p95_ms: stats.p95_ms, min_ms: stats.min_ms, max_ms: stats.max_ms, rounds: stats.rounds },
         u64::from(ops),
     )
+    .map_err(harness_error)
 }

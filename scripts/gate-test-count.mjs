@@ -1,18 +1,11 @@
 // Acceptance gate: both languages must hit the same corpus, pass every
 // assertion, and produce byte-identical per-case outputs (no single-side pass).
-// Floor verdicts run in `database.harness` through the napi primitive
-// `harnessSuiteVerdict`; parsing of the summaries and the parity comparison
-// stay here.
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const resultsDir = join(repo, '.tmp', 'test-results')
-const binding = createRequire(import.meta.url)(
-    join(repo, 'projects', 'mongo.ts', 'platforms', `mongo-${process.platform}-${process.arch}`),
-)
 
 // A single-language lane only has that language's results on disk. Pass
 // `--language ts|py` to gate one lane, or omit it to gate both plus parity.
@@ -36,21 +29,12 @@ const MIN_CASES = 850
 const problems = []
 for (const name of requested) {
     const summary = summaries[name]
-    const gate = JSON.parse(binding.harnessSuiteVerdict(
-        JSON.stringify({
-            cases: summary.cases,
-            assertions: summary.assertions,
-            passed: Math.max(summary.assertions - summary.failed - summary.skipped, 0),
-            failed: summary.failed,
-            skipped: summary.skipped,
-        }),
-        JSON.stringify([{ metric: 'assertions', min: MIN_ASSERTIONS }, { metric: 'cases', min: MIN_CASES }]),
-    ))
-    const byKind = new Map(gate.problems.map((problem) => [`${problem.kind}:${problem.metric ?? ''}`, problem]))
-    if (byKind.has('floor-unmet:assertions')) problems.push(`${name}: ${byKind.get('floor-unmet:assertions').actual} assertions < floor ${byKind.get('floor-unmet:assertions').min}`)
-    if (byKind.has('floor-unmet:cases')) problems.push(`${name}: ${byKind.get('floor-unmet:cases').actual} cases < floor ${byKind.get('floor-unmet:cases').min}`)
-    if (byKind.has('skipped:')) problems.push(`${name}: ${byKind.get('skipped:').count} skipped assertions`)
-    if (byKind.has('failed:')) problems.push(`${name}: ${byKind.get('failed:').count} failed assertions`)
+    if (summary.assertions < MIN_ASSERTIONS) {
+        problems.push(`${name}: ${summary.assertions} assertions < floor ${MIN_ASSERTIONS}`)
+    }
+    if (summary.cases < MIN_CASES) problems.push(`${name}: ${summary.cases} cases < floor ${MIN_CASES}`)
+    if (summary.skipped !== 0) problems.push(`${name}: ${summary.skipped} skipped assertions`)
+    if (summary.failed !== 0) problems.push(`${name}: ${summary.failed} failed assertions`)
 }
 
 const mismatches = []
