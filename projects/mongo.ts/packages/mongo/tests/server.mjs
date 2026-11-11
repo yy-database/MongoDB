@@ -1586,6 +1586,65 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     standalone.socket.destroy()
 }
 
+// --- commitTransaction / abortTransaction validation ------------------------
+//
+// Every message and code below was captured from a real `mongod 8.0.9`
+// single-member replica set over raw `OP_MSG` probes; the order of the checks
+// is the measured order (the `autocommit` validations win over the
+// admin-database rule).
+{
+    const txn = await connect(address.port)
+    const lsid = { id: { $binary: { base64: 'AQIDBAUGBwgJCgsMDQ4PEA==', subType: '04' } } }
+    const txnNumber = { $numberLong: '41' }
+
+    const autocommitTrue = await command(txn, { commitTransaction: 1, lsid, txnNumber, autocommit: true, $db: 'admin' })
+    equal(autocommitTrue.code, { $numberInt: '72' }, 'autocommit=true is InvalidOptions')
+    equal(autocommitTrue.codeName, 'InvalidOptions', 'the autocommit=true code name matches mongod')
+    equal(autocommitTrue.errmsg, 'Specifying autocommit=true is not allowed.', 'the autocommit=true text matches mongod')
+
+    const autocommitNoTxn = await command(txn, { abortTransaction: 1, lsid, autocommit: false, $db: 'admin' })
+    equal(autocommitNoTxn.code, { $numberInt: '72' }, 'autocommit without a txn number is InvalidOptions')
+    equal(autocommitNoTxn.errmsg, "'autocommit' field requires a transaction number to also be specified", 'the autocommit-without-txn text matches mongod')
+
+    const txnNoLsid = await command(txn, { commitTransaction: 1, txnNumber, autocommit: false, $db: 'admin' })
+    equal(txnNoLsid.code, { $numberInt: '72' }, 'a txn number without an lsid is InvalidOptions')
+    equal(txnNoLsid.errmsg, 'Transaction number requires a session ID to also be specified', 'the txn-without-lsid text matches mongod')
+
+    const noAutocommit = await command(txn, { commitTransaction: 1, lsid, txnNumber, $db: 'admin' })
+    equal(noAutocommit.code, { $numberInt: '50768' }, 'a txn number without autocommit:false is NotARetryableWriteCommand')
+    equal(noAutocommit.codeName, 'NotARetryableWriteCommand', 'the 50768 code name matches mongod')
+    equal(
+        noAutocommit.errmsg,
+        'txnNumber may only be provided for multi-document transactions and retryable write commands. autocommit:false was not provided, and commitTransaction is not a retryable write command.',
+        'the 50768 text names the command as mongod does'
+    )
+
+    const bare = await command(txn, { commitTransaction: 1, $db: 'admin' })
+    equal(bare.code, { $numberInt: '125' }, 'a bare commit is CommandFailed')
+    equal(bare.codeName, 'CommandFailed', 'the bare-commit code name matches mongod')
+    equal(bare.errmsg, 'commitTransaction must be run within a transaction', 'the bare-commit text matches mongod')
+
+    const bareAbort = await command(txn, { abortTransaction: 1, $db: 'admin' })
+    equal(bareAbort.errmsg, 'abortTransaction must be run within a transaction', 'the bare-abort text matches mongod')
+
+    const wrongDb = await command(txn, { commitTransaction: 1, lsid, txnNumber, autocommit: false, $db: 'appdb' })
+    equal(wrongDb.code, { $numberInt: '13' }, 'a well-formed commit outside admin is Unauthorized')
+    equal(wrongDb.codeName, 'Unauthorized', 'the wrong-database code name matches mongod')
+    equal(wrongDb.errmsg, 'commitTransaction may only be run against the admin database.', 'the wrong-database text matches mongod')
+
+    const ghost = await command(txn, { commitTransaction: 1, lsid, txnNumber: { $numberLong: '99' }, autocommit: false, $db: 'admin' })
+    equal(ghost.code, { $numberInt: '251' }, 'committing a transaction that never started answers NoSuchTransaction')
+    equal(ghost.errmsg, 'Given transaction number 99 does not match any in-progress transactions. The active transaction number is -1', 'the ghost-commit text matches mongod')
+
+    // An unknown verb carries the `CommandNotFound` code name, as `mongod` answers.
+    const unknown = await command(txn, { totallyBogus: 1, $db: 'admin' })
+    equal(unknown.code, { $numberInt: '59' }, 'an unknown command is CommandNotFound')
+    equal(unknown.codeName, 'CommandNotFound', 'the 59 reply carries the code name')
+    equal(unknown.errmsg, "no such command: 'totallyBogus'", 'the 59 text matches mongod')
+
+    txn.socket.destroy()
+}
+
 replicaConnection.socket.destroy()
 await replicaServer.close()
 

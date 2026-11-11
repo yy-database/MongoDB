@@ -176,6 +176,56 @@ function settleWrite(
     return writeConcernReply(name, body, decision, writeStamps(state), ok)
 }
 
+/**
+ * `commitTransaction` / `abortTransaction` validation, measured on
+ * `mongod 8.0.9` (single-member replica set, raw `OP_MSG` probes):
+ *
+ * - `autocommit: true` answers `72 InvalidOptions` with
+ *   "Specifying autocommit=true is not allowed.";
+ * - `autocommit: false` without a `txnNumber` answers `72 InvalidOptions`
+ *   with "'autocommit' field requires a transaction number to also be
+ *   specified";
+ * - a `txnNumber` without an `lsid` answers `72 InvalidOptions` with
+ *   "Transaction number requires a session ID to also be specified";
+ * - a `txnNumber` without `autocommit: false` answers
+ *   `50768 NotARetryableWriteCommand` naming the command;
+ * - neither `txnNumber` nor `autocommit` answers `125 CommandFailed`
+ *   "<name> must be run within a transaction";
+ * - a well-formed commit/abort only runs against `admin`: any other command
+ *   database answers `13 Unauthorized` "<name> may only be run against the
+ *   admin database." (the autocommit checks above win over this one, which
+ *   is the measured order).
+ */
+function transactionCommandError(name: string, command: any): any | null {
+    const autocommit = command.autocommit
+    const hasTxnNumber = command.txnNumber !== undefined
+    const hasLsid = command.lsid !== undefined
+    if (autocommit === true) {
+        return { ok: { $numberDouble: '0.0' }, errmsg: 'Specifying autocommit=true is not allowed.', code: numberValue(72), codeName: 'InvalidOptions' }
+    }
+    if (autocommit === false && !hasTxnNumber) {
+        return { ok: { $numberDouble: '0.0' }, errmsg: "'autocommit' field requires a transaction number to also be specified", code: numberValue(72), codeName: 'InvalidOptions' }
+    }
+    if (hasTxnNumber && !hasLsid) {
+        return { ok: { $numberDouble: '0.0' }, errmsg: 'Transaction number requires a session ID to also be specified', code: numberValue(72), codeName: 'InvalidOptions' }
+    }
+    if (hasTxnNumber && autocommit === undefined) {
+        return {
+            ok: { $numberDouble: '0.0' },
+            errmsg: `txnNumber may only be provided for multi-document transactions and retryable write commands. autocommit:false was not provided, and ${name} is not a retryable write command.`,
+            code: numberValue(50768),
+            codeName: 'NotARetryableWriteCommand'
+        }
+    }
+    if (!hasTxnNumber && autocommit === undefined) {
+        return { ok: { $numberDouble: '0.0' }, errmsg: `${name} must be run within a transaction`, code: numberValue(125), codeName: 'CommandFailed' }
+    }
+    if ((command.$db ?? 'admin') !== 'admin') {
+        return { ok: { $numberDouble: '0.0' }, errmsg: `${name} may only be run against the admin database.`, code: numberValue(13), codeName: 'Unauthorized' }
+    }
+    return null
+}
+
 function hostPrefix(): string {
     return os.hostname()
 }
@@ -441,9 +491,11 @@ function dispatch(
         case 'listCollections':
             return document(binding.listCollections(session.store, text))
         case 'commitTransaction':
-            return document(binding.commitTransaction(session.store, text))
-        case 'abortTransaction':
-            return document(binding.abortTransaction(session.store, text))
+        case 'abortTransaction': {
+            const invalid = transactionCommandError(name, command)
+            if (invalid) return invalid
+            return document(name === 'commitTransaction' ? binding.commitTransaction(session.store, text) : binding.abortTransaction(session.store, text))
+        }
         case 'listDatabases':
             return listDatabasesCommand(session, command, authRequired)
         case 'dbStats':
@@ -516,7 +568,15 @@ function dispatch(
                 ok: OK
             }
         default:
-            return document(binding.errorReply(59, `no such command: '${name}'`))
+            // `mongod 8.0.9` answers an unknown verb with `59 CommandNotFound`
+            // and the `codeName` field; the primitive's table does not carry
+            // 59, so the reply is assembled here to keep the field set exact.
+            return {
+                ok: { $numberDouble: '0.0' },
+                errmsg: `no such command: '${name}'`,
+                code: numberValue(59),
+                codeName: 'CommandNotFound'
+            }
     }
 }
 
