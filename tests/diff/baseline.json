@@ -5,7 +5,62 @@
   "mongod": "8.0.9",
   "corpusDigest": "6092d7a29b4abefe039df47fb5d21eaacaf341fe07334fd89f5cb730e64af9d6",
   "replyDigest": "eb8e38ea1e9b0bb741062695b2edcc81c78f165bd77034314d5fda2d5b8481ca",
-  "knownDifferences": {},
+  "knownDifferences": {
+    "diff.hint.planner_eq": {
+      "signal": "1bdb11d22cde02f1d45ce31e677a4e128c1b08d488fae0d64ae5ddc8a67d8be9"
+    },
+    "diff.hint.planner_range_forward": {
+      "signal": "6fb1c08aab6dda705ce5c1266a9bd5dbbfd2dcc85806b81df96acf2a9e6f3f74"
+    },
+    "diff.hint.planner_range_backward": {
+      "signal": "35846f40b16c9c30fde11152067af9727a841a2189332184376408bb08dfdb83"
+    },
+    "diff.hint.planner_residual": {
+      "signal": "1e8f851bea10ae371b6364b0c2d9803d3236a1ba1d05bd66b10f9a7c3876c10f"
+    },
+    "diff.hint.planner_compound": {
+      "signal": "de43424a2e2adec7adb63949b9e6e7d7bf72a6019ab76117542153007844a903"
+    },
+    "diff.hint.planner_sort": {
+      "signal": "ca8e7c3896a029dbdf34023cda14b8f9d1b78d7fd2ff2384c235d9f167c0291f"
+    },
+    "diff.hint.planner_multikey": {
+      "signal": "a54b11efafbfa06498118fe014902e5a2c5cfcb1abb8230b8d476a7f2b0687cf"
+    },
+    "diff.hint.planner_unique": {
+      "signal": "1dea79e274df7ec78106835af0aeccbe67a9272ecbd13293c3ec6b17daf10727"
+    },
+    "diff.hint.planner_sparse": {
+      "signal": "cb57213450d7436556f72f2547e165e6deb21ca47bf2fcf69422d6561d255e20"
+    },
+    "diff.hint.planner_partial": {
+      "signal": "abfff38f1c0455a6f3365d4b6fbe2ee31b092e5155604177022a42f7741eda54"
+    },
+    "diff.hint.planner_partial_outside": {
+      "signal": "fd81c00c202b66a2cfb870cc79e2d530b1944741a11b50b15b2bc48993ba8012"
+    },
+    "diff.hint.stats_eq": {
+      "signal": "047f2c79e5d98d33420abdbca401a515ecc107a0341bc6fea856bf09a2b13622"
+    },
+    "diff.hint.stats_limit": {
+      "signal": "1afd731da3edbd4631b0917933302c97dda5411f0c231c5796497df97d6c9b76"
+    },
+    "diff.hint.stats_skip": {
+      "signal": "fec050c1177b8d07988cd3cc566c5e52970cd0082b260a8308a93a158e3ab57a"
+    },
+    "diff.hint.count_planner": {
+      "signal": "1c7aefacd605054aa295151cd5ed33e92555f7c89492d20a2ab59fcf5a6de0c6"
+    },
+    "diff.hint.count_stats": {
+      "signal": "b279455785b9401cff8cc1db1e6bd94b8950f26a134368c68fa830d86c99e719"
+    },
+    "diff.hint.count_skip_stats": {
+      "signal": "f0493c7e4eb7582ec7f32aefbf7b6bcbebe4370788bc1b4845d3693d518397c1"
+    },
+    "diff.hint.count_residual_stats": {
+      "signal": "d20869caf4d902e3a4c313fb02adeb74a48c97fd0b55ca9697c7361bd2fee79b"
+    }
+  },
   "replies": {
     "diff.find.eq_int": [
       {
