@@ -93,6 +93,7 @@ command-level granularity) are in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md)
 Start the listener with `--repl-set <name>`, then `rs.initiate()` (no argument)
 in `mongosh`; `rs.status()` and `rs.conf()` answer from the stored single-member
 configuration. On a node started without `--repl-set` the three commands answer
-`NoReplicationEnabled` (76), as `mongod` does. The configuration lives in memory
-only, so a restart needs `rs.initiate()` again; the other limit is that only
+`NoReplicationEnabled` (76), as `mongod` does. The configuration is persisted in
+`local.system.replset` and restored at startup, so `rs.initiate()` is only
+needed once and a restart keeps reporting PRIMARY; the other limit is that only
 member 0 exists. Both are recorded in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).

@@ -12,8 +12,11 @@ which the gaps have to close before any of it can start.
   every successful write appends an entry with `ts/t/op/ns/o/o2/ui`, capped at
   990 MB by default (`--oplog-size-mb`). `replSetGetStatus.optime` follows the
   newest entry and write replies carry the same `opTime`.
-- The set configuration is in memory, a restart returns to `NotYetInitialized`
-  (94), and the set has exactly one member: the local primary.
+- The set configuration is persisted in `local.system.replset` on a successful
+  `replSetInitiate` and restored at startup, so a restart keeps the initiated
+  set instead of returning to `NotYetInitialized` (94). Election state
+  (`electionId`, `term`, oplog-recovered `optime`) is still per-process. The
+  set has exactly one member: the local primary.
 - Nothing consumes the oplog. `syncSourceHost` is empty and there is no initial
   sync, no second member and no rollback. The deliberate rule is that this
   server never fabricates a SECONDARY (see `KNOWN-DIFFERENCES.md`).
@@ -80,11 +83,13 @@ is no second oplog to compare against and no common point to roll back to.
 Implementing a rollback stage now would either be dead code or, worse, would
 roll back writes that were never divergent.
 
-If a second process is ever added, rollback needs all of the following, none of
-which exist:
+If a second process is ever added, rollback needs all of the following, most of
+which do not exist:
 
 - two oplogs with a shared history and a detected divergence point;
-- `local.system.replset` persisted with a real `setVersion` and member ids;
+- `local.system.replset` persisted with a real `setVersion` and member ids
+  (persistence and restore exist; `setVersion` only ever stays 1 until
+  `replSetReconfig` lands);
 - `applyOps` that can replay the inverse of the losing branch (`o2`, version 2
   diffs) with the original timestamps;
 - a barrier that stops writes on the member being rolled back while the
@@ -101,8 +106,10 @@ process; Phase 2 cannot.
 
 **Phase 0 — foundations, one process**
 
-1. Persist the set configuration in `local.system.replset` and keep
-   `setVersion` across restarts (today it is memory only).
+1. Done: the set configuration persists in `local.system.replset` and
+   `setVersion` and `replicaSetId` survive restarts; `term` and `electionId`
+   are still regenerated per process, and `optime` is not recovered from the
+   oplog across a restart.
 2. Emit `$clusterTime` and `operationTime` on every reply and keep `electionId`
    stable for the life of the primary.
 3. Implement `tailable`/`awaitData` on `find` and `maxAwaitTimeMS` on

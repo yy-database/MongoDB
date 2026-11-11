@@ -198,9 +198,23 @@ Limits a client can observe:
 - **The oplog is written, not consumed.** Every successful write appends an entry
   to the persistent `local.oplog.rs` (see below), but no member replays it, so
   `syncSourceHost` is empty and initial sync does not exist.
-- **The configuration is in memory.** Real `mongod` persists it in
-  `local.system.replset`; here a restart returns to `NotYetInitialized` (94) and
-  needs `rs.initiate()` again.
+- **The configuration is persisted; the election state is not.** A successful
+  `replSetInitiate` writes the set document into `local.system.replset` and a
+  node started with `--replSet` reads it back at startup, so a restart reports
+  PRIMARY without `rs.initiate()` again, never answers `NotYetInitialized` (94)
+  and a second initiate answers `AlreadyInitialized` (23). `replicaSetId`,
+  `setVersion` and the member list survive the restart. What a real server
+  recovers and this one does not: `mongod` re-runs an election on restart, so
+  its stored `term` advances (1 after initiation, 2 after the first restart, as
+  measured on a real single-member set) and `electionId` increments; here
+  `electionId` is regenerated per process, `config.term` stays `0`, and `optime`
+  restarts from the current wall clock with term `-1` until the first write of
+  the new process instead of being recovered from the persisted oplog. The set
+  document is written as replication metadata: it produces no oplog entry,
+  where `mongod` logs the config change. The stored document keeps this
+  server's numeric types — the settings numbers are int32 where `mongod` stores
+  int64 (`heartbeatIntervalMillis`, `electionTimeoutMillis`,
+  `catchUpTimeoutMillis`, `catchUpTakeoverDelayMillis`).
 - **`replSetReconfig`, `replSetStepDown` and `replSetFreeze` are not
   implemented** (CommandNotFound). `topologyVersion.counter` advances when the
   member state changes (initiation), not on heartbeats.
