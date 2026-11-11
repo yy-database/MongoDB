@@ -21,10 +21,11 @@ Tiers describe what it would take to close a gap, not how important it is.
 | `db.getCollectionNames()` | `listCollections` nameOnly | OK | done |
 | `db.getCollectionInfos()` | name, type, options, info.uuid, idIndex | OK, same fields | done |
 | `db.runCommand({ping:1})` | `{ok:1}` | OK | done |
-| `db.serverStatus()` | host, version, process, pid, uptime*, localTime, connections, opcounters, mem, asserts, network, ... | OK subset: host, version, process, pid, uptime*, localTime, connections | done (subset); counters are medium |
+| `db.serverStatus()` | host, version, process, pid, uptime*, localTime, asserts, connections, network, opcounters, opcountersRepl, mem, ... | OK; same sections in `mongod`'s relative order, counters measured per command class (`mem` answers `supported: false`, `asserts` zeros, `opcountersRepl` zeros) | done |
 | `db.hostInfo()` | `system` + `os` + `extra` | OK subset: `system`, `os`, `extra` | done (subset) |
 | `db.runCommand({connectionStatus:1})` | `authInfo.authenticatedUsers[]` | OK; empty before login, populated by SCRAM | done |
 | `db.createUser` / `dropUser` / `logout` | `{ok:1}` | OK, SCRAM-SHA-256 and SCRAM-SHA-1 | done |
+| `db.createRole` / `db.dropRole` | `{ok:1}`, `system.roles` documents | OK; stored in `<db>.system.roles` with `mongod`'s validation codes and texts, inheritance resolves in enforcement and `showPrivileges`; `updateRole` / `grantPrivilegesToRole` / `rolesInfo` still 59 | done (subset) |
 | `show users` (`usersInfo`) | `users[]` from `<db>.system.users` with `_id`, `userId`, `user`, `db`, `roles`, `mechanisms` | OK; same fields and order, `showCredentials`, `showPrivileges` (see below) | done |
 | `db.currentOp()` | `inprog[]` (legacy `currentOp`, `$currentOp` aggregate) | OK, empty `inprog` | done |
 | `db.killOp(0)` | `{info:"attempting to kill op", ok:1}` | OK ack, no in-flight ops to kill | done |
@@ -35,7 +36,7 @@ Tiers describe what it would take to close a gap, not how important it is.
 | `db.<c>.drop()` | `{ok:1, ns}` | OK; `{nIndexesWas, ns, ok}`, missing collection `{ok:1}`, `system.*` and the live oplog guarded | done |
 | `db.<c>.createIndex` (wildcard / hashed / multikey, `unique`+`sparse`) | `indexes[]` in `listIndexes` | OK; same catalog shape, same error codes (see KNOWN-DIFFERENCES) | done |
 | `db.<c>.createIndex({body:'text'})` + `$text` | `_fts`/`_ftsx` entry, `weights`, `$meta:"textScore"` | `text indexes are not supported yet` (59) | hard; feasibility in KNOWN-DIFFERENCES |
-| `db.adminCommand({serverStatus:1})` counters (`opcounters`, `mem`, `asserts`) | present | absent | medium |
+| `db.adminCommand({serverStatus:1})` counters (`opcounters`, `mem`, `asserts`) | present | OK; counters tracked in the dispatch layer (`mem.supported: false`, zero `asserts`, zero `opcountersRepl` like the measured single-member set) | done |
 | `rs.status()` (`replSetGetStatus`) | member array, `stateStr: PRIMARY`, `optime`, `syncSourceHost: ""` | OK; single member, PRIMARY, `optime` from real writes (see KNOWN-DIFFERENCES) | done |
 | `rs.conf()` (`replSetGetConfig`) | `config` with set name, members, settings | OK, same fields for the single member | done |
 | `rs.initiate()` (`replSetInitiate`) | `info2` "no configuration specified...", `me` | OK; the empty/numeric request builds the single-member config from the connection address | done |
@@ -75,18 +76,24 @@ too.
 `1` (numeric, or any number truncating to 1), a user name, `{user, db}`, an
 array of either, and `{forAllDBs: true}` are accepted with `mongod`'s
 validation texts. `showCredentials` returns the stored credential document and
-`showPrivileges` expands the built-in roles into the same privilege table the
-dispatch layer enforces, so `inheritedPrivileges` matches `mongod` for the six
-modelled roles.
+`showPrivileges` expands built-in and custom roles through the same path the
+dispatch layer enforces, so `inheritedPrivileges` matches `mongod` for all
+seventeen built-ins and for custom-role chains (fixtures:
+`tests/oracle-showprivileges.json`).
 
 ## Authorization
 
 With `--auth`, commands are checked against the roles stored in
-`<db>.system.users`: `read`, `readWrite`, `dbAdmin`, `userAdmin` on any
-database, and `clusterAdmin`, `root` on `admin`. A refused command answers
+`<db>.system.users`: the seventeen built-ins (`read`, `readWrite`, `dbAdmin`,
+`userAdmin` and `dbOwner` on any database; `clusterAdmin`, `root`,
+`readAnyDatabase`, `readWriteAnyDatabase`, `userAdminAnyDatabase`,
+`dbAdminAnyDatabase`, `clusterMonitor`, `clusterManager`, `hostManager`,
+`backup`, `restore` and `__system` on `admin`) plus custom roles stored in
+`<db>.system.roles` with inheritance. A refused command answers
 `not authorized on <db> to execute command` (13); `listDatabases` returns the
-databases the user's privileges cover. Limits (other built-ins, custom roles,
-command-level granularity) are in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
+databases the user's privileges cover. Limits (role administration commands
+beyond `createRole`/`dropRole`, unenforced authentication restrictions) are in
+[KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 
 ## Replica set
 

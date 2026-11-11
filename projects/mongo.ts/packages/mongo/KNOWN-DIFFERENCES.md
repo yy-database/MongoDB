@@ -61,18 +61,43 @@ Implemented and verified against `mongod 8.0.9`:
 - **`createUser` role validation.** Role elements are validated in `mongod`'s
   order and wording (`RoleName must contain a field named: role` / `: db`,
   `... But, has type int`, `Role name must be either a document or string`),
-  and a role that is not one of the built-ins answers `RoleNotFound` (31) with
-  `Could not find role: <role>@<db>`.
+  and a role that is neither a built-in nor a stored custom role answers
+  `RoleNotFound` (31) with `Could not find role: <role>@<db>`.
+- **Seventeen built-in roles.** `read`, `readWrite`, `dbAdmin`, `userAdmin` and
+  `dbOwner` resolve on any database; `clusterAdmin`, `root`,
+  `readAnyDatabase`, `readWriteAnyDatabase`, `userAdminAnyDatabase`,
+  `dbAdminAnyDatabase`, `clusterMonitor`, `clusterManager`, `hostManager`,
+  `backup`, `restore` and `__system` resolve on `admin` only. Each expansion is
+  transcribed from `usersInfo({showPrivileges: true})` on the real server and
+  checked deep-equal in `tests/server.mjs` against
+  `tests/oracle-showprivileges.json`.
+- **`createRole` and `dropRole`.** Custom roles are stored in
+  `<db>.system.roles`, resolve through the same expansion the dispatcher
+  enforces (including inheritance), and reproduce `mongod 8.0.9`'s validation
+  codes and texts — `Location51002` for a duplicate, `BadValue` for a built-in
+  name or an unknown action, `InvalidRoleModification` (49) for cross-database
+  scope violations and self-grants, `RoleNotFound` (31) for a missing inherited
+  role or a missing drop target. `mongod` does not refuse dropping a role that
+  users or other roles still reference; it strips those references, and this
+  server reproduces the cascade.
 
 Remaining limits:
 
-- **Only six built-in roles exist** (`read`, `readWrite`, `dbAdmin`, `userAdmin`,
-  `clusterAdmin`, `root`), with `clusterAdmin` and `root` resolved on `admin`
-  only. `mongod`'s other built-ins (`dbOwner`, `readAnyDatabase`,
-  `readWriteAnyDatabase`, `userAdminAnyDatabase`, `dbAdminAnyDatabase`,
-  `clusterMonitor`, `clusterManager`, `hostManager`, `backup`, `restore`,
-  `__system`) and user-defined roles answer `RoleNotFound` (31) instead of
-  resolving, and `createRole`/`dropRole` are not implemented.
+- **Custom roles live per database.** `mongod` stores every user-defined role
+  in `admin.system.roles`; this server keeps `<db>.system.roles`, matching the
+  per-database `system.users` layout it already uses. The document shape
+  (`_id`, `role`, `db`, `privileges`, `roles`) is the same.
+- **`rolesInfo`, `updateRole`, `grantRolesToUser`, `revokeRolesFromUser`,
+  `grantRolesToRole`, `revokeRolesFromRole` and `grantPrivilegesToRole` are not
+  implemented**; an authorized caller sees `no such command` (59).
+- **Authentication restrictions are not enforced.** `createRole` accepts and
+  stores `authenticationRestrictions` and `usersInfo` reports them, but no
+  login is ever refused for them; `createUser` does not accept the field.
+- **Multi-role expansion order.** `mongod` merges privileges that share a
+  resource and orders the union in its canonical action order, which this
+  server reproduces; but it walks the user's roles in the order of an internal
+  unordered container, so the sequence of resources for a user holding several
+  roles is not reproducible. This server orders roles by `(role, db)`.
 - **SASLprep uses the host's Unicode tables** (Node's `NFKC`), while `mongod`
   uses ICU. Mapping and prohibition coverage is complete for the code points the
   fixtures exercise; an exotic code point whose Unicode version differs could
@@ -83,21 +108,28 @@ Remaining limits:
 ## Authorization
 
 `--auth` is now an authorization boundary, not just an identity check. Built-in
-roles stored in `<db>.system.users` are expanded into privileges by one table in
-`src/authorization.ts`, and the same expansion feeds `showPrivileges`, so the
-enforced and reported sets cannot drift. The command-to-action mapping covers
+roles and custom roles stored in `<db>.system.users` / `<db>.system.roles` are
+expanded into privileges by one path in `src/authorization.ts`, and the same
+expansion feeds `showPrivileges`, so the enforced and reported sets cannot
+drift. The command-to-action mapping covers
 `find`, `count`, `distinct`, `aggregate`, `explain`, `insert`, `update`,
 `delete`, `findAndModify`, `bulkWrite`, `create`, `collMod`, `createIndexes`,
 `dropIndexes`, `listIndexes`, `listCollections`, `dbStats`, `dropDatabase`,
-`createUser`, `dropUser`, `usersInfo`, `getMore`, `killCursors`, `listDatabases`
+`createUser`, `dropUser`, `createRole`, `dropRole`, `usersInfo`, `getMore`,
+`killCursors`, `listDatabases`
 and the cluster commands (`serverStatus`, `hostInfo`, `currentOp`, `killOp`,
 `replSetGetStatus`, `replSetGetConfig`, `replSetConfigure`).
 
-Measured against a real `--auth` instance:
+Measured against a real `mongod 8.0.9`:
 
-- The six role privilege expansions are deep-equal to `showPrivileges`
-  (`read` 2, `readWrite` 2, `dbAdmin` 2, `userAdmin` 1, `clusterAdmin` 14,
-  `root` 26).
+- All seventeen built-in role expansions are deep-equal to `showPrivileges`
+  (`read` 2, `readWrite` 2, `dbAdmin` 2, `userAdmin` 1, `dbOwner` 3,
+  `clusterAdmin` 14, `root` 26, `readAnyDatabase` 4, `readWriteAnyDatabase` 4,
+  `userAdminAnyDatabase` 9, `dbAdminAnyDatabase` 4, `clusterMonitor` 12,
+  `clusterManager` 11, `hostManager` 2, `backup` 15, `restore` 17, `__system` 1).
+- Custom-role expansions match too: a role's own privileges come first, its
+  inherited roles' after, and privileges sharing a resource merge into the
+  union in `mongod`'s canonical action order.
 - A refused command answers `not authorized on <db> to execute command
   { <command>, ... }` (13), with `pwd` redacted to `"xxx"` and the `lsid` binary
   rendered as `UUID("...")`.
@@ -116,15 +148,53 @@ Remaining limits:
 - **`system.*` collections inside a granted database** are treated like user
   collections by `find`/`listCollections`; `mongod` restricts `system.users` to
   its own commands.
-- **No authentication restrictions and no custom roles**, so `createUser` does
-  not accept `authenticationRestrictions`, and `roles` must name a built-in.
+- **`createUser` does not accept `authenticationRestrictions`**, and the
+  restrictions a `createRole` stores are reported but never enforced.
 
 ## `showPrivileges`
 
-`inheritedRoles` repeats the stored roles. `inheritedPrivileges` is the built-in
-role expansion from the same table the dispatch layer enforces, and
-`inheritedAuthenticationRestrictions` is an empty array, which is what `mongod`
-reports for the six built-ins.
+`inheritedRoles` lists the stored roles followed by the roles they inherit
+transitively. `inheritedPrivileges` is the expansion from the same path the
+dispatch layer enforces, merging duplicate resources into one entry with the
+union of actions in `mongod`'s canonical order.
+`inheritedAuthenticationRestrictions` is empty for built-in roles and nests
+one array per custom role that stored restrictions, which is the shape `mongod
+8.0.9` reports; `mongod` additionally normalizes CIDR notation when reporting,
+which this server does not.
+
+## `serverStatus` counters
+
+`opcounters`, `network`, `mem`, `asserts` and `opcountersRepl` answer from
+counters kept in the dispatch layer, classified by the deltas measured on the
+real server: an `insert` counts every document in its array (a duplicate-key
+failure still counts its attempt), `update` and `delete` count the statements
+in their arrays rather than the documents touched, `find` and `aggregate` count
+as `query`, `getMore` as `getmore`, and every other command — including
+`hello`, `count`, `distinct`, `findAndModify`, `killCursors` and `serverStatus`
+itself — counts as `command`. `network.bytesIn`/`bytesOut`/`numRequests` count
+wire frame bytes and frames at the socket layer. Commands refused before
+routing (authentication or authorization failures) are not counted.
+
+Differences from the real reply:
+
+- **`mem` answers `{supported: false}`.** The oracle on this platform answers
+  `supported: true` with `bits`, `resident` and `virtual` in MB; this server
+  does not track a memory footprint, and `supported: false` is the honest flag
+  (`mongosh` then hides the memory block).
+- **`asserts` is all zero**, including `user`. `mongod` counts uasserts there
+  (the oracle reported 92 after its own lifetime); this server does not track
+  them.
+- **`network` reports the three counters this server measures.** The real reply
+  also carries `physicalBytesIn`/`physicalBytesOut`, `numSlowDNSOperations`,
+  `numSlowSSLOperations`, `tcpFastOpen`, `compression`, `serviceExecutors` and
+  `listenerProcessingTime`.
+- **`opcountersRepl` is present with zero counters**, which is what both the
+  standalone oracle and a measured single-member replica set report (the
+  section counts oplog application by secondaries; there is no applier here).
+- The reply carries the sections this server measures in `mongod`'s relative
+  order (`asserts` after `localTime`, `network` after `connections`, then
+  `opcounters`, `opcountersRepl`, `mem`); the real server answers many more
+  sections between them.
 
 ## `dbStats` / `collStats`
 
