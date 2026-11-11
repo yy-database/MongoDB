@@ -330,6 +330,39 @@ the single-member set with `readPreference: secondary` fails server selection,
 because the only member reports itself as primary; a `directConnection` to that
 member reads normally, as with a real server.
 
+## Transactions
+
+The isolation surface was measured against a real `mongod 8.0.9` single-member
+replica set with raw `OP_MSG` probes (a fresh `lsid` per scenario): a second
+transaction updating a document the first has already modified answers
+`112 WriteConflict` with `mongod`'s text, uncommitted transaction writes are
+invisible to plain reads and visible to the transaction's own reads,
+`abortTransaction` discards them, re-committing a committed transaction and
+committing a transaction that never started answer exactly as `mongod`, and
+the `commitTransaction` / `abortTransaction` option validation reproduces the
+measured codes and wording in the measured order: `72 InvalidOptions` for
+`autocommit: true` ("Specifying autocommit=true is not allowed."), for
+`autocommit: false` without a `txnNumber`, and for a `txnNumber` without an
+`lsid`; `50768 NotARetryableWriteCommand` for a `txnNumber` without
+`autocommit: false`; `125 CommandFailed` for a bare commit/abort ("<name> must
+be run within a transaction"); and `13 Unauthorized` for a well-formed
+commit/abort sent against a database other than `admin` ("<name> may only be
+run against the admin database."), which the `autocommit` rules win over.
+Unknown verbs answer `59 CommandNotFound` with the `codeName` field.
+
+Remaining difference — document locking:
+
+- **A plain write to a document held by an open transaction is applied
+  immediately here.** `mongod` parks the plain writer on the document lock
+  until the transaction commits or aborts and then lets it proceed, so both
+  writes land in arrival order (the transaction's value first, the plain
+  write's value last). This server applies the plain write and refuses the
+  transaction at commit time with `112 WriteConflict`, so the transaction's
+  value never lands. The final state is the plain write's value either way,
+  and neither engine silently loses an acknowledged update, but the client
+  holding the transaction must retry it — which is also the driver behaviour
+  against `mongod` on `112`.
+
 ## `drop`
 
 `{drop: <name>}` answers `{nIndexesWas: <n>, ns: "<db>.<name>", ok: 1}` for an
