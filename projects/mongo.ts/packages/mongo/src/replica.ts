@@ -8,7 +8,7 @@
  * and after initiation, and the stored `local.system.replset` document across
  * a restart).
  */
-import { randomBytes } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
 export interface ReplicaState {
     /** `--repl-set` name; `null` means the server is not replication-enabled. */
@@ -29,6 +29,16 @@ export interface ReplicaState {
     increment: number
     /** Successful writes so far; `optime.t` stays `-1` until the first one. */
     writes: number
+    /** `$clusterTime.clusterTime`, seeded at start and advanced monotonically. */
+    clusterTime: { t: number; i: number }
+    /**
+     * Ephemeral HMAC-SHA256 key signing `$clusterTime.signature`. It is
+     * generated at startup and dies with the process, like `mongod`'s
+     * `--keyFile` secret is fixed for the life of the set.
+     */
+    signingKey: Buffer
+    /** Random 64-bit `signature.keyId`, fixed for the life of the process. */
+    signingKeyId: string
 }
 
 export function createReplicaState(name: string | null): ReplicaState {
@@ -46,7 +56,10 @@ export function createReplicaState(name: string | null): ReplicaState {
         electedAt: now,
         seconds: Math.floor(now / 1000),
         increment: 0,
-        writes: 0
+        writes: 0,
+        clusterTime: { t: Math.floor(now / 1000), i: 1 },
+        signingKey: randomBytes(32),
+        signingKeyId: String(randomBytes(8).readBigInt64BE())
     }
 }
 
@@ -61,6 +74,7 @@ export function noteWrite(state: ReplicaState, optime?: { t: number; i: number }
     if (optime !== undefined) {
         state.seconds = optime.t
         state.increment = optime.i
+        advanceClusterTime(state, optime.t, optime.i)
         return
     }
     const seconds = Math.floor(Date.now() / 1000)
@@ -71,6 +85,87 @@ export function noteWrite(state: ReplicaState, optime?: { t: number; i: number }
     else {
         state.increment += 1
     }
+    advanceClusterTime(state, state.seconds, state.increment)
+}
+
+/**
+ * Moves the cluster time to `max(current, candidate)`. `mongod` advances it
+ * with every oplog timestamp and with the `$clusterTime` a client sends, so it
+ * never moves backwards across the set.
+ */
+function advanceClusterTime(state: ReplicaState, seconds: number, increment: number): void {
+    const current = state.clusterTime
+    if (seconds > current.t || (seconds === current.t && increment > current.i)) {
+        state.clusterTime = { t: seconds, i: increment }
+    }
+}
+
+/**
+ * Adopts the `$clusterTime` of a request document when it is newer than the
+ * server's own, exactly as `mongod` does. Only the timestamp is read; a client
+ * signature is never verified here, because a real server checks it between
+ * internal members only.
+ */
+function adoptClientClusterTime(state: ReplicaState, command: any): void {
+    const ts = command?.$clusterTime?.clusterTime?.$timestamp
+    if (ts === undefined || ts === null || typeof ts !== 'object') return
+    const seconds = Number(ts.t)
+    const increment = Number(ts.i)
+    if (Number.isFinite(seconds) && Number.isFinite(increment)) advanceClusterTime(state, seconds, increment)
+}
+
+/** The BSON binary subtype 0 wrapper the signature hash is reported in. */
+function binaryValue(bytes: Buffer): any {
+    return { $binary: { base64: bytes.toString('base64'), subType: '00' } }
+}
+
+/**
+ * The `$clusterTime` reply field: the current cluster time signed with the
+ * ephemeral HMAC-SHA256 key. `mongod` signs the 8-byte BSON timestamp encoding
+ * (`i` then `t`, little endian) and truncates the digest to 20 bytes; the key
+ * id is a random 64-bit number that stays fixed for the life of the process.
+ * Both shapes were captured from `mongod 8.0.9`: the no-keyFile set answers
+ * with a zeroed 20-byte hash and `keyId: 0`, the `--keyFile` set signs the
+ * same way this server does.
+ */
+function clusterTimeField(state: ReplicaState): any {
+    const encoded = Buffer.alloc(8)
+    encoded.writeUInt32LE(state.clusterTime.i >>> 0, 0)
+    encoded.writeUInt32LE(state.clusterTime.t >>> 0, 4)
+    const digest = createHmac('sha256', state.signingKey).update(encoded).digest()
+    return {
+        clusterTime: timestamp(state.clusterTime.t, state.clusterTime.i),
+        signature: { hash: binaryValue(digest.subarray(0, 20)), keyId: { $numberLong: state.signingKeyId } }
+    }
+}
+
+/**
+ * `true` when replies carry cluster-time stamps. `mongod 8.0.9` attaches
+ * `$clusterTime` and `operationTime` on an initiated replica set only: a
+ * standalone server and a member without a set configuration answer without
+ * them (both captured on the reference servers).
+ */
+function stampsReplies(state: ReplicaState): boolean {
+    return state.name !== null && state.initialized && state.electionId !== null
+}
+
+/**
+ * Appends `$clusterTime` and `operationTime` to a reply in the position
+ * `mongod 8.0.9` puts them: after `ok`, `$clusterTime` first. `operationTime`
+ * repeats the reply's own `opTime.ts` on a write and the newest oplog
+ * timestamp on every other command, so a replayed retryable write keeps its
+ * cached `operationTime` while `$clusterTime` is re-stamped at send time.
+ */
+export function stampReply(state: ReplicaState, command: any, body: any): any {
+    if (!stampsReplies(state)) return body
+    adoptClientClusterTime(state, command)
+    const result: any = {}
+    for (const [key, value] of Object.entries(body)) result[key] = value
+    result.$clusterTime = clusterTimeField(state)
+    const written = body?.opTime?.ts?.$timestamp
+    result.operationTime =
+        written !== undefined ? timestamp(Number(written.t), Number(written.i)) : timestamp(state.seconds, state.increment)
+    return result
 }
 
 /**
@@ -333,6 +428,7 @@ function initiate(state: ReplicaState, command: any, me: string): any {
     state.seconds = Math.floor(now / 1000)
     state.increment = 1
     state.counter += 1
+    advanceClusterTime(state, state.seconds, state.increment)
     if (emptyRequest) {
         return {
             info2: 'no configuration specified. Using a default configuration for the set',

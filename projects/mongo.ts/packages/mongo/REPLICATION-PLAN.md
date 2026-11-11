@@ -1,10 +1,12 @@
 # Cross-process replication: pre-assessment
 
-Planning only. Nothing in this document is implemented yet, and no code in
-this change makes a member replicate. It lists the commands, session semantics
+Planning only for the cross-process parts: no code here makes a member
+replicate. It lists the commands, session semantics
 and capabilities a second process would need, what the oplog consumer still
 lacks, why rollback is impossible in the current topology, and the order in
-which the gaps have to close before any of it can start.
+which the gaps have to close before any of it can start. The Phase 0
+cluster-time and retry-deduplication foundations are already implemented and
+are marked as such below.
 
 ## What exists today
 
@@ -17,6 +19,10 @@ which the gaps have to close before any of it can start.
   set instead of returning to `NotYetInitialized` (94). Election state
   (`electionId`, `term`, oplog-recovered `optime`) is still per-process. The
   set has exactly one member: the local primary.
+- An initiated member stamps every reply with `$clusterTime` and
+  `operationTime`, signed with an ephemeral HMAC-SHA256 key, and adopts a newer
+  client cluster time. Retryable writes are deduplicated from a bounded
+  in-memory registry (see `KNOWN-DIFFERENCES.md`).
 - Nothing consumes the oplog. `syncSourceHost` is empty and there is no initial
   sync, no second member and no rollback. The deliberate rule is that this
   server never fabricates a SECONDARY (see `KNOWN-DIFFERENCES.md`).
@@ -35,7 +41,7 @@ cursor semantics.
 | clone documents | `find` + `getMore`, batched by `_id`, `noCursorTimeout` | `find`/`getMore` exist; the clone loop itself does not |
 | read the oplog | `find` on `local.oplog.rs` with `tailable`, `awaitData`, `maxAwaitTimeMS`, then `getMore` | the namespace is readable but a normal cursor, not a tailable one |
 | apply | `applyOps` on `admin.$cmd`, `mayBypassWriteConcern: true` | `applyOps` is accepted only as an oplog entry, not executed as a command |
-| session | `lsid`, `txnNumber` | accepted and ignored; there is no `config.transactions`, so a retried `applyOps` is not deduplicated |
+| session | `lsid`, `txnNumber` | retryable writes are deduplicated in process memory, but there is no `config.transactions`, so a retried `applyOps` after a restart is not suppressed |
 
 Session semantics that matter for a second member:
 
@@ -67,9 +73,10 @@ Session semantics that matter for a second member:
 3. **Rollback-aware reads.** Capped retention can drop the oldest entries, so a
    consumer must detect a gap and fall back to initial sync. `h` is no longer
    written, so undo information comes only from `o2` and the version 2 diff.
-4. **Cluster time.** Replies carry neither `$clusterTime` nor `operationTime`.
-   Drivers use them for causal consistency and for retryable-write ordering;
-   they must exist before two processes can agree on a "now".
+4. **Cluster time.** Replies on an initiated member carry `$clusterTime` and
+   `operationTime`, advanced with every write and adopted from client requests.
+   A second member still needs the two processes to agree through heartbeats,
+   which do not exist yet.
 5. **Apply path.** `applyOps` must run under the same storage primitives as
    normal writes (`insert`/`update`/`delete` on the named namespace), keep
    `ui` for collection identity, and be idempotent for a retried batch.
@@ -111,7 +118,11 @@ process; Phase 2 cannot.
    are still regenerated per process, and `optime` is not recovered from the
    oplog across a restart.
 2. Emit `$clusterTime` and `operationTime` on every reply and keep `electionId`
-   stable for the life of the primary.
+   stable for the life of the primary. **Done**: an initiated member stamps
+   every reply in `mongod 8.0.9`'s position with an ephemeral HMAC-SHA256
+   signature, standalone and uninitiated members answer unstamped, and
+   retryable writes are deduplicated from an in-memory registry (bounded, not
+   persisted to `config.transactions`; see `KNOWN-DIFFERENCES.md`).
 3. Implement `tailable`/`awaitData` on `find` and `maxAwaitTimeMS` on
    `getMore`, scoped to the oplog namespace first.
 4. Execute `applyOps` as a command with bypassed write concern, ordered apply and

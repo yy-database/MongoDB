@@ -1271,6 +1271,8 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     equal(beforeInitiate.maxWireVersion, { $numberInt: '25' }, 'the wire version is 25')
     equal(beforeInitiate.logicalSessionTimeoutMinutes, { $numberInt: '30' }, 'sessions time out in 30 minutes')
     ok(typeof beforeInitiate.connectionId.$numberInt === 'string', 'hello carries a connectionId')
+    equal(Object.hasOwn(beforeInitiate, '$clusterTime'), false, 'an uninitiated set carries no cluster time, like the oracle')
+    equal(Object.hasOwn(beforeInitiate, 'operationTime'), false, 'an uninitiated set carries no operationTime')
 
     const legacy = await command(replicaConnection, { isMaster: 1, $db: 'admin' })
     equal(legacy.ismaster, false, 'isMaster uses the legacy writable field')
@@ -1416,7 +1418,9 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     equal(removed.n, { $numberInt: '1' }, 'an acknowledged delete reports n')
 
     const unacknowledged = await command(replicaConnection, { insert: 'c', documents: [{ _id: 403 }], writeConcern: { w: 0 }, $db: db })
-    equal(unacknowledged, { n: { $numberInt: '0' }, ok: { $numberDouble: '1.0' } }, 'w: 0 withholds the counters')
+    equal(unacknowledged.n, { $numberInt: '0' }, 'w: 0 withholds the counters')
+    equal(unacknowledged.ok, { $numberDouble: '1.0' }, 'w: 0 is still acknowledged')
+    equal(Object.keys(unacknowledged), ['n', 'ok', '$clusterTime', 'operationTime'], 'the w: 0 reply keeps the oracle field order with stamps')
 
     const unsatisfiable = await command(replicaConnection, { insert: 'c', documents: [{ _id: 404 }], writeConcern: { w: 2 }, $db: db })
     equal(unsatisfiable.ok, { $numberDouble: '1.0' }, 'an unsatisfiable w still applies the write')
@@ -1515,7 +1519,8 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     equal(Object.hasOwn(dropped, 'electionId'), false, 'drop carries no electionId')
 
     const droppedMissing = await command(replicaConnection, { drop: 'ghost', $db: db })
-    equal(droppedMissing, { ok: { $numberDouble: '1.0' } }, 'dropping a missing collection replies ok only')
+    equal(droppedMissing.ok, { $numberDouble: '1.0' }, 'dropping a missing collection replies ok')
+    equal(Object.keys(droppedMissing), ['ok', '$clusterTime', 'operationTime'], 'the missing drop keeps the oracle field order with stamps')
 
     const liveOplog = await command(replicaConnection, { drop: 'oplog.rs', $db: 'local' })
     equal(liveOplog.code, { $numberInt: '5255000' }, 'the live oplog cannot be dropped')
@@ -1766,6 +1771,160 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     equal(advanced.members[0].optime.t, { $numberLong: '1' }, 'the restarted optime term advances with a real write')
     restarted.socket.destroy()
     await second.close()
+}
+
+// --- cluster time and retryable write dedupulation --------------------------
+//
+// The reply shapes below were captured from `mongod 8.0.9`: the single-member
+// set on 127.0.0.1:28019 (no keyFile, so the signature is zeroed), a
+// `--replSet --keyFile` set on 127.0.0.1:28021 (real HMAC-SHA256 signature),
+// and the standalone server on 127.0.0.1:28018, which attaches no cluster time
+// at all. The fixtures keep the exact field order the reference server sent.
+
+const ORACLE_STANDALONE_PING = '{"ok":{"$numberDouble":"1.0"}}'
+const ORACLE_RS_PING =
+    '{"ok":{"$numberDouble":"1.0"},"$clusterTime":{"clusterTime":{"$timestamp":{"t":1794375803,"i":2}},"signature":{"hash":{"$binary":{"base64":"AAAAAAAAAAAAAAAAAAAAAAAAAAA=","subType":"00"}},"keyId":{"$numberLong":"0"}}},"operationTime":{"$timestamp":{"t":1794375803,"i":2}}}'
+const ORACLE_RS_INSERT =
+    '{"n":{"$numberInt":"1"},"electionId":{"$oid":"7fffffff0000000000000001"},"opTime":{"ts":{"$timestamp":{"t":1794375815,"i":2}},"t":{"$numberLong":"1"}},"ok":{"$numberDouble":"1.0"},"$clusterTime":{"clusterTime":{"$timestamp":{"t":1794375815,"i":2}},"signature":{"hash":{"$binary":{"base64":"AAAAAAAAAAAAAAAAAAAAAAAAAAA=","subType":"00"}},"keyId":{"$numberLong":"0"}}},"operationTime":{"$timestamp":{"t":1794375815,"i":2}}}'
+const ORACLE_RS_RETRY =
+    '{"n":{"$numberInt":"1"},"electionId":{"$oid":"7fffffff0000000000000001"},"opTime":{"ts":{"$timestamp":{"t":1794375815,"i":2}},"t":{"$numberLong":"1"}},"retriedStmtIds":[{"$numberInt":"0"}],"ok":{"$numberDouble":"1.0"},"$clusterTime":{"clusterTime":{"$timestamp":{"t":1794375815,"i":2}},"signature":{"hash":{"$binary":{"base64":"AAAAAAAAAAAAAAAAAAAAAAAAAAA=","subType":"00"}},"keyId":{"$numberLong":"0"}}},"operationTime":{"$timestamp":{"t":1794375815,"i":2}}}'
+const ORACLE_SIGNED_CLUSTER_TIME =
+    '{"clusterTime":{"$timestamp":{"t":1794376406,"i":1}},"signature":{"hash":{"$binary":{"base64":"e0aE+y8KYGtN9e/j04YwoMl302s=","subType":"00"}},"keyId":{"$numberLong":"7706787808685326343"}}}'
+
+/** The `$clusterTime` field with its volatile values replaced by shape tags. */
+function clusterTimeShape(value) {
+    return {
+        clusterTime: '<timestamp>',
+        signature: {
+            hash: `<binary:${Buffer.from(value.signature.hash.$binary.base64, 'base64').length}:${value.signature.hash.$binary.subType}>`,
+            keyId: '<numberLong>'
+        }
+    }
+}
+
+// A standalone server answers without any cluster time, exactly as the oracle.
+{
+    const standalone = await connect(address.port)
+    const ping = await command(standalone, { ping: 1, $db: 'admin' })
+    equal(JSON.stringify(ping), ORACLE_STANDALONE_PING, 'a standalone ping matches the oracle reply field for field: no cluster time')
+    const write = await command(standalone, { insert: 'ct', documents: [{ _id: 1 }], $db: 'standalone_ct' })
+    equal(Object.hasOwn(write, '$clusterTime'), false, 'a standalone write carries no cluster time')
+    equal(Object.hasOwn(write, 'operationTime'), false, 'a standalone write carries no operationTime')
+    standalone.socket.destroy()
+}
+
+{
+    const ping = await command(replicaConnection, { ping: 1, $db: 'admin' })
+    equal(Object.keys(ping), Object.keys(JSON.parse(ORACLE_RS_PING)), 'the set ping reply keeps the oracle field order')
+    equal(Object.keys(ping.$clusterTime), ['clusterTime', 'signature'], '$clusterTime carries clusterTime then signature')
+    equal(Object.keys(ping.$clusterTime.signature), ['hash', 'keyId'], 'the signature carries hash then keyId')
+    ok(ping.$clusterTime.clusterTime.$timestamp !== undefined, 'clusterTime is a BSON timestamp')
+    equal(ping.$clusterTime.signature.hash.$binary.subType, '00', 'the signature hash is binary subtype 0')
+    equal(Buffer.from(ping.$clusterTime.signature.hash.$binary.base64, 'base64').length, 20, 'the signature hash is the first 20 bytes of the HMAC')
+    ok(typeof ping.$clusterTime.signature.keyId.$numberLong === 'string', 'the signature carries a NumberLong keyId')
+    ok(ping.operationTime.$timestamp !== undefined, 'the reply carries operationTime')
+    equal(
+        JSON.stringify(clusterTimeShape(ping.$clusterTime)),
+        JSON.stringify(clusterTimeShape(JSON.parse(ORACLE_SIGNED_CLUSTER_TIME))),
+        'the signed cluster time matches the --keyFile oracle shape'
+    )
+
+    const write = await command(replicaConnection, { insert: 'ct', documents: [{ _id: 1 }], $db: 'rs_cluster' })
+    equal(Object.keys(write), Object.keys(JSON.parse(ORACLE_RS_INSERT)), 'the set insert reply keeps the oracle field order')
+    equal(JSON.stringify(write.operationTime), JSON.stringify(write.opTime.ts), 'operationTime repeats the oplog timestamp of the write')
+    const afterWrite = await command(replicaConnection, { ping: 1, $db: 'admin' })
+    const stamp = (value) => value.$timestamp.t * 0x1_0000_0000 + value.$timestamp.i
+    ok(stamp(afterWrite.$clusterTime.clusterTime) >= stamp(write.$clusterTime.clusterTime), 'the cluster time never moves backwards')
+    equal(JSON.stringify(afterWrite.operationTime), JSON.stringify(write.opTime.ts), 'a read reports the newest oplog timestamp')
+    equal(JSON.stringify(afterWrite.$clusterTime.signature.keyId), JSON.stringify(write.$clusterTime.signature.keyId), 'the signature key id is fixed for the process')
+
+    // `mongod` advances the cluster time from the `$clusterTime` a client sends.
+    const future = write.$clusterTime.clusterTime.$timestamp.t + 5000
+    const adopted = await command(replicaConnection, {
+        ping: 1,
+        $clusterTime: {
+            clusterTime: { $timestamp: { t: future, i: 3 } },
+            signature: { hash: { $binary: { base64: Buffer.alloc(20, 3).toString('base64'), subType: '00' } }, keyId: { $numberLong: '1' } }
+        },
+        $db: 'admin'
+    })
+    equal(adopted.$clusterTime.clusterTime, { $timestamp: { t: future, i: 3 } }, 'the server adopts a newer client cluster time')
+    const kept = await command(replicaConnection, { ping: 1, $db: 'admin' })
+    ok(kept.$clusterTime.clusterTime.$timestamp.t >= future, 'the adopted cluster time stays advanced')
+    ok(
+        JSON.stringify(kept.$clusterTime.signature.hash) !== JSON.stringify(write.$clusterTime.signature.hash),
+        'a newer cluster time gets a different HMAC'
+    )
+}
+
+{
+    const lsid = { id: { $binary: { base64: Buffer.from('5a5b5c5d5e5f60616263646566676869', 'hex').toString('base64'), subType: '04' } } }
+    const retryCommand = (txn, stmt, id) => ({
+        insert: 'dedup',
+        documents: [{ _id: id }],
+        lsid,
+        txnNumber: { $numberLong: String(txn) },
+        ...(stmt === null ? {} : { stmtId: { $numberInt: String(stmt) } }),
+        $db: 'rs_retry'
+    })
+
+    const first = await command(replicaConnection, retryCommand(1, 0, 1))
+    equal(first.n, { $numberInt: '1' }, 'the first attempt of a retryable write runs')
+
+    // Advance only the cluster time, then retry: `mongod` keeps the cached
+    // `opTime` and `operationTime` but re-stamps `$clusterTime` at send time.
+    const future = first.$clusterTime.clusterTime.$timestamp.t + 5000
+    await command(replicaConnection, {
+        ping: 1,
+        $clusterTime: {
+            clusterTime: { $timestamp: { t: future, i: 3 } },
+            signature: { hash: { $binary: { base64: Buffer.alloc(20, 3).toString('base64'), subType: '00' } }, keyId: { $numberLong: '1' } }
+        },
+        $db: 'admin'
+    })
+    const retry = await command(replicaConnection, retryCommand(1, 0, 1))
+    equal(Object.keys(retry), Object.keys(JSON.parse(ORACLE_RS_RETRY)), 'the replayed reply keeps the oracle field order')
+    equal(retry.n, { $numberInt: '1' }, 'the replay reports the cached counter, not a duplicate-key error')
+    equal(JSON.stringify(retry.opTime), JSON.stringify(first.opTime), 'the replay keeps the cached opTime')
+    equal(JSON.stringify(retry.operationTime), JSON.stringify(first.operationTime), 'the replay keeps the cached operationTime')
+    equal(retry.retriedStmtIds, [{ $numberInt: '0' }], 'the replay names the retried statement')
+    equal(retry.$clusterTime.clusterTime, { $timestamp: { t: future, i: 3 } }, 'the replay re-stamps the current cluster time')
+    const counted = await command(replicaConnection, { find: 'dedup', filter: {}, $db: 'rs_retry' })
+    equal(counted.cursor.firstBatch.length, 1, 'the retried insert executed once')
+
+    const otherTxn = await command(replicaConnection, retryCommand(2, 0, 2))
+    equal(otherTxn.n, { $numberInt: '1' }, 'a different txnNumber executes normally')
+    const otherStmt = await command(replicaConnection, retryCommand(2, 1, 3))
+    equal(otherStmt.n, { $numberInt: '1' }, 'a different stmtId in the same txnNumber is a different statement')
+    const noStmt = await command(replicaConnection, retryCommand(4, null, 4))
+    const noStmtRetry = await command(replicaConnection, retryCommand(4, null, 4))
+    equal(noStmtRetry.retriedStmtIds, [{ $numberInt: '0' }], 'a replay without stmtId reports statement 0, like mongod')
+    equal(JSON.stringify(noStmtRetry.opTime), JSON.stringify(noStmt.opTime), 'the no-stmtId replay keeps the cached opTime')
+
+    const duplicate = await command(replicaConnection, { insert: 'dedup', documents: [{ _id: 1 }], $db: 'rs_retry' })
+    equal(duplicate.ok, { $numberDouble: '1.0' }, 'a write without txnNumber executes again')
+    equal(duplicate.writeErrors?.[0]?.code, { $numberInt: '11000' }, 'the un-stamped duplicate hits the unique index')
+
+    await command(replicaConnection, { insert: 'counter', documents: [{ _id: 1, v: 0 }], $db: 'rs_retry' })
+    const update = { update: 'counter', updates: [{ q: { _id: 1 }, u: { $inc: { v: 5 } } }], lsid, txnNumber: { $numberLong: '10' }, stmtId: { $numberInt: '0' }, $db: 'rs_retry' }
+    const inc = await command(replicaConnection, update)
+    const incRetry = await command(replicaConnection, update)
+    equal(JSON.stringify(incRetry.nModified), JSON.stringify(inc.nModified), 'the replayed update reports the cached counters')
+    const counter = (await command(replicaConnection, { find: 'counter', filter: { _id: 1 }, $db: 'rs_retry' })).cursor.firstBatch[0]
+    equal(counter.v, { $numberInt: '5' }, 'the retried $inc did not run twice')
+
+    const fam = { findAndModify: 'counter', query: { _id: 1 }, update: { $inc: { v: 1 } }, lsid, txnNumber: { $numberLong: '11' }, stmtId: { $numberInt: '0' }, $db: 'rs_retry' }
+    const modified = await command(replicaConnection, fam)
+    const modifiedRetry = await command(replicaConnection, fam)
+    equal(JSON.stringify(modifiedRetry.value), JSON.stringify(modified.value), 'the replayed findAndModify reports the cached document')
+    const afterFam = (await command(replicaConnection, { find: 'counter', filter: { _id: 1 }, $db: 'rs_retry' })).cursor.firstBatch[0]
+    equal(afterFam.v, { $numberInt: '6' }, 'the retried findAndModify incremented once')
+
+    const removed = { delete: 'dedup', deletes: [{ q: { _id: 2 }, limit: 1 }], lsid, txnNumber: { $numberLong: '12' }, stmtId: { $numberInt: '0' }, $db: 'rs_retry' }
+    const deleted = await command(replicaConnection, removed)
+    const deletedRetry = await command(replicaConnection, removed)
+    equal(JSON.stringify(deletedRetry.n), JSON.stringify(deleted.n), 'the replayed delete reports the cached counter')
+    equal(deletedRetry.retriedStmtIds, [{ $numberInt: '0' }], 'the replayed delete names the retried statement')
 }
 
 replicaConnection.socket.destroy()

@@ -218,13 +218,30 @@ Limits a client can observe:
 - **`replSetReconfig`, `replSetStepDown` and `replSetFreeze` are not
   implemented** (CommandNotFound). `topologyVersion.counter` advances when the
   member state changes (initiation), not on heartbeats.
-- **No cluster time.** Replies carry neither `$clusterTime` nor `operationTime`.
-  Sessions, retryable writes and transactions are accepted, but the retry
-  metadata a real server attaches to replies is absent.
-- **Retryable writes are executed but not deduplicated.** A write stamped with
-  `txnNumber` outside a transaction runs normally, as `mongod` does, but there is
-  no `config.transactions` record, so a retried write with the same `txnNumber`
-  runs a second time instead of being suppressed.
+- **Cluster time is signed with an ephemeral key.** Replies on an initiated set
+  carry `$clusterTime` and `operationTime` in `mongod 8.0.9`'s position (after
+  `ok`, `$clusterTime` first, `operationTime` last) on every command, errors
+  included; a standalone server and an uninitiated member answer without them,
+  which is what the reference servers send. The signature is the first 20 bytes
+  of an HMAC-SHA256 over the timestamp, taken with a key generated at startup
+  and a random 64-bit `keyId`. A real `mongod` without `--keyFile` answers with
+  a zeroed hash and `keyId: 0`, and one with `--keyFile` shares a persisted
+  secret; this server's signature therefore verifies against no external key,
+  which no external client checks. The cluster time advances with every write
+  and adopts a newer `$clusterTime` from a request document, like `mongod`.
+- **Retryable writes are deduplicated in process memory.** An acknowledged
+  `insert`, `update`, `delete`, `findAndModify` or `bulkWrite` that carries
+  `lsid` and `txnNumber` stores its settled reply under
+  `(lsid, txnNumber, stmtId)`; a retry with the same key gets the stored reply
+  without running the write again, with `retriedStmtIds` inserted before `ok`
+  and a re-stamped `$clusterTime`, exactly as `mongod` replays. The registry
+  holds at most 4096 entries, evicts the oldest first and forgets records older
+  than 30 minutes, the session timeout. `mongod` persists the same records in
+  `config.transactions`; here a restart forgets them, so a retry that arrives
+  after a restart runs again. The per-session rule that a retryable write's
+  `txnNumber` must not be older than the newest one already started on that
+  session (`TransactionTooOld`, 225) is not enforced: an old retry is answered
+  from the registry while the record lives and executes after it is gone.
 - **`hello` is not streamed.** An awaitable handshake (`topologyVersion` plus
   `maxAwaitTimeMS` and `exhaustAllowed`) gets one immediate reply instead of a
   held-open reply stream, so a client configured with

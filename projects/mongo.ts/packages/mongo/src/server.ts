@@ -31,6 +31,7 @@ import {
     replicaCommand,
     replicaError,
     restoreReplicaConfig,
+    stampReply,
     topologyHandshake,
     writeStamps,
     type ReplicaState
@@ -257,8 +258,103 @@ function hostPrefix(): string {
     return os.hostname()
 }
 
+/** Commands `mongod` replays from its retry registry instead of running twice. */
+const RETRYABLE_WRITE_COMMANDS = new Set(['insert', 'update', 'delete', 'findAndModify', 'bulkWrite'])
+
+/** Entry and age bound of the in-memory retry registry. */
+const RETRY_MAX_ENTRIES = 4096
+const RETRY_MAX_AGE_MS = 30 * 60 * 1000
+
+interface RetryRecord {
+    reply: any
+    storedAt: number
+}
+
+/** Unwraps an extended-JSON integer into the decimal text the registry keys on. */
+function integerText(value: unknown): string {
+    if (value !== null && typeof value === 'object') {
+        for (const key of ['$numberInt', '$numberLong', '$numberDouble']) {
+            if (Object.hasOwn(value, key)) return String((value as any)[key])
+        }
+    }
+    return String(value)
+}
+
+/**
+ * The `(lsid, txnNumber, stmtId)` identity of a retryable write, or `null` when
+ * the command is not retryable or carries no `txnNumber`. A missing `stmtId`
+ * keys as `0`, which is what `mongod` stores for single-statement writes.
+ */
+function retryKey(name: unknown, command: any): string | null {
+    if (typeof name !== 'string' || !RETRYABLE_WRITE_COMMANDS.has(name)) return null
+    const lsid = command?.lsid?.id?.$binary
+    if (typeof lsid?.base64 !== 'string' || command.txnNumber === undefined) return null
+    const stmt = command.stmtId === undefined ? '0' : integerText(command.stmtId)
+    return `${lsid.subType ?? '04'}|${lsid.base64}|${integerText(command.txnNumber)}|${stmt}`
+}
+
+/**
+ * The stored reply of a retried write with `retriedStmtIds` inserted before
+ * `ok`, exactly where `mongod 8.0.9` puts it. `opTime` and `operationTime` keep
+ * the cached timestamps; only `$clusterTime` is re-stamped when the reply is
+ * sent again.
+ */
+function replayedReply(stored: any, stmtId: string): any {
+    const result: any = {}
+    for (const [key, value] of Object.entries(stored)) {
+        if (key === 'ok') result.retriedStmtIds = [{ $numberInt: stmtId }]
+        result[key] = value
+    }
+    return result
+}
+
+/**
+ * Settled replies of retryable writes, keyed by `retryKey`, kept in process
+ * memory: bounded by entry count and age, evicting the oldest entry first.
+ * `mongod` persists the same records in `config.transactions`; a restart here
+ * forgets them (documented in `KNOWN-DIFFERENCES.md`).
+ */
+class RetryRegistry {
+    private records = new Map<string, RetryRecord>()
+
+    get(key: string): RetryRecord | null {
+        const record = this.records.get(key)
+        if (record === undefined) return null
+        if (Date.now() - record.storedAt > RETRY_MAX_AGE_MS) {
+            this.records.delete(key)
+            return null
+        }
+        return record
+    }
+
+    store(key: string, reply: any): void {
+        const now = Date.now()
+        for (const [entry, record] of this.records) {
+            if (now - record.storedAt > RETRY_MAX_AGE_MS) this.records.delete(entry)
+        }
+        while (this.records.size >= RETRY_MAX_ENTRIES) {
+            const oldest = this.records.keys().next()
+            if (oldest.done === true) break
+            this.records.delete(oldest.value)
+        }
+        this.records.set(key, { reply, storedAt: now })
+    }
+}
+
 function hasCurrentOpStage(stage: any): boolean {
     return typeof stage === 'object' && stage !== null && Object.hasOwn(stage, '$currentOp')
+}
+
+/**
+ * The retry-registry key of a command that may be answered from a stored
+ * reply, or `null`. The auth gates `dispatch` applies are re-checked here, so
+ * a replay never reaches a client that `dispatch` would have refused.
+ */
+function replayKey(name: unknown, command: any, session: Session, authRequired: boolean): string | null {
+    if (typeof name !== 'string' || !RETRYABLE_WRITE_COMMANDS.has(name)) return null
+    if (authRequired && session.auth.users.length === 0 && !allowedBeforeAuth(name)) return null
+    if (authRequired && session.auth.users.length > 0 && authorizeCommand(session, command) !== null) return null
+    return retryKey(name, command)
 }
 
 /** Canonical extended JSON for a millisecond timestamp. */
@@ -711,6 +807,7 @@ export function createServer(options: ServerOptions): MongoServer {
         const stored = readStoredReplicaConfig(store)
         if (stored !== null) restoreReplicaConfig(replica, stored)
     }
+    const retries = new RetryRegistry()
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
     let replyId = 0
     let closed = false
@@ -786,11 +883,24 @@ export function createServer(options: ServerOptions): MongoServer {
             }
             if (inbound.envelope !== null) stats.compressedRequests += 1
             stats.negotiated = session.negotiated
+            let command: any = null
             try {
-                const command =
+                command =
                     inbound.opcode === OP_QUERY
                         ? document(binding.decodeOpQuery(inbound.payload))
                         : document(binding.decodeOpMsg(inbound.payload))
+                const commandName = Object.keys(command)[0]
+                const key = replayKey(commandName, command, session, authRequired)
+                if (key !== null) {
+                    const cached = retries.get(key)
+                    if (cached !== null) {
+                        // `mongod` replays the stored reply and never runs the write again.
+                        const replay = replayedReply(cached.reply, key.slice(key.lastIndexOf('|') + 1))
+                        stats.negotiated = session.negotiated
+                        if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampReply(replica, command, replay))
+                        return
+                    }
+                }
                 const write: WriteSlot = { decision: null }
                 const body = dispatch(
                     session,
@@ -808,17 +918,17 @@ export function createServer(options: ServerOptions): MongoServer {
                     `${socket.localAddress}:${socket.localPort}`,
                     write
                 )
-                const commandName = Object.keys(command)[0]
                 const settled = settleWrite(store, replica, commandName, body, write.decision)
+                if (key !== null && replyOk(settled)) retries.store(key, settled)
                 stats.negotiated = session.negotiated
-                if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, settled)
+                if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampReply(replica, command, settled))
             } catch (error) {
                 binding.discardOplog(store)
                 stats.negotiated = session.negotiated
                 if (moreToCome(inbound)) return
                 const message = (error as Error).message ?? String(error)
                 try {
-                    reply(inbound.header.requestId, inbound, document(binding.errorReply(2, message)))
+                    reply(inbound.header.requestId, inbound, stampReply(replica, command, document(binding.errorReply(2, message))))
                 } catch {
                     sendProtocolError(socket, frame, message)
                 }
