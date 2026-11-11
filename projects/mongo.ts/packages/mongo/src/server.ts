@@ -5,10 +5,10 @@
 // `OP_COMPRESSED` frame is unwrapped, the payload is decoded by `mongo`,
 // and the reply is wrapped in the same compressor the request used (which is
 // what `mongod 8.0.9` does, even when that compressor was not negotiated).
-import { mkdirSync, statfsSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
     allowedBeforeAuth,
     anyUserExists,
@@ -60,7 +60,7 @@ import {
 export const SUPPORTED_COMPRESSORS = ['snappy', 'zlib', 'zstd']
 
 export interface ServerOptions {
-    /** Directory that holds `mongo.yykv`. */
+    /** Directory that holds `mongo.yykv` and the `mongo.lock` file. */
     dataDir: string
     port?: number
     host?: string
@@ -580,11 +580,86 @@ function dispatch(
     }
 }
 
+/** File name of the mutual-exclusion lock inside `dataDir`. */
+const LOCK_FILE_NAME = 'mongo.lock'
+
+/** Resolved data directories held by a live `createServer` in this process. */
+const processDirLocks = new Set<string>()
+
+function lockDirectoryKey(dataDir: string): string {
+    const resolved = resolve(dataDir)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+/** `true` when a pid names a process that is still running. */
+function pidAlive(pid: unknown): boolean {
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false
+    try {
+        process.kill(pid, 0)
+        return true
+    } catch (error) {
+        // `EPERM` means the process exists but belongs to another user.
+        return (error as NodeJS.ErrnoException).code === 'EPERM'
+    }
+}
+
+/**
+ * Takes the exclusive data-directory lock before the store opens, mirroring
+ * `mongod`'s `mongod.lock`: the file is created with `wx` and names the holder
+ * (`pid`, host, port, start time). A lock file whose pid is dead is stale and
+ * removed, then the exclusive create is retried once; a live holder — another
+ * process, or another `createServer` in this one, which no pid check can see —
+ * refuses the directory synchronously.
+ */
+function acquireDirLock(options: ServerOptions): { directory: string; lockPath: string; key: string } {
+    const directory = resolve(options.dataDir)
+    const key = lockDirectoryKey(options.dataDir)
+    if (processDirLocks.has(key)) {
+        throw new Error(
+            `Unable to lock data directory "${directory}": ${LOCK_FILE_NAME} is already held by process ${process.pid} in this process`
+        )
+    }
+    const lockPath = join(directory, LOCK_FILE_NAME)
+    const holder = JSON.stringify({
+        pid: process.pid,
+        host: options.host ?? '127.0.0.1',
+        port: options.port ?? 27017,
+        startedAt: new Date().toISOString()
+    })
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            writeFileSync(lockPath, `${holder}\n`, { flag: 'wx' })
+            processDirLocks.add(key)
+            return { directory, lockPath, key }
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+            let existing: any = null
+            try {
+                existing = JSON.parse(readFileSync(lockPath, 'utf8'))
+            } catch {
+                existing = null
+            }
+            if (pidAlive(existing?.pid)) {
+                throw new Error(
+                    `Unable to lock data directory "${directory}": ${LOCK_FILE_NAME} is held by process ${existing.pid}`
+                )
+            }
+            try {
+                rmSync(lockPath)
+            } catch {
+                // A concurrent holder may have taken it back; the retry reports that.
+            }
+        }
+    }
+    throw new Error(`Unable to lock data directory "${directory}": the stale ${LOCK_FILE_NAME} keeps reappearing`)
+}
+
 export function createServer(options: ServerOptions): MongoServer {
     const host = options.host ?? '127.0.0.1'
     const port = options.port ?? 27017
     const supported = options.compressors ?? SUPPORTED_COMPRESSORS
     mkdirSync(options.dataDir, { recursive: true })
+    const dirLock = acquireDirLock(options)
 
     const store = new binding.MongoStore(join(options.dataDir, 'mongo.yykv'))
     // `mongod --replSet` creates the capped oplog at startup, before the set is
@@ -760,6 +835,12 @@ export function createServer(options: ServerOptions): MongoServer {
             for (const socket of sockets) socket.destroy()
             sockets.clear()
             cursorTables.clear()
+            try {
+                rmSync(dirLock.lockPath)
+            } catch {
+                // The lock file is already gone; releasing the directory is what matters.
+            }
+            processDirLocks.delete(dirLock.key)
         }
     }
 }

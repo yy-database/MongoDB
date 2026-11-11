@@ -54,3 +54,14 @@ listed in [KNOWN-DIFFERENCES.md](./KNOWN-DIFFERENCES.md).
 const server = createServer({ dataDir: './data', port: 27017, auth: true })
 ```
 
+## Data directory lock
+
+`createServer` takes an exclusive lock on `dataDir` before it opens the store:
+it creates `mongo.lock` with `wx` and writes the holder's `pid`, host, port and
+start time. A second `createServer` on the same directory — in this process or
+in another — is refused synchronously with an `Unable to lock data directory`
+error naming the directory and the holder pid, mirroring `mongod`'s startup
+failure on a busy `dbpath`. A lock file whose pid is no longer running is
+stale: it is removed and the exclusive create is retried once, so a crashed
+holder never wedges the directory. `close()` releases the lock.
+

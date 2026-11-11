@@ -6,7 +6,7 @@
 // for drop-in use.
 import assert from 'node:assert/strict'
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1643,6 +1643,72 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     equal(unknown.errmsg, "no such command: 'totallyBogus'", 'the 59 text matches mongod')
 
     txn.socket.destroy()
+}
+
+// --- data directory lock ------------------------------------------------------
+//
+// Two processes sharing one data directory can corrupt the `.yykv` shard, so
+// `createServer` takes an exclusive `mongo.lock` before opening the store and
+// refuses a directory a live holder owns, mirroring `mongod`'s "Unable to lock
+// data directory" startup failure.
+
+{
+    const lockDir = mkdtempSync(join(tmpdir(), 'mongo-lock-'))
+    const lockFile = join(lockDir, 'mongo.lock')
+    const first = createServer({ dataDir: lockDir, port: 0 })
+    await first.listening
+
+    ok(existsSync(lockFile), 'the server writes a lock file inside the data directory')
+    const holder = JSON.parse(readFileSync(lockFile, 'utf8'))
+    equal(holder.pid, process.pid, 'the lock file names the holder pid')
+    equal(holder.host, '127.0.0.1', 'the lock file names the holder host')
+    equal(typeof holder.startedAt, 'string', 'the lock file names the holder start time')
+
+    let refused = null
+    try {
+        createServer({ dataDir: lockDir, port: 0 })
+    } catch (error) {
+        refused = error
+    }
+    ok(refused instanceof Error, 'a second server on the same data directory is refused')
+    ok(refused.message.includes('Unable to lock data directory'), 'the refusal uses the mongod wording')
+    ok(refused.message.includes(lockDir), 'the refusal names the data directory')
+    ok(refused.message.includes(String(process.pid)), 'the refusal names the holder pid')
+    equal(JSON.parse(readFileSync(lockFile, 'utf8')).pid, process.pid, 'the refusal leaves the holder lock file alone')
+
+    await first.close()
+    equal(existsSync(lockFile), false, 'close releases the lock file')
+
+    const reopened = createServer({ dataDir: lockDir, port: 0 })
+    await reopened.listening
+    equal(JSON.parse(readFileSync(lockFile, 'utf8')).pid, process.pid, 'a new server re-locks the released directory')
+    await reopened.close()
+}
+
+{
+    const busyDir = mkdtempSync(join(tmpdir(), 'mongo-busy-'))
+    const lockFile = join(busyDir, 'mongo.lock')
+    writeFileSync(lockFile, JSON.stringify({ pid: process.ppid, host: '127.0.0.1', port: 27017, startedAt: new Date().toISOString() }))
+    let refused = null
+    try {
+        createServer({ dataDir: busyDir, port: 0 })
+    } catch (error) {
+        refused = error
+    }
+    ok(refused instanceof Error, 'a lock held by a live foreign process refuses the directory')
+    ok(refused.message.includes(String(process.ppid)), 'the refusal names the foreign holder pid')
+    equal(JSON.parse(readFileSync(lockFile, 'utf8')).pid, process.ppid, 'the live holder lock file survives the refusal')
+    rmSync(lockFile)
+}
+
+{
+    const staleDir = mkdtempSync(join(tmpdir(), 'mongo-stale-'))
+    const lockFile = join(staleDir, 'mongo.lock')
+    writeFileSync(lockFile, JSON.stringify({ pid: 0x7FFFFFFF, host: '127.0.0.1', port: 27017, startedAt: new Date().toISOString() }))
+    const server = createServer({ dataDir: staleDir, port: 0 })
+    await server.listening
+    equal(JSON.parse(readFileSync(lockFile, 'utf8')).pid, process.pid, 'a stale lock is replaced by the new holder')
+    await server.close()
 }
 
 replicaConnection.socket.destroy()
