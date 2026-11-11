@@ -4,6 +4,10 @@
 
 use std::sync::Arc;
 
+use database::harness::{
+    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, Stats, check_baseline, per_op_ms, render_json,
+    summarize,
+};
 use mongo::{
     bson::BsonDocument,
     commands::{self, CommandError},
@@ -15,7 +19,7 @@ use mongo::{
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
-    types::{PyBytes, PyModule},
+    types::{PyBytes, PyDict, PyModule},
 };
 
 fn decode_command(text: &str) -> PyResult<BsonDocument> {
@@ -347,6 +351,66 @@ fn repair_shard(path: &str) -> PyResult<String> {
     Store::repair_shard(path).map(|report| report.to_json()).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+fn harness_error(error: impl std::fmt::Display) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+/// 对给定字节取 SHA-256，返回小写十六进制。
+#[pyfunction]
+fn harness_digest(bytes: &[u8]) -> String {
+    Digest::of(bytes).to_hex()
+}
+
+/// 按已知差异台账判定一次语料运行。
+#[pyfunction]
+fn harness_check_baseline(baseline_json: &str, current_json: &str, observed_json: &str) -> PyResult<String> {
+    let baseline: Baseline = serde_json::from_str(baseline_json).map_err(harness_error)?;
+    let current: BaselineIdentity = serde_json::from_str(current_json).map_err(harness_error)?;
+    let observed: Vec<DifferenceObservation> = serde_json::from_str(observed_json).map_err(harness_error)?;
+    let verdict = check_baseline(&baseline, &current, &observed);
+    serde_json::to_string(&verdict).map_err(harness_error)
+}
+
+/// 将报告信封渲染为稳定 JSON 文本。
+#[pyfunction]
+fn harness_render_report(report_json: &str) -> PyResult<String> {
+    let report: ReportEnvelope = serde_json::from_str(report_json).map_err(harness_error)?;
+    render_json(&report).map_err(harness_error)
+}
+
+/// 对一组毫秒样本求 median/p95/极值（nearest-rank，与 TS 既有实现逐字节一致）。
+#[pyfunction]
+fn harness_bench_summary<'py>(py: Python<'py>, samples_ms: Vec<f64>) -> PyResult<Bound<'py, PyDict>> {
+    let stats = summarize(&samples_ms).map_err(harness_error)?;
+    let dict = PyDict::new(py);
+    dict.set_item("median_ms", stats.median_ms)?;
+    dict.set_item("p95_ms", stats.p95_ms)?;
+    dict.set_item("min_ms", stats.min_ms)?;
+    dict.set_item("max_ms", stats.max_ms)?;
+    dict.set_item("rounds", stats.rounds)?;
+    Ok(dict)
+}
+
+/// 单次操作的归一毫秒（median / ops）。`ops` 为 0 时返回 NaN。
+#[pyfunction]
+fn harness_bench_per_op(stats: &Bound<'_, PyDict>, ops: u32) -> PyResult<f64> {
+    let field = |key: &str| -> PyResult<f64> {
+        stats.get_item(key)?.ok_or_else(|| PyValueError::new_err(format!("stats is missing {key}")))?.extract::<f64>()
+    };
+    let rounds: u32 = stats.get_item("rounds")?.ok_or_else(|| PyValueError::new_err("stats is missing rounds"))?.extract()?;
+    per_op_ms(
+        &Stats {
+            median_ms: field("median_ms")?,
+            p95_ms: field("p95_ms")?,
+            min_ms: field("min_ms")?,
+            max_ms: field("max_ms")?,
+            rounds,
+        },
+        u64::from(ops),
+    )
+    .map_err(harness_error)
+}
+
 #[pymodule]
 fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<MongoStore>()?;
@@ -393,5 +457,10 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(import_bson, module)?)?;
     module.add_function(wrap_pyfunction!(import_bson_file, module)?)?;
     module.add_function(wrap_pyfunction!(repair_shard, module)?)?;
+    module.add_function(wrap_pyfunction!(harness_digest, module)?)?;
+    module.add_function(wrap_pyfunction!(harness_check_baseline, module)?)?;
+    module.add_function(wrap_pyfunction!(harness_render_report, module)?)?;
+    module.add_function(wrap_pyfunction!(harness_bench_summary, module)?)?;
+    module.add_function(wrap_pyfunction!(harness_bench_per_op, module)?)?;
     Ok(())
 }
