@@ -1711,6 +1711,63 @@ const beforeInitiate = await command(replicaConnection, { hello: 1, $db: 'admin'
     await server.close()
 }
 
+// --- replica set configuration persistence -------------------------------------
+//
+// `mongod` writes the set document into `local.system.replset` on initiation
+// and reads it back at startup, so a restart does not return to
+// `NotYetInitialized` (94). The stored shape below follows the document
+// captured from a real `mongod 8.0.9` single-member set.
+
+{
+    const persistDir = mkdtempSync(join(tmpdir(), 'mongo-rs-persist-'))
+    const first = createServer({ dataDir: persistDir, port: 0, replSet: 'rs0' })
+    const firstAddress = await first.listening
+    const firstMe = `127.0.0.1:${firstAddress.port}`
+    const connection = await connect(firstAddress.port)
+    const initiated = await command(connection, { replSetInitiate: {}, $db: 'admin' })
+    equal(initiated.ok, { $numberDouble: '1.0' }, 'initiation succeeds on the persistence set')
+
+    const stored = await command(connection, { find: 'system.replset', filter: {}, $db: 'local' })
+    equal(stored.cursor.firstBatch.length, 1, 'a successful initiate stores one set document')
+    const storedDocument = stored.cursor.firstBatch[0]
+    equal(storedDocument._id, 'rs0', 'the stored document carries the set name')
+    equal(storedDocument.version, { $numberInt: '1' }, 'the stored version matches mongod')
+    equal(storedDocument.members[0].host, firstMe, 'the stored member host is the initiating address')
+    equal(storedDocument.protocolVersion, { $numberLong: '1' }, 'the stored protocolVersion is a long like mongod')
+    equal(storedDocument.writeConcernMajorityJournalDefault, true, 'the stored journal default matches mongod')
+    ok(typeof storedDocument.settings.replicaSetId.$oid === 'string', 'the stored settings carry a replica set id')
+    connection.socket.destroy()
+    await first.close()
+
+    const second = createServer({ dataDir: persistDir, port: 0, replSet: 'rs0' })
+    const secondAddress = await second.listening
+    const restarted = await connect(secondAddress.port)
+    const hello = await command(restarted, { hello: 1, $db: 'admin' })
+    equal(hello.isWritablePrimary, true, 'a restarted set is primary without a second initiate')
+    equal(hello.setName, 'rs0', 'the restarted handshake names the set')
+    equal(hello.me, firstMe, 'the restarted member keeps the stored host')
+
+    const status = await command(restarted, { replSetGetStatus: 1, $db: 'admin' })
+    equal(status.ok, { $numberDouble: '1.0' }, 'the restarted status does not answer NotYetInitialized')
+    equal(status.set, 'rs0', 'the restarted status names the set')
+    equal(status.members[0].stateStr, 'PRIMARY', 'the restarted member reports PRIMARY')
+
+    const config = await command(restarted, { replSetGetConfig: 1, $db: 'admin' })
+    equal(config.config._id, 'rs0', 'the restarted config comes from the stored document')
+    equal(config.config.settings.replicaSetId.$oid, storedDocument.settings.replicaSetId.$oid, 'the replica set id survives the restart')
+    equal(config.config.members[0].host, firstMe, 'the restarted config keeps the stored member')
+
+    const again = await command(restarted, { replSetInitiate: {}, $db: 'admin' })
+    equal(again.code, { $numberInt: '23' }, 'a restarted set is already initialized')
+
+    const write = await command(restarted, { insert: 'items', documents: [{ _id: 1 }], $db: 'rs_persist' })
+    equal(write.ok, { $numberDouble: '1.0' }, 'writes land on the restarted set')
+    const advanced = await command(restarted, { replSetGetStatus: 1, $db: 'admin' })
+    equal(advanced.members[0].optime.t, { $numberLong: '1' }, 'the restarted optime term advances with a real write')
+    restarted.socket.destroy()
+    await second.close()
+}
+
 replicaConnection.socket.destroy()
 await replicaServer.close()
 

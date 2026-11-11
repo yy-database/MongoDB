@@ -29,6 +29,8 @@ import {
     noteWrite,
     numberValue,
     replicaCommand,
+    replicaError,
+    restoreReplicaConfig,
     topologyHandshake,
     writeStamps,
     type ReplicaState
@@ -224,6 +226,31 @@ function transactionCommandError(name: string, command: any): any | null {
         return { ok: { $numberDouble: '0.0' }, errmsg: `${name} may only be run against the admin database.`, code: numberValue(13), codeName: 'Unauthorized' }
     }
     return null
+}
+
+/**
+ * Reads the persisted replica-set configuration from `local.system.replset`.
+ * A fresh store answers with an empty batch, which is how `mongod` behaves
+ * before the set has ever been initiated.
+ */
+function readStoredReplicaConfig(store: any): any | null {
+    const cursors = new binding.MongoCursors()
+    const reply = document(binding.find(store, cursors, commandText({ find: 'system.replset', filter: {}, $db: 'local' })))
+    const batch = reply?.cursor?.firstBatch
+    return Array.isArray(batch) && batch.length > 0 ? batch[0] : null
+}
+
+/**
+ * Writes the set configuration into `local.system.replset`, like `mongod`'s
+ * initiation does. The set document is replication metadata, not data, so any
+ * oplog entry the write staged is discarded instead of committed.
+ */
+function writeStoredReplicaConfig(store: any, config: any): boolean {
+    const reply = document(
+        binding.insert(store, commandText({ insert: 'system.replset', documents: [config], $db: 'local' }))
+    )
+    binding.discardOplog(store)
+    return replyOk(reply)
 }
 
 function hostPrefix(): string {
@@ -422,7 +449,13 @@ function dispatch(
 
     if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session, view)
     if (name === 'replSetInitiate' || name === 'replSetGetConfig' || name === 'replSetGetStatus') {
-        return replicaCommand(view.replica, name, command, me)
+        const reply = replicaCommand(view.replica, name, command, me)
+        // A successful initiation persists the set document, like `mongod`
+        // writing `local.system.replset` before it answers.
+        if (name === 'replSetInitiate' && replyOk(reply) && !writeStoredReplicaConfig(session.store, view.replica.config)) {
+            return replicaError(96, 'OperationFailed', 'replica set configuration could not be persisted')
+        }
+        return reply
     }
 
     // `db.currentOp()` is an aggregate over `$currentOp`; there are no
@@ -671,6 +704,13 @@ export function createServer(options: ServerOptions): MongoServer {
     }
     const authRequired = options.auth === true
     const replica = createReplicaState(options.replSet ?? null)
+    // `mongod` reads `local.system.replset` at startup and rejoins the set
+    // without a second `replSetInitiate`; the same restore happens here, so a
+    // restarted member answers `hello` and `replSetGetStatus` as PRIMARY.
+    if (options.replSet !== undefined) {
+        const stored = readStoredReplicaConfig(store)
+        if (stored !== null) restoreReplicaConfig(replica, stored)
+    }
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
     let replyId = 0
     let closed = false

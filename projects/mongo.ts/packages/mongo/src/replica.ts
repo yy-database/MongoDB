@@ -1,10 +1,12 @@
 /**
  * Single-node replica set state.
  *
- * `mongod --replSet` keeps the set configuration and topology counters in
- * memory; this server does the same for one member. The shapes below were
- * captured from `mongod 8.0.9` (`replSetInitiate`, `replSetGetConfig`,
- * `replSetGetStatus`, `hello` before and after initiation).
+ * `mongod --replSet` persists the set configuration in `local.system.replset`
+ * and keeps the topology counters per process; this server does the same for
+ * one member. The shapes below were captured from `mongod 8.0.9`
+ * (`replSetInitiate`, `replSetGetConfig`, `replSetGetStatus`, `hello` before
+ * and after initiation, and the stored `local.system.replset` document across
+ * a restart).
  */
 import { randomBytes } from 'node:crypto'
 
@@ -114,7 +116,7 @@ function lastWriteBlock(state: ReplicaState): any {
     }
 }
 
-function replicaError(code: number, codeName: string, message: string): any {
+export function replicaError(code: number, codeName: string, message: string): any {
     return { ok: { $numberDouble: '0.0' }, errmsg: message, code: numberValue(code), codeName }
 }
 
@@ -189,6 +191,57 @@ function normalizeConfig(config: any, replicaSetId: string): any {
             replicaSetId: objectId(replicaSetId)
         }
     }
+}
+
+/**
+ * Flattens the extended-JSON scalars a stored document comes back with:
+ * tagged numbers become plain numbers, `$oid` becomes its hex string.
+ */
+function unwrapStoredValue(value: any): any {
+    if (Array.isArray(value)) return value.map(unwrapStoredValue)
+    if (value !== null && typeof value === 'object') {
+        const keys = Object.keys(value)
+        if (keys.length === 1) {
+            const key = keys[0]
+            if (key === '$oid') return value[key]
+            if (key === '$numberInt' || key === '$numberLong' || key === '$numberDouble' || key === '$numberDecimal') {
+                return Number(value[key])
+            }
+        }
+        const result: Record<string, any> = {}
+        for (const [name, entry] of Object.entries(value)) result[name] = unwrapStoredValue(entry)
+        return result
+    }
+    return value
+}
+
+/**
+ * Restores the set configuration persisted in `local.system.replset`, the way
+ * `mongod` does at startup: a node started with `--replSet` reads the stored
+ * document and comes back as an initiated primary without a second
+ * `replSetInitiate`. `replicaSetId` and the member list survive from the
+ * stored document; `electionId` is regenerated for the new process, because a
+ * restart re-runs the election. A document whose set name does not match the
+ * command line, or whose shape is not a usable configuration, is ignored and
+ * leaves the member uninitialized.
+ */
+export function restoreReplicaConfig(state: ReplicaState, stored: any): boolean {
+    if (state.name === null || state.initialized) return false
+    const config = unwrapStoredValue(stored)
+    if (config === null || typeof config !== 'object' || Array.isArray(config)) return false
+    if (config._id !== state.name) return false
+    if (!Array.isArray(config.members) || config.members.length === 0) return false
+    if (config.members.some((member: any) => typeof member?.host !== 'string')) return false
+    const replicaSetId =
+        typeof config.settings?.replicaSetId === 'string' ? config.settings.replicaSetId : randomBytes(12).toString('hex')
+    state.config = normalizeConfig(config, replicaSetId)
+    state.replicaSetId = replicaSetId
+    state.electionId = `7fffffff${randomBytes(8).toString('hex')}`
+    state.initialized = true
+    state.electedAt = Date.now()
+    state.seconds = Math.floor(state.electedAt / 1000)
+    state.increment = 1
+    return true
 }
 
 /** Renders a BSON scalar the way `mongod` prints it inside an error message. */
