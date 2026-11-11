@@ -15,7 +15,9 @@ import {
     authError,
     authenticationRequired,
     createAuthState,
+    createRoleCommand,
     createUserCommand,
+    dropRoleCommand,
     dropUserCommand,
     logoutCommand,
     saslContinueCommand,
@@ -43,7 +45,7 @@ import {
     writeConcernReply,
     type WriteConcernDecision
 } from './write-concern.ts'
-import { authorizeCommand, clusterGrants, databaseInScope, privilegesForRoles } from './authorization.ts'
+import { authorizeCommand, clusterGrants, databaseInScope, makeStoreResolver, privilegesForRoles } from './authorization.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
 import {
@@ -125,6 +127,66 @@ interface ServerView {
     replica: ReplicaState
     /** Every live connection's cursor table, so a drop reaches all of them. */
     cursorTables: Set<any>
+    /** Per-server counters, answered by `serverStatus`. */
+    counters: ServerCounters
+}
+
+/**
+ * Per-server counters in `mongod`'s sections.
+ *
+ * `opcounters` follows the measured classification of `mongod 8.0.9`: an
+ * `insert` counts every document in its `documents` array (including one a
+ * duplicate-key error rejects), `update` and `delete` count the statements in
+ * their arrays rather than the documents they touch, `find` and `aggregate`
+ * count as `query`, `getMore` as `getmore`, and every other command —
+ * `hello`, `count`, `findAndModify`, `distinct`, `serverStatus` itself —
+ * counts as `command`. Commands refused before routing (authentication or
+ * authorization failures) are not counted. `opcountersRepl` counts oplog
+ * application by secondaries; this server has no applier, and the measured
+ * single-member replica set reports the section with zero counters, so the
+ * zeros are the honest answer. `mem` reports `supported: false`: the oracle
+ * on this platform answers `supported: true` with `resident`/`virtual` in MB,
+ * which this server does not track (see KNOWN-DIFFERENCES.md).
+ */
+interface ServerCounters {
+    opcounters: { insert: number; query: number; update: number; delete: number; getmore: number; command: number }
+    opcountersRepl: { insert: number; query: number; update: number; delete: number; getmore: number; command: number }
+    network: { bytesIn: number; bytesOut: number; numRequests: number }
+    asserts: { regular: number; warning: number; msg: number; user: number; tripwire: number; rollovers: number }
+}
+
+function createServerCounters(): ServerCounters {
+    return {
+        opcounters: { insert: 0, query: 0, update: 0, delete: 0, getmore: 0, command: 0 },
+        opcountersRepl: { insert: 0, query: 0, update: 0, delete: 0, getmore: 0, command: 0 },
+        network: { bytesIn: 0, bytesOut: 0, numRequests: 0 },
+        asserts: { regular: 0, warning: 0, msg: 0, user: 0, tripwire: 0, rollovers: 0 }
+    }
+}
+
+/** Routes one admitted command into its `opcounters` class, by the measured semantics. */
+function countCommand(counters: ServerCounters, name: string, command: any): void {
+    const op = counters.opcounters
+    switch (name) {
+        case 'insert':
+            op.insert += Array.isArray(command.documents) ? command.documents.length : 1
+            break
+        case 'update':
+            op.update += Array.isArray(command.updates) ? command.updates.length : 1
+            break
+        case 'delete':
+            op.delete += Array.isArray(command.deletes) ? command.deletes.length : 1
+            break
+        case 'find':
+        case 'aggregate':
+            op.query += 1
+            break
+        case 'getMore':
+            op.getmore += 1
+            break
+        default:
+            op.command += 1
+    }
 }
 
 /** Per-request write-concern result, filled by `dispatch` and read by `settleWrite`. */
@@ -444,7 +506,7 @@ function listDatabasesCommand(session: Session, command: any, authRequired: bool
     const reply = document(binding.listDatabases(session.store))
     const databases = Array.isArray(reply.databases) ? reply.databases : null
     if (!authRequired || session.auth.users.length === 0 || databases === null) return reply
-    const privileges = privilegesForRoles(session.auth.roles)
+    const privileges = privilegesForRoles(session.auth.roles, makeStoreResolver(session))
     if (clusterGrants(privileges, 'listDatabases')) return reply
     const scoped = databases.filter((entry: any) => typeof entry?.name === 'string' && databaseInScope(privileges, entry.name))
     if (command.nameOnly === true) {
@@ -543,8 +605,12 @@ function dispatch(
         write.decision = decision
     }
 
-    if (name === 'hello' || name === 'isMaster' || name === 'ismaster') return helloReply(command, supported, session, view)
+    if (name === 'hello' || name === 'isMaster' || name === 'ismaster') {
+        countCommand(view.counters, name, command)
+        return helloReply(command, supported, session, view)
+    }
     if (name === 'replSetInitiate' || name === 'replSetGetConfig' || name === 'replSetGetStatus') {
+        countCommand(view.counters, name, command)
         const reply = replicaCommand(view.replica, name, command, me)
         // A successful initiation persists the set document, like `mongod`
         // writing `local.system.replset` before it answers.
@@ -553,6 +619,7 @@ function dispatch(
         }
         return reply
     }
+    countCommand(view.counters, name, command)
 
     // `db.currentOp()` is an aggregate over `$currentOp`; there are no
     // background operations in this server, so an empty list is the honest
@@ -583,6 +650,10 @@ function dispatch(
             return createUserCommand(session, command)
         case 'dropUser':
             return dropUserCommand(session, command)
+        case 'createRole':
+            return createRoleCommand(session, command)
+        case 'dropRole':
+            return dropRoleCommand(session, command)
         case 'logout':
             return logoutCommand(session)
         case 'usersInfo':
@@ -674,11 +745,16 @@ function dispatch(
                 uptimeMillis: Math.round(process.uptime() * 1000),
                 uptimeEstimate: Math.floor(process.uptime()),
                 localTime: dateValue(Date.now()),
+                asserts: view.counters.asserts,
                 connections: {
                     current: view.openConnections,
                     available: 0,
                     totalCreated: view.totalConnections
                 },
+                network: view.counters.network,
+                opcounters: view.counters.opcounters,
+                opcountersRepl: view.counters.opcountersRepl,
+                mem: { supported: false },
                 ok: OK
             }
         case 'hostInfo':
@@ -809,6 +885,7 @@ export function createServer(options: ServerOptions): MongoServer {
     }
     const retries = new RetryRegistry()
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
+    const counters = createServerCounters()
     let replyId = 0
     let closed = false
 
@@ -843,6 +920,8 @@ export function createServer(options: ServerOptions): MongoServer {
                 if (buffer.length < total) return
                 const frame = buffer.subarray(0, total)
                 buffer = buffer.subarray(total)
+                counters.network.bytesIn += frame.length
+                counters.network.numRequests += 1
                 handle(session, frame)
             }
         }
@@ -850,25 +929,29 @@ export function createServer(options: ServerOptions): MongoServer {
         const reply = (requestId: number, inbound: InboundFrame, body: any) => {
             const json = commandText(body)
             if (inbound.opcode === OP_QUERY) {
-                socket.write(encodeReplyFrame(replyId++, requestId, binding.encodeDocument(json)))
+                const frame = encodeReplyFrame(replyId++, requestId, binding.encodeDocument(json))
+                counters.network.bytesOut += frame.length
+                socket.write(frame)
                 return
             }
             const payload = binding.encodeOpMsg(json)
             if (inbound.envelope === null) {
-                socket.write(encodeMsgFrame(replyId++, requestId, payload))
+                const frame = encodeMsgFrame(replyId++, requestId, payload)
+                counters.network.bytesOut += frame.length
+                socket.write(frame)
                 return
             }
             const compressed = compress(inbound.envelope.compressorId, payload)
             stats.compressedReplies += 1
-            socket.write(
-                encodeCompressedFrame(
-                    replyId++,
-                    requestId,
-                    inbound.envelope.compressorId,
-                    payload.length,
-                    compressed
-                )
+            const frame = encodeCompressedFrame(
+                replyId++,
+                requestId,
+                inbound.envelope.compressorId,
+                payload.length,
+                compressed
             )
+            counters.network.bytesOut += frame.length
+            socket.write(frame)
         }
 
         const handle = (session: Session, frame: Buffer) => {
@@ -912,7 +995,8 @@ export function createServer(options: ServerOptions): MongoServer {
                         totalConnections: stats.connections,
                         dataDir: options.dataDir,
                         replica,
-                        cursorTables
+                        cursorTables,
+                        counters
                     },
                     authRequired,
                     `${socket.localAddress}:${socket.localPort}`,

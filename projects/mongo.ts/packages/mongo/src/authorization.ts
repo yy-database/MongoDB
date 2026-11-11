@@ -3,10 +3,13 @@
 // `mongod 8.0.9` answers commands only when one of the user's roles grants the
 // matching action on the command's resource. The built-in role expansions below
 // are transcribed from `usersInfo({showPrivileges: true})` replies read from a
-// real `--auth` server (see `KNOWN-DIFFERENCES.md` for the roles that are not
-// modelled). The same table drives both `showPrivileges` and the dispatch
-// checks, so a privilege can never be reported without also being enforced.
+// real server (see `KNOWN-DIFFERENCES.md` for the limits that remain). Custom
+// roles are resolved from `<db>.system.roles` through the same expansion, so
+// one path produces both the reported and the enforced privilege set;
+// privileges that share a resource are merged into one entry with the union of
+// actions in `mongod`'s canonical action order, exactly as its replies do.
 import type { AuthRole } from './auth.ts'
+import { binding } from './binding.ts'
 
 export interface Resource {
     db?: string
@@ -77,6 +80,23 @@ interface DbScopedRole {
     actions: string[]
 }
 
+/** `dbAdmin`'s `system.profile` actions, reused by `dbOwner`. */
+const PROFILE_ACTIONS = [
+    'changeStream',
+    'collStats',
+    'convertToCapped',
+    'createCollection',
+    'dbHash',
+    'dbStats',
+    'dropCollection',
+    'find',
+    'killCursors',
+    'listCollections',
+    'listIndexes',
+    'listSearchIndexes',
+    'planCacheRead'
+]
+
 /** Roles whose privileges `mongod` scopes to the database the role is granted on. */
 const DB_SCOPED_ROLES: Record<string, DbScopedRole[]> = {
     read: [
@@ -122,21 +142,7 @@ const DB_SCOPED_ROLES: Record<string, DbScopedRole[]> = {
         },
         {
             collection: 'system.profile',
-            actions: [
-                'changeStream',
-                'collStats',
-                'convertToCapped',
-                'createCollection',
-                'dbHash',
-                'dbStats',
-                'dropCollection',
-                'find',
-                'killCursors',
-                'listCollections',
-                'listIndexes',
-                'listSearchIndexes',
-                'planCacheRead'
-            ]
+            actions: PROFILE_ACTIONS
         }
     ],
     userAdmin: [
@@ -156,12 +162,68 @@ const DB_SCOPED_ROLES: Record<string, DbScopedRole[]> = {
                 'viewUser'
             ]
         }
+    ],
+    dbOwner: [
+        {
+            collection: '',
+            actions: [
+                'analyze',
+                'bypassDocumentValidation',
+                'changeCustomData',
+                'changePassword',
+                'changeStream',
+                'cleanupStructuredEncryptionData',
+                'collMod',
+                'collStats',
+                'compact',
+                'compactStructuredEncryptionData',
+                'configureQueryAnalyzer',
+                'convertToCapped',
+                'createCollection',
+                'createIndex',
+                'createRole',
+                'createSearchIndexes',
+                'createUser',
+                'dbHash',
+                'dbStats',
+                'dropCollection',
+                'dropDatabase',
+                'dropIndex',
+                'dropRole',
+                'dropSearchIndex',
+                'dropUser',
+                'enableProfiler',
+                'find',
+                'grantRole',
+                'insert',
+                'killCursors',
+                'listCollections',
+                'listIndexes',
+                'listSearchIndexes',
+                'updateSearchIndex',
+                'planCacheIndexFilter',
+                'planCacheRead',
+                'planCacheWrite',
+                'reIndex',
+                'remove',
+                'renameCollectionSameDB',
+                'revokeRole',
+                'setAuthenticationRestriction',
+                'storageDetails',
+                'update',
+                'validate',
+                'viewRole',
+                'viewUser'
+            ]
+        },
+        { collection: 'system.js', actions: READ_WRITE_ACTIONS },
+        { collection: 'system.profile', actions: PROFILE_ACTIONS }
     ]
 }
 
 const CLUSTER_READ_ACTIONS = READ_ACTIONS
 
-/** `clusterAdmin` and `root`, whose resources are fixed rather than db-scoped. */
+/** Built-in roles whose resources are fixed rather than scoped to the granting database. */
 const CLUSTER_BOUND_ROLES: Record<string, Privilege[]> = {
     clusterAdmin: [],
     root: []
@@ -856,16 +918,560 @@ const ROOT_PRIVILEGES: Privilege[] = [
     privilege({ db: 'config', collection: 'system.change_collection' }, ['find', 'insert', 'remove', 'update'])
 ]
 
+/** `readAnyDatabase`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const READ_ANY_DATABASE_PRIVILEGES: Privilege[] = [
+    privilege({ db: '', collection: '' }, READ_ACTIONS),
+    privilege({ cluster: true }, ['listDatabases']),
+    privilege({ db: '', collection: 'system.js' }, READ_ACTIONS),
+    privilege({ system_buckets: '' }, READ_ACTIONS)
+]
+
+/** `readWriteAnyDatabase`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const READ_WRITE_ANY_DATABASE_PRIVILEGES: Privilege[] = [
+    privilege({ db: '', collection: '' }, READ_WRITE_ACTIONS),
+    privilege({ cluster: true }, ['listDatabases']),
+    privilege({ db: '', collection: 'system.js' }, READ_WRITE_ACTIONS),
+    privilege({ system_buckets: '' }, READ_WRITE_ACTIONS)
+]
+
+/** `userAdminAnyDatabase`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const USER_ADMIN_ANY_DATABASE_PRIVILEGES: Privilege[] = [
+    privilege(
+        { db: '', collection: '' },
+        [
+            'changeCustomData',
+            'changePassword',
+            'createRole',
+            'createUser',
+            'dropRole',
+            'dropUser',
+            'grantRole',
+            'listCachedAndActiveUsers',
+            'revokeRole',
+            'setAuthenticationRestriction',
+            'viewRole',
+            'viewUser'
+        ]
+    ),
+    privilege(
+        { db: 'local', collection: '' },
+        [
+            'changeCustomData',
+            'changePassword',
+            'createRole',
+            'createUser',
+            'dropRole',
+            'dropUser',
+            'grantRole',
+            'revokeRole',
+            'setAuthenticationRestriction',
+            'viewRole',
+            'viewUser'
+        ]
+    ),
+    privilege(
+        { db: 'config', collection: '' },
+        [
+            'changeCustomData',
+            'changePassword',
+            'createRole',
+            'createUser',
+            'dropRole',
+            'dropUser',
+            'grantRole',
+            'revokeRole',
+            'setAuthenticationRestriction',
+            'viewRole',
+            'viewUser'
+        ]
+    ),
+    privilege({ cluster: true }, ['authSchemaUpgrade', 'invalidateUserCache', 'listDatabases', 'viewUser']),
+    privilege(
+        { db: 'admin', collection: 'system.users' },
+        [
+            'changeStream',
+            'collStats',
+            'createIndex',
+            'createSearchIndexes',
+            'dbHash',
+            'dbStats',
+            'dropIndex',
+            'dropSearchIndex',
+            'find',
+            'killCursors',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'planCacheRead'
+        ]
+    ),
+    privilege(
+        { db: 'admin', collection: 'system.roles' },
+        [
+            'changeStream',
+            'collStats',
+            'createIndex',
+            'createSearchIndexes',
+            'dbHash',
+            'dbStats',
+            'dropIndex',
+            'dropSearchIndex',
+            'find',
+            'killCursors',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'planCacheRead'
+        ]
+    ),
+    privilege({ db: '', collection: 'system.users' }, READ_ACTIONS),
+    privilege({ db: 'admin', collection: 'system.version' }, READ_ACTIONS),
+    privilege({ db: 'admin', collection: 'system.backup_users' }, READ_ACTIONS)
+]
+
+/** `dbAdminAnyDatabase`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const DB_ADMIN_ANY_DATABASE_PRIVILEGES: Privilege[] = [
+    privilege({ cluster: true }, ['listDatabases', 'applyOps']),
+    privilege(
+        { db: '', collection: '' },
+        [
+            'analyze',
+            'bypassDocumentValidation',
+            'collMod',
+            'collStats',
+            'compact',
+            'configureQueryAnalyzer',
+            'convertToCapped',
+            'createCollection',
+            'createIndex',
+            'createSearchIndexes',
+            'dbStats',
+            'dropCollection',
+            'dropDatabase',
+            'dropIndex',
+            'dropSearchIndex',
+            'enableProfiler',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'updateSearchIndex',
+            'planCacheIndexFilter',
+            'planCacheRead',
+            'planCacheWrite',
+            'reIndex',
+            'renameCollectionSameDB',
+            'storageDetails',
+            'validate'
+        ]
+    ),
+    privilege({ db: '', collection: 'system.profile' }, PROFILE_ACTIONS),
+    privilege(
+        { system_buckets: '' },
+        [
+            'analyze',
+            'bypassDocumentValidation',
+            'collMod',
+            'collStats',
+            'compact',
+            'convertToCapped',
+            'createCollection',
+            'createIndex',
+            'createSearchIndexes',
+            'dbStats',
+            'dropCollection',
+            'dropDatabase',
+            'dropIndex',
+            'dropSearchIndex',
+            'enableProfiler',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'updateSearchIndex',
+            'planCacheIndexFilter',
+            'planCacheRead',
+            'planCacheWrite',
+            'reIndex',
+            'renameCollectionSameDB',
+            'storageDetails',
+            'validate'
+        ]
+    )
+]
+
+/** `clusterMonitor`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const CLUSTER_MONITOR_PRIVILEGES: Privilege[] = [
+    privilege(
+        { db: 'config', collection: '' },
+        [
+            'changeStream',
+            'collStats',
+            'dbHash',
+            'dbStats',
+            'find',
+            'getDatabaseVersion',
+            'getShardVersion',
+            'indexStats',
+            'killCursors',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'planCacheRead'
+        ]
+    ),
+    privilege({ db: 'config', collection: 'system.js' }, CLUSTER_READ_ACTIONS),
+    privilege(
+        { db: 'local', collection: '' },
+        [
+            'changeStream',
+            'collStats',
+            'dbHash',
+            'dbStats',
+            'find',
+            'getDatabaseVersion',
+            'getShardVersion',
+            'indexStats',
+            'killCursors',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'planCacheRead'
+        ]
+    ),
+    privilege({ db: 'local', collection: 'system.js' }, CLUSTER_READ_ACTIONS),
+    privilege(
+        { cluster: true },
+        [
+            'allCollectionStats',
+            'connPoolStats',
+            'getDefaultRWConcern',
+            'getCmdLineOpts',
+            'getLog',
+            'getParameter',
+            'getShardMap',
+            'hostInfo',
+            'inprog',
+            'listDatabases',
+            'listSampledQueries',
+            'listSessions',
+            'listShards',
+            'netstat',
+            'operationMetrics',
+            'queryStatsRead',
+            'queryStatsReadTransformed',
+            'replSetGetConfig',
+            'replSetGetStatus',
+            'serverStatus',
+            'shardedDataDistribution',
+            'shardingState',
+            'top',
+            'useUUID'
+        ]
+    ),
+    privilege({ db: '', collection: '' }, ['collStats', 'dbStats', 'getDatabaseVersion', 'getShardVersion', 'indexStats']),
+    privilege({ system_buckets: '' }, ['collStats', 'dbStats', 'getDatabaseVersion', 'getShardVersion', 'indexStats']),
+    privilege({ db: 'config', collection: 'system.sessions' }, ['collStats', 'dbStats', 'getDatabaseVersion', 'getShardVersion', 'indexStats']),
+    privilege({ db: 'local', collection: 'system.replset' }, ['find']),
+    privilege({ db: 'local', collection: 'replset.election' }, ['find']),
+    privilege({ db: 'local', collection: 'replset.minvalid' }, ['find']),
+    privilege({ db: '', collection: 'system.profile' }, ['find'])
+]
+
+/** `clusterManager`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const CLUSTER_MANAGER_PRIVILEGES: Privilege[] = [
+    privilege(
+        { db: 'config', collection: '' },
+        [
+            'analyzeShardKey',
+            'changeStream',
+            'clearJumboFlag',
+            'collStats',
+            'configureQueryAnalyzer',
+            'dbHash',
+            'dbStats',
+            'enableSharding',
+            'find',
+            'insert',
+            'killCursors',
+            'listCollections',
+            'listIndexes',
+            'listSearchIndexes',
+            'moveChunk',
+            'moveCollection',
+            'planCacheRead',
+            'refineCollectionShardKey',
+            'remove',
+            'reshardCollection',
+            'splitChunk',
+            'splitVector',
+            'unshardCollection',
+            'update'
+        ]
+    ),
+    privilege({ db: 'config', collection: 'system.js' }, CLUSTER_READ_ACTIONS),
+    privilege(
+        { cluster: true },
+        [
+            'addShard',
+            'appendOplogNote',
+            'applicationMessage',
+            'checkMetadataConsistency',
+            'cleanupOrphaned',
+            'flushRouterConfig',
+            'getClusterParameter',
+            'getDefaultRWConcern',
+            'listSessions',
+            'listShards',
+            'querySettings',
+            'removeShard',
+            'replSetConfigure',
+            'replSetGetConfig',
+            'replSetGetStatus',
+            'replSetStateChange',
+            'resync',
+            'runTenantMigration',
+            'setClusterParameter',
+            'setDefaultRWConcern',
+            'setFeatureCompatibilityVersion',
+            'transitionFromDedicatedConfigServer',
+            'transitionToDedicatedConfigServer',
+            'setChangeStreamState',
+            'getChangeStreamState'
+        ]
+    ),
+    privilege(
+        { db: '', collection: '' },
+        [
+            'analyzeShardKey',
+            'clearJumboFlag',
+            'configureQueryAnalyzer',
+            'enableSharding',
+            'moveChunk',
+            'moveCollection',
+            'refineCollectionShardKey',
+            'reshardCollection',
+            'splitChunk',
+            'splitVector',
+            'unshardCollection'
+        ]
+    ),
+    privilege(
+        { system_buckets: '' },
+        [
+            'analyzeShardKey',
+            'clearJumboFlag',
+            'configureQueryAnalyzer',
+            'enableSharding',
+            'moveChunk',
+            'moveCollection',
+            'refineCollectionShardKey',
+            'reshardCollection',
+            'splitChunk',
+            'splitVector',
+            'unshardCollection'
+        ]
+    ),
+    privilege(
+        { db: 'local', collection: '' },
+        [
+            'analyzeShardKey',
+            'clearJumboFlag',
+            'configureQueryAnalyzer',
+            'enableSharding',
+            'insert',
+            'moveChunk',
+            'moveCollection',
+            'refineCollectionShardKey',
+            'remove',
+            'reshardCollection',
+            'splitChunk',
+            'splitVector',
+            'unshardCollection',
+            'update'
+        ]
+    ),
+    privilege({ db: 'local', collection: 'system.replset' }, CLUSTER_READ_ACTIONS),
+    privilege({ anyResource: true }, ['dbCheck']),
+    privilege({ db: 'local', collection: 'system.healthlog' }, CLUSTER_READ_ACTIONS),
+    privilege({ db: 'local', collection: 'replset.election' }, ['insert', 'remove', 'update']),
+    privilege({ db: 'local', collection: 'replset.minvalid' }, ['insert', 'remove', 'update'])
+]
+
+/** `hostManager`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const HOST_MANAGER_PRIVILEGES: Privilege[] = [
+    privilege(
+        { cluster: true },
+        [
+            'applicationMessage',
+            'auditConfigure',
+            'compact',
+            'connPoolSync',
+            'dropConnections',
+            'flushRouterConfig',
+            'fsync',
+            'invalidateUserCache',
+            'killAnyCursor',
+            'killAnySession',
+            'killop',
+            'logRotate',
+            'oidcListKeys',
+            'oidcRefreshKeys',
+            'oidReset',
+            'replSetResizeOplog',
+            'resync',
+            'rotateCertificates',
+            'setParameter',
+            'shutdown',
+            'touch',
+            'trafficRecord',
+            'unlock'
+        ]
+    ),
+    privilege({ db: '', collection: '' }, ['killCursors'])
+]
+
+/** `backup`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const BACKUP_PRIVILEGES: Privilege[] = [
+    privilege({ anyResource: true }, ['collStats', 'listCollections', 'listIndexes', 'listSearchIndexes']),
+    privilege({ db: '', collection: '' }, ['find']),
+    privilege({ system_buckets: '' }, ['find']),
+    privilege({ cluster: true }, ['appendOplogNote', 'getParameter', 'listDatabases', 'serverStatus', 'setUserWriteBlockMode', 'useUUID']),
+    privilege({ db: 'config', collection: '' }, ['find']),
+    privilege({ db: 'local', collection: '' }, ['find']),
+    privilege({ db: 'local', collection: 'replset.election' }, ['find']),
+    privilege({ db: 'local', collection: 'replset.minvalid' }, ['find']),
+    privilege({ db: '', collection: 'system.js' }, ['find']),
+    privilege({ db: '', collection: 'system.users' }, ['find']),
+    privilege({ db: '', collection: 'system.profile' }, ['find']),
+    privilege({ db: 'admin', collection: 'system.backup_users' }, ['find']),
+    privilege({ db: 'admin', collection: 'system.roles' }, ['find']),
+    privilege({ db: 'admin', collection: 'system.version' }, ['find']),
+    privilege({ db: 'config', collection: 'settings' }, ['find', 'insert', 'update'])
+]
+
+/** `restore`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const RESTORE_WRITE_ACTIONS = [
+    'bypassDocumentValidation',
+    'collMod',
+    'convertToCapped',
+    'createCollection',
+    'createIndex',
+    'createSearchIndexes',
+    'dropCollection',
+    'insert',
+    'updateSearchIndex'
+]
+const RESTORE_PRIVILEGES: Privilege[] = [
+    privilege({ cluster: true }, ['bypassWriteBlockingMode', 'forceUUID', 'getParameter', 'setUserWriteBlockMode', 'useUUID', 'applyOps']),
+    privilege({ db: 'local', collection: '' }, RESTORE_WRITE_ACTIONS),
+    privilege({ db: 'config', collection: '' }, RESTORE_WRITE_ACTIONS),
+    privilege({ system_buckets: '' }, RESTORE_WRITE_ACTIONS),
+    privilege({ db: 'local', collection: 'system.replset' }, RESTORE_WRITE_ACTIONS),
+    privilege({ db: 'local', collection: 'replset.election' }, RESTORE_WRITE_ACTIONS),
+    privilege({ db: 'local', collection: 'replset.minvalid' }, RESTORE_WRITE_ACTIONS),
+    privilege({ anyResource: true }, ['listCollections']),
+    privilege(
+        { db: '', collection: '' },
+        [
+            'bypassDocumentValidation',
+            'changeCustomData',
+            'changePassword',
+            'collMod',
+            'convertToCapped',
+            'createCollection',
+            'createIndex',
+            'createRole',
+            'createSearchIndexes',
+            'createUser',
+            'dropCollection',
+            'dropRole',
+            'dropUser',
+            'grantRole',
+            'insert',
+            'updateSearchIndex',
+            'revokeRole',
+            'setAuthenticationRestriction',
+            'viewRole',
+            'viewUser'
+        ]
+    ),
+    privilege({ db: '', collection: 'system.js' }, RESTORE_WRITE_ACTIONS),
+    privilege({ db: 'admin', collection: 'tempusers' }, ['find']),
+    privilege({ db: 'admin', collection: 'temproles' }, ['find']),
+    privilege({ db: 'admin', collection: 'system.backup_users' }, RESTORE_WRITE_ACTIONS),
+    privilege(
+        { db: 'admin', collection: 'system.version' },
+        [
+            'bypassDocumentValidation',
+            'collMod',
+            'convertToCapped',
+            'createCollection',
+            'createIndex',
+            'createSearchIndexes',
+            'dropCollection',
+            'find',
+            'insert',
+            'updateSearchIndex'
+        ]
+    ),
+    privilege(
+        { db: '', collection: 'system.users' },
+        [
+            'bypassDocumentValidation',
+            'collMod',
+            'convertToCapped',
+            'createCollection',
+            'createIndex',
+            'createSearchIndexes',
+            'dropCollection',
+            'find',
+            'insert',
+            'updateSearchIndex',
+            'remove',
+            'update'
+        ]
+    ),
+    privilege({ db: 'admin', collection: 'system.roles' }, ['createIndex']),
+    privilege({ db: '', collection: 'system.views' }, ['dropCollection'])
+]
+
+/** `__system`, transcribed from `mongod 8.0.9`'s `showPrivileges`. */
+const SYSTEM_PRIVILEGES: Privilege[] = [privilege({ anyResource: true }, ['anyAction'])]
+
 CLUSTER_BOUND_ROLES.clusterAdmin = CLUSTER_ADMIN_PRIVILEGES
 CLUSTER_BOUND_ROLES.root = ROOT_PRIVILEGES
+CLUSTER_BOUND_ROLES.readAnyDatabase = READ_ANY_DATABASE_PRIVILEGES
+CLUSTER_BOUND_ROLES.readWriteAnyDatabase = READ_WRITE_ANY_DATABASE_PRIVILEGES
+CLUSTER_BOUND_ROLES.userAdminAnyDatabase = USER_ADMIN_ANY_DATABASE_PRIVILEGES
+CLUSTER_BOUND_ROLES.dbAdminAnyDatabase = DB_ADMIN_ANY_DATABASE_PRIVILEGES
+CLUSTER_BOUND_ROLES.clusterMonitor = CLUSTER_MONITOR_PRIVILEGES
+CLUSTER_BOUND_ROLES.clusterManager = CLUSTER_MANAGER_PRIVILEGES
+CLUSTER_BOUND_ROLES.hostManager = HOST_MANAGER_PRIVILEGES
+CLUSTER_BOUND_ROLES.backup = BACKUP_PRIVILEGES
+CLUSTER_BOUND_ROLES.restore = RESTORE_PRIVILEGES
+CLUSTER_BOUND_ROLES.__system = SYSTEM_PRIVILEGES
 
 /** Built-in roles `mongod` resolves without a matching `system.roles` document. */
-const BUILTIN_ROLE_NAMES = new Set(Object.keys(DB_SCOPED_ROLES).concat(Object.keys(CLUSTER_BOUND_ROLES)))
+export const BUILTIN_ROLE_NAMES = new Set(Object.keys(DB_SCOPED_ROLES).concat(Object.keys(CLUSTER_BOUND_ROLES)))
 
 /**
- * Whether `role` names a built-in role at that database. Cluster-wide roles
- * (`clusterAdmin`, `root`) only resolve on `admin`; database roles resolve on
- * any database, including one that does not exist, as `mongod 8.0.9` does.
+ * Every action name `mongod 8.0.9` accepts in a privilege: the union of the
+ * built-in role expansions plus `anyAction`, verified by probing `createRole`
+ * with candidate names (anything outside this set answers
+ * `Unknown action type in privilege set`).
+ */
+export const VALID_ACTIONS: Set<string> = (() => {
+    const actions = new Set<string>(['anyAction'])
+    for (const entries of Object.values(DB_SCOPED_ROLES)) for (const entry of entries) for (const action of entry.actions) actions.add(action)
+    for (const entries of Object.values(CLUSTER_BOUND_ROLES)) for (const entry of entries) for (const action of entry.actions) actions.add(action)
+    return actions
+})()
+
+/**
+ * Whether `role` names a built-in role at that database. Cluster-bound roles
+ * (`clusterAdmin`, `root`, the `*AnyDatabase` roles, `clusterMonitor`,
+ * `clusterManager`, `hostManager`, `backup`, `restore` and `__system`) only
+ * resolve on `admin`; database roles resolve on any database, including one
+ * that does not exist, as `mongod 8.0.9` does.
  */
 export function builtinRoleExists(role: { role: string; db: string }): boolean {
     if (!BUILTIN_ROLE_NAMES.has(role.role)) return false
@@ -873,22 +1479,166 @@ export function builtinRoleExists(role: { role: string; db: string }): boolean {
     return true
 }
 
-/** Expands stored roles into the privilege set `showPrivileges` reports. */
-export function privilegesForRoles(roles: AuthRole[]): Privilege[] {
-    const privileges: Privilege[] = []
-    for (const role of roles) {
+/** A user-defined role as stored in `<db>.system.roles`. */
+export interface StoredRole {
+    privileges: Privilege[]
+    roles: AuthRole[]
+    authenticationRestrictions: any[]
+}
+
+/** Resolves one role name to its stored document, or `null` when it does not exist. */
+export type RoleResolver = (role: AuthRole) => StoredRole | null
+
+/** Reads custom role documents through the binding, caching one lookup per expansion. */
+export function makeStoreResolver(session: { store: any; cursors: any }): RoleResolver {
+    const cache = new Map<string, StoredRole | null>()
+    return (role) => {
+        const key = `${role.db}.${role.role}`
+        if (cache.has(key)) return cache.get(key) ?? null
+        if (builtinRoleExists(role)) return null
+        let resolved: StoredRole | null = null
+        try {
+            const find = JSON.stringify({ find: 'system.roles', filter: { _id: key }, limit: 1, $db: role.db })
+            const batch = JSON.parse(binding.find(session.store, session.cursors, find))?.cursor?.firstBatch
+            const document = Array.isArray(batch) && batch.length > 0 ? batch[0] : null
+            if (document !== null && typeof document === 'object') {
+                resolved = {
+                    privileges: Array.isArray(document.privileges) ? document.privileges : [],
+                    roles: Array.isArray(document.roles) ? document.roles.filter((entry: any) => entry && typeof entry.role === 'string' && typeof entry.db === 'string') : [],
+                    authenticationRestrictions: Array.isArray(document.authenticationRestrictions) ? document.authenticationRestrictions : []
+                }
+            }
+        } catch {
+            resolved = null
+        }
+        cache.set(key, resolved)
+        return resolved
+    }
+}
+
+/** `mongod`'s action enumeration is alphabetical except for three trailing and one pulled-forward action. */
+const TRAILING_ACTIONS = ['applyOps', 'setChangeStreamState', 'getChangeStreamState']
+
+function actionSortKey(action: string): string {
+    return action === 'updateSearchIndex' ? 'listSearchIndexes~' : action
+}
+
+function compareActions(left: string, right: string): number {
+    const leftTrailing = TRAILING_ACTIONS.indexOf(left)
+    const rightTrailing = TRAILING_ACTIONS.indexOf(right)
+    if (leftTrailing !== -1 || rightTrailing !== -1) {
+        if (leftTrailing === -1) return -1
+        if (rightTrailing === -1) return 1
+        return leftTrailing - rightTrailing
+    }
+    const a = actionSortKey(left)
+    const b = actionSortKey(right)
+    return a < b ? -1 : a > b ? 1 : 0
+}
+
+/** Identity of a resource for merging privileges that name the same target. */
+function resourceKey(resource: Resource): string {
+    if (resource.cluster === true) return 'C'
+    if (resource.anyResource === true) return 'A'
+    if (resource.system_buckets !== undefined) return `B:${resource.system_buckets}`
+    return `D:${resource.db ?? ''}|${resource.collection ?? ''}`
+}
+
+/** Accumulates privileges per resource, merging duplicates the way `mongod` stores them. */
+function createPrivilegeMerger() {
+    const merged: { resource: Resource; seen: Set<string>; mixed: boolean }[] = []
+    const byKey = new Map<string, (typeof merged)[number]>()
+    const add = (resource: Resource, actions: string[]) => {
+        const key = resourceKey(resource)
+        let entry = byKey.get(key)
+        if (entry === undefined) {
+            entry = { resource, seen: new Set(), mixed: false }
+            byKey.set(key, entry)
+            merged.push(entry)
+        } else {
+            entry.mixed = true
+        }
+        if (entry.seen.has('anyAction')) return
+        if (actions.includes('anyAction')) {
+            entry.seen.clear()
+            entry.seen.add('anyAction')
+            return
+        }
+        for (const action of actions) entry.seen.add(action)
+    }
+    const finish = (): Privilege[] =>
+        merged.map((entry) => {
+            const actions = [...entry.seen]
+            if (entry.mixed && actions.length > 1) actions.sort(compareActions)
+            return { resource: entry.resource, actions }
+        })
+    return { add, finish }
+}
+
+/**
+ * Merges duplicate resources and orders actions exactly as `mongod` normalizes
+ * a `createRole` privileges array before storing it.
+ */
+export function normalizePrivileges(privileges: Privilege[]): Privilege[] {
+    const merger = createPrivilegeMerger()
+    for (const entry of privileges) merger.add(entry.resource, entry.actions)
+    return merger.finish()
+}
+
+/**
+ * Expands stored roles (built-in and custom) into the privilege set, inherited
+ * role list and authentication restrictions `showPrivileges` reports. Roles are
+ * visited in `(role, db)` order; each custom role contributes its own
+ * privileges before its inherited roles' ones, mirroring `mongod`. Privileges
+ * that share a resource merge into the first entry, their actions unioned in
+ * `mongod`'s canonical order; `anyAction` replaces the whole list, as it does
+ * there. Dangling role references expand to nothing, which is what `mongod`
+ * reports for a role dropped from under a user.
+ */
+export function expandRoles(roles: AuthRole[], resolve: RoleResolver = () => null): { privileges: Privilege[]; inheritedRoles: AuthRole[]; authenticationRestrictions: any[] } {
+    const merger = createPrivilegeMerger()
+    const addPrivilege = merger.add
+    const inheritedRoles: AuthRole[] = []
+    const authenticationRestrictions: any[] = []
+    const visited = new Set<string>()
+
+    const addRole = (role: AuthRole) => {
+        const key = `${role.db}.${role.role}`
+        if (visited.has(key)) return
+        visited.add(key)
+        inheritedRoles.push({ role: role.role, db: role.db })
         const scoped = DB_SCOPED_ROLES[role.role]
         if (scoped) {
-            for (const entry of scoped) {
-                privileges.push({ resource: { db: role.db, collection: entry.collection }, actions: [...entry.actions] })
-            }
+            for (const entry of scoped) addPrivilege({ db: role.db, collection: entry.collection }, entry.actions)
+            return
         }
         const fixed = CLUSTER_BOUND_ROLES[role.role]
         if (fixed) {
-            for (const entry of fixed) privileges.push({ resource: { ...entry.resource }, actions: [...entry.actions] })
+            for (const entry of fixed) addPrivilege({ ...entry.resource }, entry.actions)
+            return
         }
+        const stored = resolve(role)
+        if (stored === null) return
+        if (stored.authenticationRestrictions.length > 0) authenticationRestrictions.push(stored.authenticationRestrictions)
+        for (const entry of stored.privileges) {
+            if (entry === null || typeof entry !== 'object' || entry.resource === null || typeof entry.resource !== 'object') continue
+            addPrivilege(entry.resource, Array.isArray(entry.actions) ? entry.actions.filter((action: unknown) => typeof action === 'string') : [])
+        }
+        for (const child of stored.roles) addRole(child)
     }
-    return privileges
+
+    for (const role of [...roles].sort((left, right) =>
+        left.role < right.role ? -1 : left.role > right.role ? 1 : left.db < right.db ? -1 : left.db > right.db ? 1 : 0
+    )) {
+        addRole(role)
+    }
+
+    return { privileges: merger.finish(), inheritedRoles, authenticationRestrictions }
+}
+
+/** Expands stored roles into the privilege set `showPrivileges` reports. */
+export function privilegesForRoles(roles: AuthRole[], resolve: RoleResolver = () => null): Privilege[] {
+    return expandRoles(roles, resolve).privileges
 }
 
 /**
@@ -913,14 +1663,19 @@ function covers(resource: Resource, db: string, collection: string): boolean {
     return true
 }
 
+/** Whether one privilege's action list answers `action`; `anyAction` answers every one. */
+function hasAction(actions: string[], action: string): boolean {
+    return actions.includes(action) || actions.includes('anyAction')
+}
+
 function grants(privileges: Privilege[], action: string, db: string, collection: string): boolean {
-    return privileges.some((entry) => entry.actions.includes(action) && covers(entry.resource, db, collection))
+    return privileges.some((entry) => hasAction(entry.actions, action) && covers(entry.resource, db, collection))
 }
 
 /** Whether any privilege grants a cluster-wide action, e.g. `listDatabases`. */
 export function clusterGrants(privileges: Privilege[], action: string): boolean {
     return privileges.some(
-        (entry) => entry.actions.includes(action) && (entry.resource.cluster === true || entry.resource.anyResource === true)
+        (entry) => hasAction(entry.actions, action) && (entry.resource.cluster === true || entry.resource.anyResource === true)
     )
 }
 
@@ -1365,11 +2120,12 @@ function check(privileges: Privilege[], requirement: Requirement): boolean {
  * `listDatabases` refusal keeps its own message, as `mongod` does not echo the
  * command document for it.
  */
-export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, command: any): any | null {
+export function authorizeCommand(session: { auth: { roles: AuthRole[] }; store?: any; cursors?: any }, command: any): any | null {
+    const resolve: RoleResolver = session.store !== undefined ? makeStoreResolver(session as { store: any; cursors: any }) : () => null
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') return null
     if (name === 'listDatabases') {
-        const privileges = privilegesForRoles(session.auth.roles)
+        const privileges = privilegesForRoles(session.auth.roles, resolve)
         if (command.authorizedDatabases === false && !clusterGrants(privileges, 'listDatabases')) {
             return {
                 ok: { $numberDouble: '0.0' },
@@ -1381,7 +2137,7 @@ export function authorizeCommand(session: { auth: { roles: AuthRole[] } }, comma
         return null
     }
     const database = typeof command.$db === 'string' ? command.$db : 'admin'
-    const privileges = privilegesForRoles(session.auth.roles)
+    const privileges = privilegesForRoles(session.auth.roles, resolve)
     // `root` answers every privilege question, including actions that its
     // reported privilege list does not enumerate (`updateRole` on `mongod
     // 8.0.9` reaches the role lookup instead of being refused).

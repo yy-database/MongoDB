@@ -1095,10 +1095,10 @@ async function driverLogin(user, password, db) {
             { label: 'dbHash (unimplemented)', build: () => ({ dbHash: 1, $db: database }), codes: { z_read: 59, z_rw: 59, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
             { label: 'validate (unimplemented)', build: () => ({ validate: 'items', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 59, z_ua: 13, z_ca: 13, z_root: 59 } },
             { label: 'updateUser (unimplemented)', build: () => ({ updateUser: 'z_read', pwd: 'other', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
-            { label: 'createRole same database (unimplemented)', build: () => ({ createRole: 'matrix_role', roles: [], privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
-            { label: 'createRole with a privilege on another database (unimplemented)', build: () => ({ createRole: 'matrix_role_cross', roles: [], privileges: [{ resource: { db: other, collection: '' }, actions: ['find'] }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
+            { label: 'createRole same database', build: () => ({ createRole: 'matrix_role', roles: [], privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 1, z_ca: 13, z_root: 51002 } },
+            { label: 'createRole with a privilege on another database', build: () => ({ createRole: 'matrix_role_cross', roles: [], privileges: [{ resource: { db: other, collection: '' }, actions: ['find'] }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 49 } },
             { label: 'updateRole (unimplemented)', build: () => ({ updateRole: 'matrix_role', privileges: [], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
-            { label: 'dropRole (unimplemented)', build: () => ({ dropRole: 'matrix_role', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
+            { label: 'dropRole', build: () => ({ dropRole: 'matrix_role', $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 1, z_ca: 13, z_root: 31 } },
             { label: 'grantRolesToUser (unimplemented)', build: () => ({ grantRolesToUser: 'z_read', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
             { label: 'grantRolesToUser with a role on another database (unimplemented)', build: () => ({ grantRolesToUser: 'z_read', roles: [{ role: 'read', db: other }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 13, z_ca: 13, z_root: 59 } },
             { label: 'revokeRolesFromUser (unimplemented)', build: () => ({ revokeRolesFromUser: 'z_read', roles: [{ role: 'read', db: database }], $db: database }), codes: { z_read: 13, z_rw: 13, z_dba: 13, z_ua: 59, z_ca: 13, z_root: 59 } },
@@ -1153,6 +1153,333 @@ async function driverLogin(user, password, db) {
     equal((await command(dbAdmin.connection, { dropDatabase: 1, $db: database })).ok, { $numberDouble: '1.0' }, 'dbAdmin can drop the database')
     equal((await command(dbAdmin.connection, { listCollections: 1, $db: database })).cursor.firstBatch, [], 'the dropped database has no collection')
     dbAdmin.connection.socket.destroy()
+}
+
+// --- roles, custom roles and serverStatus counters -------------------------
+
+// The expected privilege expansions below are raw `usersInfo` replies captured
+// from `mongod 8.0.9` (see `oracle-showprivileges.json`), so the reported and
+// enforced privilege sets are checked against the real server, never against
+// a second call into this one.
+{
+    const rolesDir = mkdtempSync(join(tmpdir(), 'mongo-roles-'))
+    const rolesServer = createServer({ dataDir: rolesDir, port: 0, auth: true })
+    const rolesAddress = await rolesServer.listening
+    const fixture = JSON.parse(readFileSync(new URL('./oracle-showprivileges.json', import.meta.url), 'utf8'))
+
+    const rootConn = await connect(rolesAddress.port)
+    await command(rootConn, { createUser: 'r_bootstrap', pwd: 'r-pass', roles: [{ role: 'root', db: 'admin' }], $db: 'admin' })
+    const rootSession = await scram(rootConn, 'r_bootstrap', 'r-pass')
+    ok(rootSession.finished?.done === true, 'root logs in on the roles server')
+    const as = (document) => command(rootConn, document)
+    const login = async (user, db = 'admin') => {
+        const connection = await connect(rolesAddress.port)
+        const session = await scram(connection, user, 'r-pass', 'SCRAM-SHA-256', db)
+        ok(session.finished?.done === true, `${user}@${db} logs in`)
+        return connection
+    }
+    const codeOf = (reply) => Number(reply.code?.$numberInt ?? reply.code?.$numberLong ?? reply.code ?? 0)
+
+    // Every built-in role's expansion deep-equals the captured oracle reply.
+    for (const [role, privileges] of Object.entries(fixture.builtin)) {
+        equal(
+            (await as({ createUser: `r_${role}`, pwd: 'r-pass', roles: [{ role, db: 'admin' }], $db: 'admin' })).ok,
+            { $numberDouble: '1.0' },
+            `createUser accepts the built-in ${role}`
+        )
+        const info = await as({ usersInfo: `r_${role}`, showPrivileges: true, $db: 'admin' })
+        equal(info.users[0].inheritedPrivileges, privileges, `${role} expands exactly like mongod reports`)
+        equal(info.users[0].inheritedRoles, [{ role, db: 'admin' }], `${role} reports only itself as inherited`)
+    }
+
+    // Enforcement verdicts for the newly modelled roles.
+    {
+        const monitor = await login('r_clusterMonitor')
+        equal((await command(monitor, { serverStatus: 1, $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'clusterMonitor can read serverStatus')
+        equal(codeOf(await command(monitor, { find: 'items', filter: {}, $db: 'roledb' })), 13, 'clusterMonitor cannot read application data')
+        equal(codeOf(await command(monitor, { insert: 'items', documents: [{ _id: 1 }], $db: 'roledb' })), 13, 'clusterMonitor cannot write')
+        equal((await command(monitor, { listDatabases: 1, authorizedDatabases: false, $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'clusterMonitor may list every database')
+        monitor.socket.destroy()
+
+        const keeper = await login('r_backup')
+        equal((await command(keeper, { find: 'items', filter: {}, $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'backup can read any database')
+        equal(codeOf(await command(keeper, { insert: 'items', documents: [{ _id: 9 }], $db: 'roledb' })), 13, 'backup cannot write')
+        equal((await command(keeper, { serverStatus: 1, $db: 'admin' })).ok, { $numberDouble: '1.0' }, 'backup can read serverStatus')
+        keeper.socket.destroy()
+
+        await as({ insert: 'items', documents: [{ _id: 1 }, { _id: 2 }], $db: 'roledb' })
+        const restorer = await login('r_restore')
+        equal((await command(restorer, { insert: 'more', documents: [{ _id: 1 }], $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'restore can write any database')
+        equal(codeOf(await command(restorer, { find: 'items', filter: {}, $db: 'roledb' })), 13, 'restore cannot read')
+        restorer.socket.destroy()
+
+        await as({ createUser: 'r_owner', pwd: 'r-pass', roles: [{ role: 'dbOwner', db: 'roledb' }], $db: 'admin' })
+        const owner = await login('r_owner', 'admin')
+        equal((await command(owner, { find: 'items', filter: {}, $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'dbOwner can read its database')
+        equal((await command(owner, { insert: 'items', documents: [{ _id: 3 }], $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'dbOwner can write its database')
+        equal((await command(owner, { createUser: 'r_owned', pwd: 'x', roles: [], $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'dbOwner can create users in its database')
+        equal(codeOf(await command(owner, { find: 'items', filter: {}, $db: 'admin' })), 13, 'dbOwner does not reach other databases')
+        owner.socket.destroy()
+
+        const anyAdmin = await login('r_userAdminAnyDatabase')
+        equal((await command(anyAdmin, { createUser: 'r_any_made', pwd: 'x', roles: [], $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'userAdminAnyDatabase creates users anywhere')
+        equal(codeOf(await command(anyAdmin, { find: 'items', filter: {}, $db: 'roledb' })), 13, 'userAdminAnyDatabase cannot read data')
+        anyAdmin.socket.destroy()
+
+        const anyReader = await login('r_readAnyDatabase')
+        equal((await command(anyReader, { find: 'items', filter: {}, $db: 'roledb' })).ok, { $numberDouble: '1.0' }, 'readAnyDatabase reads any database')
+        equal(codeOf(await command(anyReader, { insert: 'items', documents: [{ _id: 4 }], $db: 'roledb' })), 13, 'readAnyDatabase cannot write')
+        anyReader.socket.destroy()
+
+        const hoster = await login('r_hostManager')
+        equal(codeOf(await command(hoster, { serverStatus: 1, $db: 'admin' })), 13, 'hostManager cannot read serverStatus')
+        hoster.socket.destroy()
+
+        const system = await login('r___system')
+        equal((await command(system, { insert: 'items', documents: [{ _id: 5 }], $db: 'roledb' })).ok, { $numberDouble: '1.0' }, '__system writes anywhere')
+        equal((await command(system, { find: 'system.users', filter: {}, $db: 'admin' })).ok, { $numberDouble: '1.0' }, '__system reads the credential collection')
+        system.socket.destroy()
+    }
+
+    // Custom roles: storage shape, expansion equality and enforcement.
+    {
+        equal(
+            (await as({ createRole: 'cap_reader', privileges: [{ resource: { db: 'capdb', collection: '' }, actions: ['find'] }], roles: [], $db: 'capdb' })).ok,
+            { $numberDouble: '1.0' },
+            'createRole stores a minimal role'
+        )
+        // `root` holds `admin.system.roles`, not a per-database one, and its
+        // database-wide grants do not reach the credential collections — the
+        // same boundary `mongod` enforces. `__system` answers `anyResource`
+        // with `anyAction`, so the stored documents are read through it.
+        const reader = await login('r___system')
+        const readRoles = async (id) => command(reader, { find: 'system.roles', filter: { _id: id }, $db: 'capdb' })
+        const roleDocument = (await readRoles('capdb.cap_reader')).cursor.firstBatch[0]
+        equal(Object.keys(roleDocument), fixture.custom.plain.storedKeys, 'the stored role document has mongod\u2019s field order')
+        equal(roleDocument.db, 'capdb', 'the stored role names its database')
+        equal(roleDocument.privileges, [{ resource: { db: 'capdb', collection: '' }, actions: ['find'] }], 'the stored privileges match the request')
+
+        await as({ createUser: 'r_plain', pwd: 'r-pass', roles: [{ role: 'cap_reader', db: 'capdb' }], $db: 'admin' })
+        const plainInfo = await as({ usersInfo: 'r_plain', showPrivileges: true, $db: 'admin' })
+        equal(plainInfo.users[0].inheritedPrivileges, fixture.custom.plain.inheritedPrivileges, 'a custom role expands exactly like mongod reports')
+        equal(plainInfo.users[0].inheritedRoles, fixture.custom.plain.inheritedRoles, 'a custom role reports itself as inherited')
+        const plain = await login('r_plain')
+        equal((await command(plain, { find: 'anything', filter: {}, $db: 'capdb' })).ok, { $numberDouble: '1.0' }, 'the custom role answers its grant')
+        equal(codeOf(await command(plain, { insert: 'anything', documents: [{ _id: 1 }], $db: 'capdb' })), 13, 'the custom role refuses writes')
+        equal(codeOf(await command(plain, { find: 'items', filter: {}, $db: 'roledb' })), 13, 'the custom role does not reach other databases')
+        plain.socket.destroy()
+
+        equal(
+            (await as({ createRole: 'cap_inherit_read', privileges: [], roles: [{ role: 'read', db: 'capdb' }], $db: 'capdb' })).ok,
+            { $numberDouble: '1.0' },
+            'createRole accepts a built-in role of its own database'
+        )
+        await as({ createUser: 'r_inherit', pwd: 'r-pass', roles: [{ role: 'cap_inherit_read', db: 'capdb' }], $db: 'admin' })
+        const inheritInfo = await as({ usersInfo: 'r_inherit', showPrivileges: true, $db: 'admin' })
+        equal(inheritInfo.users[0].inheritedPrivileges, fixture.custom.inheritBuiltin.inheritedPrivileges, 'inheriting a built-in expands exactly like mongod')
+        equal(inheritInfo.users[0].inheritedRoles, fixture.custom.inheritBuiltin.inheritedRoles, 'the inherited built-in joins inheritedRoles')
+
+        equal(
+            (await as({
+                createRole: 'cap_reader_plus',
+                privileges: [{ resource: { db: 'capdb', collection: 'extra' }, actions: ['insert'] }],
+                roles: [{ role: 'cap_reader', db: 'capdb' }],
+                $db: 'capdb'
+            })).ok,
+            { $numberDouble: '1.0' },
+            'createRole accepts a custom role of its own database'
+        )
+        await as({ createUser: 'r_plus', pwd: 'r-pass', roles: [{ role: 'cap_reader_plus', db: 'capdb' }], $db: 'admin' })
+        const plusInfo = await as({ usersInfo: 'r_plus', showPrivileges: true, $db: 'admin' })
+        equal(plusInfo.users[0].inheritedPrivileges, fixture.custom.inheritCustom.inheritedPrivileges, 'a custom chain expands exactly like mongod')
+        equal(plusInfo.users[0].inheritedRoles, fixture.custom.inheritCustom.inheritedRoles, 'the custom chain reports both roles')
+        const plus = await login('r_plus')
+        equal((await command(plus, { find: 'whatever', filter: {}, $db: 'capdb' })).ok, { $numberDouble: '1.0' }, 'the chain keeps the parent grant')
+        equal((await command(plus, { insert: 'extra', documents: [{ _id: 1 }], $db: 'capdb' })).ok, { $numberDouble: '1.0' }, 'the chain answers its own grant')
+        equal(codeOf(await command(plus, { insert: 'whatever', documents: [{ _id: 1 }], $db: 'capdb' })), 13, 'the chain does not widen the parent')
+        plus.socket.destroy()
+
+        // `mongod` normalizes duplicate resources and orders merged actions.
+        equal(
+            (await as({
+                createRole: 'cap_norm',
+                privileges: [
+                    { resource: { db: 'capdb', collection: '' }, actions: ['insert', 'find', 'update'] },
+                    { resource: { db: 'capdb', collection: '' }, actions: ['remove', 'viewUser'] }
+                ],
+                roles: [],
+                $db: 'capdb'
+            })).ok,
+            { $numberDouble: '1.0' },
+            'createRole accepts duplicate resources'
+        )
+        const normalized = await readRoles('capdb.cap_norm')
+        equal(
+            normalized.cursor.firstBatch[0].privileges,
+            [{ resource: { db: 'capdb', collection: '' }, actions: ['find', 'insert', 'remove', 'update', 'viewUser'] }],
+            'the stored privileges merge and sort like mongod stores them'
+        )
+        await as({ dropRole: 'cap_norm', $db: 'capdb' })
+
+        // Validation errors, with the codes and texts measured on the oracle.
+        const duplicate = await as({ createRole: 'cap_reader', privileges: [], roles: [], $db: 'capdb' })
+        equal(codeOf(duplicate), 51002, 'a duplicate role answers Location51002')
+        equal(duplicate.errmsg, 'Role "cap_reader@capdb" already exists', 'the duplicate text matches mongod')
+        const builtinName = await as({ createRole: 'read', privileges: [], roles: [], $db: 'capdb' })
+        equal(codeOf(builtinName), 2, 'a built-in role name is a BadValue')
+        equal(builtinName.errmsg, 'Cannot create roles with the same name as a built-in role', 'the built-in-name text matches mongod')
+        const badAction = await as({ createRole: 'cap_bad', privileges: [{ resource: { db: 'capdb', collection: '' }, actions: ['bogusAction'] }], roles: [], $db: 'capdb' })
+        equal(codeOf(badAction), 2, 'an unknown action is a BadValue')
+        equal(badAction.errmsg, "Unknown action type in privilege set: 'bogusAction'", 'the unknown-action text matches mongod')
+        const crossPrivilege = await as({ createRole: 'cap_cross', privileges: [{ resource: { db: 'other', collection: '' }, actions: ['find'] }], roles: [], $db: 'capdb' })
+        equal(codeOf(crossPrivilege), 49, 'a cross-database privilege on a non-admin role is refused')
+        equal(
+            crossPrivilege.errmsg,
+            "Roles on the 'capdb' database cannot be granted privileges that target other databases or the cluster",
+            'the cross-privilege text matches mongod'
+        )
+        const crossCluster = await as({ createRole: 'cap_cluster', privileges: [{ resource: { cluster: true }, actions: ['serverStatus'] }], roles: [], $db: 'capdb' })
+        equal(codeOf(crossCluster), 49, 'a cluster privilege on a non-admin role is refused')
+        const emptyName = await as({ createRole: '', privileges: [], roles: [], $db: 'capdb' })
+        equal(emptyName.errmsg, 'Role name must be non-empty', 'the empty-name text matches mongod')
+        const missingPrivileges = await as({ createRole: 'cap_missing', roles: [], $db: 'capdb' })
+        equal(codeOf(missingPrivileges), 40414, 'missing privileges is an IDL parse failure')
+        equal(missingPrivileges.errmsg, "BSON field 'createRole.privileges' is missing but a required field", 'the missing-privileges text matches mongod')
+        const rolesType = await as({ createRole: 'cap_roles_type', privileges: [], roles: { role: 'read', db: 'capdb' }, $db: 'capdb' })
+        equal(codeOf(rolesType), 14, 'non-array roles is a TypeMismatch')
+        equal(rolesType.errmsg, "BSON field 'createRole.roles' is the wrong type 'object', expected type 'array'", 'the roles-type text matches mongod')
+        const emptyActions = await as({ createRole: 'cap_empty_actions', privileges: [{ resource: { db: 'capdb', collection: '' }, actions: [] }], roles: [], $db: 'capdb' })
+        equal(emptyActions.errmsg, "'actions' field of privilege resource must not be empty", 'the empty-actions text matches mongod')
+        const emptyResource = await as({ createRole: 'cap_empty_resource', privileges: [{ resource: {}, actions: ['find'] }], roles: [], $db: 'capdb' })
+        equal(emptyResource.errmsg, "resource pattern must contain 'collection' or 'systemBuckets' specifier", 'the empty-resource text matches mongod')
+        const collectionOnly = await as({ createRole: 'cap_col_only', privileges: [{ resource: { collection: 'x' }, actions: ['find'] }], roles: [], $db: 'capdb' })
+        equal(collectionOnly.errmsg, "resource {collection: '...'} must include 'db' field as well", 'the collection-only text matches mongod')
+        const dbCluster = await as({ createRole: 'cap_db_cluster', privileges: [{ resource: { db: 'capdb', cluster: true }, actions: ['find'] }], roles: [], $db: 'capdb' })
+        equal(dbCluster.errmsg, "resource: {cluster: true} conflicts with resource type 'db'", 'the db-plus-cluster text matches mongod')
+        const unknownRef = await as({ createRole: 'cap_unknown_ref', privileges: [], roles: [{ role: 'ghost_role', db: 'capdb' }], $db: 'capdb' })
+        equal(codeOf(unknownRef), 31, 'an unknown granted role is RoleNotFound')
+        equal(unknownRef.errmsg, "Cannot grant roles to 'cap_unknown_ref@capdb': Could not find role: ghost_role@capdb", 'the unknown-reference text matches mongod')
+        const selfRef = await as({ createRole: 'cap_edge_self', privileges: [], roles: [{ role: 'cap_edge_self', db: 'capdb' }], $db: 'capdb' })
+        equal(codeOf(selfRef), 49, 'a self-reference is an InvalidRoleModification')
+        equal(selfRef.errmsg, 'Cannot grant role cap_edge_self@capdb to itself.', 'the self-reference text matches mongod')
+        const crossRole = await as({ createRole: 'cap_cross_role', privileges: [], roles: [{ role: 'read', db: 'other' }], $db: 'capdb' })
+        equal(codeOf(crossRole), 49, 'a role from another database is refused')
+        equal(crossRole.errmsg, "Roles on the 'capdb' database cannot be granted roles from other databases", 'the cross-role text matches mongod')
+        const unknownUser = await as({ createUser: 'r_ghost', pwd: 'x', roles: [{ role: 'ghost', db: 'capdb' }], $db: 'admin' })
+        equal(codeOf(unknownUser), 31, 'createUser refuses a missing custom role')
+        equal(unknownUser.errmsg, 'Could not find role: ghost@capdb', 'the createUser RoleNotFound text matches mongod')
+
+        // `admin` roles may reach past their own database.
+        equal(
+            (await as({ createRole: 'cap_admin_cluster', privileges: [{ resource: { cluster: true }, actions: ['serverStatus'] }], roles: [], $db: 'admin' })).ok,
+            { $numberDouble: '1.0' },
+            'a role on admin may hold cluster privileges'
+        )
+        const adminMonitor = await as({ usersInfo: 1, showPrivileges: true, $db: 'admin' })
+        ok(adminMonitor.users.some((entry) => entry.user === 'r_bootstrap'), 'usersInfo still answers on admin')
+        await as({ dropRole: 'cap_admin_cluster', $db: 'admin' })
+
+        // authenticationRestrictions are stored and reported, never enforced.
+        equal(
+            (await as({
+                createRole: 'cap_restricted',
+                privileges: [],
+                roles: [],
+                authenticationRestrictions: [{ clientSource: ['10.0.0.0/8'] }],
+                $db: 'capdb'
+            })).ok,
+            { $numberDouble: '1.0' },
+            'createRole accepts authenticationRestrictions'
+        )
+        await as({ createUser: 'r_restricted', pwd: 'r-pass', roles: [{ role: 'cap_restricted', db: 'capdb' }], $db: 'admin' })
+        const restrictedInfo = await as({ usersInfo: 'r_restricted', showPrivileges: true, $db: 'admin' })
+        equal(
+            restrictedInfo.users[0].inheritedAuthenticationRestrictions,
+            [[{ clientSource: ['10.0.0.0/8'] }]],
+            'the restrictions come back nested per role like mongod reports them'
+        )
+        await as({ dropUser: 'r_restricted', $db: 'admin' })
+        await as({ dropRole: 'cap_restricted', $db: 'capdb' })
+
+        // dropRole: built-in refusal, missing refusal and the measured cascade.
+        const dropBuiltin = await as({ dropRole: 'read', $db: 'capdb' })
+        equal(codeOf(dropBuiltin), 2, 'dropping a built-in role is a BadValue')
+        equal(dropBuiltin.errmsg, 'read@capdb is a built-in role and cannot be modified', 'the built-in-drop text matches mongod')
+        const dropMissing = await as({ dropRole: 'ghost_role', $db: 'capdb' })
+        equal(codeOf(dropMissing), 31, 'dropping a missing role is RoleNotFound')
+        equal(dropMissing.errmsg, 'Could not find role: ghost_role@capdb', 'the missing-drop text matches mongod')
+
+        await as({ createRole: 'dep_parent', privileges: [{ resource: { db: 'capdb', collection: '' }, actions: ['find'] }], roles: [], $db: 'capdb' })
+        await as({ createRole: 'dep_child', privileges: [], roles: [{ role: 'dep_parent', db: 'capdb' }], $db: 'capdb' })
+        await as({ createUser: 'r_dep', pwd: 'r-pass', roles: [{ role: 'dep_child', db: 'capdb' }], $db: 'admin' })
+        const edgeInfo = await as({ usersInfo: 'r_dep', showPrivileges: true, $db: 'admin' })
+        equal(edgeInfo.users[0].inheritedPrivileges.length, 1, 'the child role resolves through the parent')
+        equal(
+            (await as({ dropRole: 'dep_parent', $db: 'capdb' })).ok,
+            { $numberDouble: '1.0' },
+            'mongod 8.0.9 does not refuse the drop of an inherited role'
+        )
+        const childAfter = await readRoles('capdb.dep_child')
+        equal(childAfter.cursor.firstBatch[0].roles, [], 'the child document loses the dropped parent')
+        const userAfter = await as({ usersInfo: 'r_dep', showPrivileges: true, $db: 'admin' })
+        equal(userAfter.users[0].inheritedPrivileges, [], 'the holder loses the privileges of the dropped chain')
+        await as({ dropRole: 'dep_child', $db: 'capdb' })
+
+        // A drop also strips the role from users that still hold it.
+        await as({ createUser: 'r_strip', pwd: 'r-pass', roles: [{ role: 'cap_reader', db: 'capdb' }], $db: 'admin' })
+        equal((await as({ dropRole: 'cap_reader', $db: 'capdb' })).ok, { $numberDouble: '1.0' }, 'dropping a held role is not refused')
+        const stripped = await as({ usersInfo: 'r_strip', $db: 'admin' })
+        equal(stripped.users[0].roles, [], 'the user document loses the dropped role')
+        await as({ dropUser: 'r_strip', $db: 'admin' })
+        await as({ dropUser: 'r_plain', $db: 'admin' })
+        await as({ dropRole: 'cap_inherit_read', $db: 'capdb' })
+        await as({ dropRole: 'cap_reader_plus', $db: 'capdb' })
+        reader.socket.destroy()
+    }
+
+    // serverStatus counters, with the classification measured on the oracle:
+    // inserts count documents, updates and deletes count statements, `find`
+    // and `aggregate` count as query, `getMore` as getmore, everything else
+    // as command, and `serverStatus` counts itself.
+    {
+        const num = (value) => Number(value?.$numberInt ?? value?.$numberLong ?? value?.$numberDouble ?? value)
+        await as({ insert: 'seq', documents: [{ _id: 1 }, { _id: 2 }, { _id: 3 }], $db: 'roledb' })
+        const before = await as({ serverStatus: 1, $db: 'admin' })
+        equal(Object.keys(before), ['host', 'version', 'process', 'pid', 'uptime', 'uptimeMillis', 'uptimeEstimate', 'localTime', 'asserts', 'connections', 'network', 'opcounters', 'opcountersRepl', 'mem', 'ok'], 'serverStatus keeps mongod\u2019s relative field order')
+        equal(Object.keys(before.opcounters), fixture.serverStatus.opcountersKeys, 'opcounters reports the six measured counters in order')
+        equal(before.mem, { supported: false }, 'mem answers the supported flag')
+        equal(Object.keys(before.asserts), fixture.serverStatus.assertsKeys, 'asserts reports the measured six counters in order')
+        ok(Object.values(before.asserts).every((value) => num(value) === 0), 'asserts are all zero')
+        ok(Object.values(before.opcountersRepl).every((value) => num(value) === 0), 'opcountersRepl is present with zeros like the measured set')
+
+        await as({ insert: 'seq', documents: [{ _id: 4 }, { _id: 5 }, { _id: 6 }], $db: 'roledb' })
+        await as({ update: 'seq', updates: [{ q: { _id: 1 }, u: { $set: { v: 1 } }, multi: true }], $db: 'roledb' })
+        await as({ delete: 'seq', deletes: [{ q: { _id: { $gt: 1 } }, limit: 0 }], $db: 'roledb' })
+        await as({ find: 'seq', filter: {}, $db: 'roledb' })
+        const cursor = await as({ find: 'seq', filter: {}, batchSize: 1, $db: 'roledb' })
+        await as({ getMore: cursor.cursor.id, collection: 'seq', $db: 'roledb' })
+        await as({ aggregate: 'seq', pipeline: [{ $match: {} }], cursor: {}, $db: 'roledb' })
+        await as({ ping: 1, $db: 'admin' })
+        const after = await as({ serverStatus: 1, $db: 'admin' })
+
+        const delta = {}
+        for (const key of Object.keys(after.opcounters)) delta[key] = num(after.opcounters[key]) - num(before.opcounters[key])
+        equal(delta, { insert: 3, query: 3, update: 1, delete: 1, getmore: 1, command: 2 }, 'opcounters deltas match the measured classification')
+        equal(num(after.network.numRequests) - num(before.network.numRequests), 9, 'numRequests counts every handled frame')
+        ok(num(after.network.bytesIn) > num(before.network.bytesIn), 'bytesIn grows with the request frames')
+        ok(num(after.network.bytesOut) > num(before.network.bytesOut), 'bytesOut grows with the reply frames')
+
+        // A command refused by authorization never reaches the counters.
+        const refusedBase = await as({ serverStatus: 1, $db: 'admin' })
+        const refused = await login('r_clusterMonitor')
+        equal(codeOf(await command(refused, { insert: 'seq', documents: [{ _id: 99 }], $db: 'roledb' })), 13, 'the refused insert is still unauthorized')
+        refused.socket.destroy()
+        const refusedAfter = await as({ serverStatus: 1, $db: 'admin' })
+        equal(num(refusedAfter.opcounters.insert) - num(refusedBase.opcounters.insert), 0, 'a refused command is not counted')
+    }
+
+    rootConn.socket.destroy()
+    await rolesServer.close()
 }
 
 // --- dbStats ----------------------------------------------------------------

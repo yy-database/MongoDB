@@ -7,7 +7,17 @@
 // leaves the connection that owns it.
 import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { binding } from './binding.ts'
-import { builtinRoleExists, privilegesForRoles } from './authorization.ts'
+import {
+    builtinRoleExists,
+    BUILTIN_ROLE_NAMES,
+    expandRoles,
+    makeStoreResolver,
+    normalizePrivileges,
+    VALID_ACTIONS,
+    type Privilege,
+    type Resource,
+    type RoleResolver
+} from './authorization.ts'
 import { saslprep, SaslprepError } from './saslprep.ts'
 
 /** Mechanisms this server registers in user credentials. */
@@ -191,7 +201,10 @@ export function createUserCommand(session: { store: any; cursors: any }, command
         mechanisms = [...SCRAM_MECHANISMS]
     }
     // Roles are validated before credentials are generated, as `mongod` does;
-    // a string role names the current database.
+    // a string role names the current database. A name that is not a built-in
+    // resolves against `<db>.system.roles`, exactly like the authorization
+    // layer later does.
+    const resolve = makeStoreResolver(session)
     const roles: AuthRole[] = []
     for (const requested of command.roles) {
         let role: AuthRole
@@ -209,7 +222,9 @@ export function createUserCommand(session: { store: any; cursors: any }, command
         } else {
             return badValue('Role name must be either a document or string')
         }
-        if (!builtinRoleExists(role)) return authError(31, 'RoleNotFound', `Could not find role: ${role.role}@${role.db}`)
+        if (!builtinRoleExists(role) && resolve(role) === null) {
+            return authError(31, 'RoleNotFound', `Could not find role: ${role.role}@${role.db}`)
+        }
         roles.push(role)
     }
     const credentials: any = {}
@@ -242,6 +257,244 @@ export function dropUserCommand(session: { store: any; cursors: any }, command: 
     if (typeof name !== 'string') return badValue('dropUser must be a string')
     if (findUser(session, db, name) === null) return authError(11, 'UserNotFound', `User '${name}@${db}' not found`)
     binding.delete(session.store, JSON.stringify({ delete: 'system.users', deletes: [{ q: { user: name }, limit: 1 }], $db: db }))
+    return { ok: OK }
+}
+
+/** `TypeMismatch` in `mongod`'s IDL wording. */
+function typeMismatch(field: string, actual: string, expected: string): any {
+    return authError(14, 'TypeMismatch', `BSON field '${field}' is the wrong type '${actual}', expected type '${expected}'`)
+}
+
+/** `IDLFailedToParse` for a missing required field. */
+function idlMissing(field: string): any {
+    return authError(40414, 'IDLFailedToParse', `BSON field '${field}' is missing but a required field`)
+}
+
+/** `IDLUnknownField` for a field the command IDL does not declare. */
+function idlUnknown(field: string): any {
+    return authError(40415, 'IDLUnknownField', `BSON field '${field}' is an unknown field.`)
+}
+
+/** Command-level fields every `mongod` command accepts next to its own ones. */
+const COMMON_COMMAND_FIELDS = new Set([
+    '$db', 'lsid', '$lsid', '$readPreference', '$clusterTime', '$audit', '$client', '$configServer', '$shard',
+    '$dbVersion', '$direct', 'comment', 'writeConcern', 'readConcern', 'maxTimeMS', 'txnNumber', 'autocommit',
+    'startTransaction', 'shellBatch', 'aggregationBatchSize', 'replWriteConcern', 'provenance', 'stmtId'
+])
+
+/** Reads one role document out of `<db>.system.roles`. */
+function findRole(session: { store: any; cursors: any }, db: string, name: string): any | null {
+    const find = JSON.stringify({ find: 'system.roles', filter: { _id: `${db}.${name}` }, limit: 1, $db: db })
+    const batch = JSON.parse(binding.find(session.store, session.cursors, find))?.cursor?.firstBatch
+    if (!Array.isArray(batch) || batch.length === 0) return null
+    return batch[0]
+}
+
+/** Whether a `createRole` resource names a shape `mongod` accepts, or the refusal. */
+function validateResourceShape(resource: any): any | null {
+    if (!isDocumentValue(resource)) return null
+    if (Object.hasOwn(resource, 'systemBuckets')) {
+        return badValue("resource pattern must contain 'collection' or 'systemBuckets' specifier")
+    }
+    const cluster = resource.cluster === true
+    const anyResource = resource.anyResource === true
+    if (cluster && Object.hasOwn(resource, 'db')) return badValue("resource: {cluster: true} conflicts with resource type 'db'")
+    if (cluster && Object.hasOwn(resource, 'anyResource')) {
+        return badValue("resource: {cluster: true} conflicts with resource type 'anyResource'")
+    }
+    if (Object.hasOwn(resource, 'db') && typeof resource.db !== 'string') {
+        return typeMismatch('createRole.privileges.resource.db', typeName(resource.db), 'string')
+    }
+    if (Object.hasOwn(resource, 'collection') && typeof resource.collection !== 'string') {
+        return typeMismatch('createRole.privileges.resource.collection', typeName(resource.collection), 'string')
+    }
+    if (cluster || anyResource) return null
+    if (typeof resource.db === 'string') {
+        if (typeof resource.collection !== 'string') {
+            return badValue("resource pattern must contain 'collection' or 'systemBuckets' specifier")
+        }
+        return null
+    }
+    if (Object.hasOwn(resource, 'collection')) return badValue("resource {collection: '...'} must include 'db' field as well")
+    return badValue("resource pattern must contain 'collection' or 'systemBuckets' specifier")
+}
+
+/** Whether a resource reaches past the database a non-`admin` role may govern. */
+function resourceInScope(resource: any, roleDb: string): boolean {
+    if (roleDb === 'admin') return true
+    return typeof resource.db === 'string' && resource.db === roleDb
+}
+
+/**
+ * `createRole`, storing the same document `mongod` stores.
+ *
+ * The role lives in `<db>.system.roles` (the per-database layout this server
+ * already uses for `<db>.system.users`), its privileges are normalized the way
+ * `mongod` normalizes them before writing, and every validation error carries
+ * the measured code and wording.
+ */
+export function createRoleCommand(session: { store: any; cursors: any }, command: any): any {
+    const db = command.$db ?? 'admin'
+    const name = command.createRole
+    if (typeof name !== 'string') {
+        return typeMismatch('createRole.createRole', typeName(command.createRole), 'string')
+    }
+    for (const key of Object.keys(command)) {
+        if (!CREATE_ROLE_FIELDS.has(key) && !COMMON_COMMAND_FIELDS.has(key)) return idlUnknown(`createRole.${key}`)
+    }
+    if (!Object.hasOwn(command, 'privileges')) return idlMissing('createRole.privileges')
+    if (!Object.hasOwn(command, 'roles')) return idlMissing('createRole.roles')
+    if (!Array.isArray(command.privileges)) return typeMismatch('createRole.privileges', typeName(command.privileges), 'array')
+    if (!Array.isArray(command.roles)) return typeMismatch('createRole.roles', typeName(command.roles), 'array')
+    if (Object.hasOwn(command, 'authenticationRestrictions') && !Array.isArray(command.authenticationRestrictions)) {
+        return typeMismatch('createRole.authenticationRestrictions', typeName(command.authenticationRestrictions), 'array')
+    }
+    if (name.length === 0) return badValue('Role name must be non-empty')
+    if (BUILTIN_ROLE_NAMES.has(name)) return badValue('Cannot create roles with the same name as a built-in role')
+    if (findRole(session, db, name) !== null) {
+        return authError(51002, 'Location51002', `Role "${name}@${db}" already exists`)
+    }
+
+    const resolve = makeStoreResolver(session)
+    const granted: AuthRole[] = []
+    for (const requested of command.roles) {
+        let role: AuthRole
+        if (typeof requested === 'string') role = { role: requested, db }
+        else if (isDocumentValue(requested)) {
+            if (!Object.hasOwn(requested, 'role')) return badValue('RoleName must contain a field named: role')
+            if (typeof requested.role !== 'string') {
+                return badValue(`RoleName must contain a string field named: role. But, has type ${typeName(requested.role)}`)
+            }
+            if (!Object.hasOwn(requested, 'db')) return badValue('RoleName must contain a field named: db')
+            if (typeof requested.db !== 'string') {
+                return badValue(`RoleName must contain a string field named: db. But, has type ${typeName(requested.db)}`)
+            }
+            role = { role: requested.role, db: requested.db }
+        } else {
+            return badValue('Role name must be either a document or string')
+        }
+        if (role.role === name && role.db === db) {
+            return authError(49, 'InvalidRoleModification', `Cannot grant role ${name}@${db} to itself.`)
+        }
+        if (db !== 'admin' && role.db !== db) {
+            return authError(49, 'InvalidRoleModification', `Roles on the '${db}' database cannot be granted roles from other databases`)
+        }
+        if (!builtinRoleExists(role) && resolve(role) === null) {
+            return authError(
+                31,
+                'RoleNotFound',
+                `Cannot grant roles to '${name}@${db}': Could not find role: ${role.role}@${role.db}`
+            )
+        }
+        const key = `${role.db}.${role.role}`
+        if (!granted.some((entry) => `${entry.db}.${entry.role}` === key)) granted.push(role)
+    }
+
+    const privileges: Privilege[] = []
+    for (let index = 0; index < command.privileges.length; index += 1) {
+        const entry = command.privileges[index]
+        if (!isDocumentValue(entry)) {
+            return typeMismatch(`createRole.privileges.${index}`, typeName(entry), 'object')
+        }
+        if (!Object.hasOwn(entry, 'resource')) return idlMissing('createRole.privileges.resource')
+        if (!Object.hasOwn(entry, 'actions')) return idlMissing('createRole.privileges.actions')
+        if (!Array.isArray(entry.actions)) return typeMismatch('createRole.privileges.actions', typeName(entry.actions), 'array')
+        const shape = validateResourceShape(entry.resource)
+        if (shape) return shape
+        if (!resourceInScope(entry.resource, db)) {
+            return authError(
+                49,
+                'InvalidRoleModification',
+                `Roles on the '${db}' database cannot be granted privileges that target other databases or the cluster`
+            )
+        }
+        const actions: string[] = []
+        for (let position = 0; position < entry.actions.length; position += 1) {
+            const action = entry.actions[position]
+            if (typeof action !== 'string') {
+                return typeMismatch(`createRole.privileges.actions.${position}`, typeName(action), 'string')
+            }
+            if (!VALID_ACTIONS.has(action)) return badValue(`Unknown action type in privilege set: '${action}'`)
+            actions.push(action)
+        }
+        if (actions.length === 0) return badValue("'actions' field of privilege resource must not be empty")
+        const resource: Resource = isDocumentValue(entry.resource) ? entry.resource : {}
+        privileges.push({ resource, actions })
+    }
+
+    const roleDocument: any = {
+        _id: `${db}.${name}`,
+        role: name,
+        db,
+        privileges: normalizePrivileges(privileges),
+        roles: granted
+    }
+    if (Object.hasOwn(command, 'authenticationRestrictions')) {
+        for (const entry of command.authenticationRestrictions) {
+            if (!isDocumentValue(entry)) return typeMismatch('createRole.authenticationRestrictions', typeName(entry), 'object')
+            for (const key of Object.keys(entry)) {
+                if (key !== 'clientSource' && key !== 'serverAddress') return idlUnknown(`createRole.authenticationRestrictions.${key}`)
+            }
+            for (const key of ['clientSource', 'serverAddress']) {
+                if (Object.hasOwn(entry, key) && !Array.isArray(entry[key])) {
+                    return typeMismatch(`createRole.authenticationRestrictions.${key}`, typeName(entry[key]), 'array')
+                }
+            }
+        }
+        roleDocument.authenticationRestrictions = command.authenticationRestrictions
+    }
+    const reply = JSON.parse(
+        binding.insert(session.store, JSON.stringify({ insert: 'system.roles', documents: [roleDocument], $db: db }))
+    )
+    if (Array.isArray(reply.writeErrors) && reply.writeErrors.length > 0) {
+        return authError(51002, 'Location51002', `Role "${name}@${db}" already exists`)
+    }
+    return { ok: OK }
+}
+
+/** Fields `mongod 8.0.9` declares for `createRole`; anything else is `IDLUnknownField`. */
+const CREATE_ROLE_FIELDS = new Set(['createRole', 'privileges', 'roles', 'authenticationRestrictions'])
+
+/**
+ * `dropRole`. `mongod 8.0.9` answers `RoleNotFound` for a missing role and
+ * `BadValue` for a built-in one; a successful drop removes the document and
+ * strips the role from every user and role that still references it (measured:
+ * the drop is not refused for dependents, the references are rewritten).
+ */
+export function dropRoleCommand(session: { store: any; cursors: any }, command: any): any {
+    const db = command.$db ?? 'admin'
+    const name = command.dropRole
+    if (typeof name !== 'string') {
+        return typeMismatch('dropRole.dropRole', typeName(command.dropRole), 'string')
+    }
+    for (const key of Object.keys(command)) {
+        if (key !== 'dropRole' && !COMMON_COMMAND_FIELDS.has(key)) return idlUnknown(`dropRole.${key}`)
+    }
+    if (BUILTIN_ROLE_NAMES.has(name)) {
+        return badValue(`${name}@${db} is a built-in role and cannot be modified`)
+    }
+    if (findRole(session, db, name) === null) {
+        return authError(31, 'RoleNotFound', `Could not find role: ${name}@${db}`)
+    }
+    binding.delete(session.store, JSON.stringify({ delete: 'system.roles', deletes: [{ q: { _id: `${db}.${name}` }, limit: 1 }], $db: db }))
+    for (const database of storedDatabases(session.store)) {
+        for (const document of storedUsers(session, database)) {
+            if (!Array.isArray(document.roles)) continue
+            const kept = document.roles.filter((entry: any) => !(entry !== null && typeof entry === 'object' && entry.role === name && entry.db === db))
+            if (kept.length !== document.roles.length) {
+                binding.update(session.store, JSON.stringify({ update: 'system.users', updates: [{ q: { _id: document._id }, u: { $set: { roles: kept } }, limit: 1 }], $db: database }))
+            }
+        }
+        const find = JSON.stringify({ find: 'system.roles', filter: {}, $db: database })
+        const batch = JSON.parse(binding.find(session.store, session.cursors, find))?.cursor?.firstBatch
+        for (const document of Array.isArray(batch) ? batch : []) {
+            if (!Array.isArray(document.roles)) continue
+            const kept = document.roles.filter((entry: any) => !(entry !== null && typeof entry === 'object' && entry.role === name && entry.db === db))
+            if (kept.length !== document.roles.length) {
+                binding.update(session.store, JSON.stringify({ update: 'system.roles', updates: [{ q: { _id: document._id }, u: { $set: { roles: kept } }, limit: 1 }], $db: database }))
+            }
+        }
+    }
     return { ok: OK }
 }
 
@@ -512,7 +765,7 @@ function sortedRoles(document: any): AuthRole[] {
 }
 
 /** One entry of `usersInfo.users`, in `mongod`'s field order. */
-function userReport(document: any, showCredentials: boolean, showPrivileges: boolean): any {
+function userReport(document: any, showCredentials: boolean, showPrivileges: boolean, resolve: RoleResolver): any {
     const report: any = {
         _id: document._id,
         userId: document.userId,
@@ -531,11 +784,12 @@ function userReport(document: any, showCredentials: boolean, showPrivileges: boo
     report.roles = sortedRoles(document)
     if (!showPrivileges) report.mechanisms = mechanisms
     if (showPrivileges) {
-        // The same role table that the dispatch layer enforces expands here, so
-        // a reported privilege is always one that would be honoured.
-        report.inheritedRoles = report.roles
-        report.inheritedPrivileges = privilegesForRoles(report.roles)
-        report.inheritedAuthenticationRestrictions = []
+        // The same expansion the dispatch layer enforces answers here, so a
+        // reported privilege is always one that would be honoured.
+        const expanded = expandRoles(report.roles, resolve)
+        report.inheritedRoles = expanded.inheritedRoles
+        report.inheritedPrivileges = expanded.privileges
+        report.inheritedAuthenticationRestrictions = expanded.authenticationRestrictions
     }
     return report
 }
@@ -574,7 +828,7 @@ export function usersInfoCommand(session: { store: any; cursors: any }, command:
             }
         }
     }
-    return { users: documents.map((document) => userReport(document, showCredentials, showPrivileges)), ok: OK }
+    return { users: documents.map((document) => userReport(document, showCredentials, showPrivileges, makeStoreResolver(session))), ok: OK }
 }
 
 /** Commands `mongod 8.0.9` answers before authentication. */
