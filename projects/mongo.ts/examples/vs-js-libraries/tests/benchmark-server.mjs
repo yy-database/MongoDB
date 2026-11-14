@@ -8,6 +8,7 @@
 // - 环境变量：BENCH_DATASET BENCH_ROUNDS BENCH_PING BENCH_INSERT BENCH_FIND BENCH_POINT
 //   BENCH_RANGE BENCH_ORDER BENCH_GROUP BENCH_PIPELINE BENCH_INDEX BENCH_BULK
 //   BENCH_BIG_DOCS BENCH_BIG_KB BENCH_CONNECT BENCH_SCALE_SIZES BENCH_SCALE_OPS BENCH_SCALE_ROUNDS
+//   BENCH_INDEX_EQ BENCH_PROJECTION BENCH_PAGE BENCH_ERROR
 // - `ping` 是协议 + 解析 + 回包编码的地板，其余项的耗时减去它就是该路径的额外成本；
 // - 真实 `mongod` 列是可选的：设置 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 时才测量，
 //   连不上直接失败，不降级成自比、不伪造真机数字。本机没有 `mongod`，该列记为 CI-only。
@@ -39,6 +40,8 @@ const SCALE_ROUNDS = Number(process.env.BENCH_SCALE_ROUNDS ?? 3);
 const BULK_ROWS = Number(process.env.BENCH_BULK ?? 5_000);
 const BIG_DOCS = Number(process.env.BENCH_BIG_DOCS ?? 20);
 const BIG_KB = Number(process.env.BENCH_BIG_KB ?? 64);
+/** Page size of the cursor-pagination workload: every page costs one `getMore`. */
+const PAGE = Number(process.env.BENCH_PAGE ?? 100);
 const BLOB = "x".repeat(BIG_KB * 1_024);
 
 const REAL = {
@@ -205,6 +208,90 @@ const WORKLOADS = [
           { sort: { price: -1, seq: 1 }, limit: 20, batchSize: 20 },
         );
         if (rows.length !== 20) throw new Error(`order-limit rows=${rows.length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "find-index-equality",
+    unit: "commands",
+    ops: Number(process.env.BENCH_INDEX_EQ ?? 50),
+    async setup(client) {
+      const created = await client.command({
+        createIndexes: COLLECTION,
+        indexes: [{ key: { grp: 1 }, name: "grp_1" }],
+        $db: DB,
+      });
+      if (numberValue(created.ok) !== 1) throw new Error(`index-equality setup failed: ${JSON.stringify(created)}`);
+    },
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const grp = index % 10;
+        const rows = await client.find(DB, COLLECTION, { grp }, { limit: 10, batchSize: 10 });
+        if (rows.length !== 10 || rows.some((row) => numberValue(row.grp) !== grp)) {
+          throw new Error(`index-equality rows=${rows.length} grp=${grp}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "find-projection-sort",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PROJECTION ?? 20),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await client.find(
+          DB,
+          COLLECTION,
+          {},
+          {
+            projection: { _id: 0, seq: 1, price: 1 },
+            sort: { price: -1, seq: 1 },
+            limit: 20,
+            batchSize: 20,
+          },
+        );
+        if (rows.length !== 20) throw new Error(`projection-sort rows=${rows.length}`);
+        if (Object.hasOwn(rows[0], "pad") || !Object.hasOwn(rows[0], "price")) {
+          throw new Error(`projection-sort leaked fields: ${Object.keys(rows[0]).join(",")}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "cursor-paginate",
+    unit: "documents",
+    rows: DATASET,
+    rowsPerCommand: PAGE,
+    async run(client) {
+      const first = await client.command({ find: COLLECTION, filter: {}, batchSize: PAGE, $db: DB });
+      let read = (first.cursor?.firstBatch ?? []).length;
+      let id = numberValue(first.cursor?.id);
+      while (id !== 0) {
+        const more = await client.command({ getMore: id, collection: COLLECTION, batchSize: PAGE, $db: DB });
+        read += (more.cursor?.nextBatch ?? []).length;
+        id = numberValue(more.cursor?.id);
+      }
+      if (read !== DATASET) throw new Error(`cursor-paginate read=${read}`);
+      return read;
+    },
+  },
+  {
+    name: "error-command",
+    unit: "commands",
+    ops: Number(process.env.BENCH_ERROR ?? 100),
+    seed: false,
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        let code = 0;
+        try {
+          await client.command({ benchNoSuchCommand: 1, $db: DB });
+        } catch (error) {
+          code = error.code;
+        }
+        if (code !== 59) throw new Error(`error-command code=${code}`);
       }
       return ops;
     },
@@ -382,6 +469,36 @@ const WORKLOADS = [
   },
 ];
 
+/**
+ * 每项覆盖的路径与断言，写进报告的 Workloads 表。
+ *
+ * 新增项与既有项同口径：同一份固定 seed、同一次「重置集合 → setup → 计时」流程，
+ * 断言写在 `run` 里，漏读、漏写、漏字段都会让本轮直接失败而不是记一个好看的数字。
+ */
+const WORKLOAD_NOTES = {
+  ping: "空 `ping`；协议解析与回包编码的地板",
+  "insert-single": "单条 `insert`，含一次整快照落盘",
+  "insert-multi": "一次 `insert` 写 200 篇",
+  "find-all": "`find {}` 按 `batchSize 250` 抽干整个集合",
+  "find-point-pk": "按 `_id` 单点 `find`",
+  "find-point-uk": "按唯一索引 `sku` 单点 `find`",
+  "find-range-limit": "无索引区间 `seq`，`limit 20`（早停扫描）",
+  "find-order-limit": "无索引排序 `price desc, seq asc` 取 20",
+  "find-index-equality": "建 `grp_1` 后按 `grp` 等值取 10（索引等值路径）",
+  "find-projection-sort": "投影 `{seq, price}` 加 `price desc, seq asc` 排序取 20",
+  "cursor-paginate": "`batchSize 100` 分页抽干 1000 篇（每页一条 `getMore`）",
+  "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
+  "aggregate-group": "`$group` 十组计数与求和",
+  "aggregate-multistage": "`$match → $group → $sort → $limit → $project`",
+  "create-index": "5 种键型各建一次",
+  "big-doc-write": "20 篇 64KB 文档逐条写",
+  "big-doc-read": "20 篇 64KB 文档按 `_id` 读并校验长度",
+  "update-many": "10 条 `multi: true` 更新覆盖 1000 篇",
+  "delete-many": "5 条 `limit: 0` 删除覆盖 500 篇",
+  "bulk-insert": "5000 篇按 200 篇/批写入",
+  connect: "20 次新建 `OP_MSG` 连接",
+};
+
 /** 起一个本仓服务端并返回测量用的连接。 */
 async function openOurs() {
   const dataDir = await mkdtemp(join(tmpdir(), "mongo-bench-server-"));
@@ -468,9 +585,15 @@ function collectProvenance() {
     // manifest 缺失时保持 unknown
   }
   const overrideFile = existsSync(join(repoRoot, ".cargo", "config.toml"));
-  const sibling = join(repoRoot, "..", "database.rs");
-  const siblingRev = existsSync(sibling) ? gitRun(["-C", sibling, "rev-parse", "--short", "HEAD"], sibling) : null;
-  const siblingDirty = existsSync(sibling) ? (gitRun(["-C", sibling, "status", "--porcelain"], sibling) ?? "") !== "" : null;
+  // `.cargo/config.toml` 的第一条 `paths` 指向 facade 源码（`<repo>/projects/database/facades/mongo`），
+  // 由此解析出被覆盖的工作树，报告它的 rev 与脏状态；文件存在但没配 paths 时保持未启用。
+  let overrideRoot = null;
+  if (overrideFile) {
+    const firstPath = readFileSync(join(repoRoot, ".cargo", "config.toml"), "utf8").match(/"([^"]+)"/)?.[1];
+    if (firstPath) overrideRoot = resolve(firstPath, "..", "..", "..", "..");
+  }
+  const overrideRev = overrideRoot ? gitRun(["-C", overrideRoot, "rev-parse", "--short", "HEAD"], overrideRoot) : null;
+  const overrideDirty = overrideRoot ? (gitRun(["-C", overrideRoot, "status", "--porcelain"], overrideRoot) ?? "") !== "" : null;
   let rustc = "unknown";
   try {
     rustc = execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim();
@@ -482,7 +605,7 @@ function collectProvenance() {
     rustc,
     mongoRev: gitRun(["-C", repoRoot, "rev-parse", "--short", "HEAD"], repoRoot) ?? "unknown",
     facadePin: pin,
-    pathOverride: overrideFile && siblingRev ? `${siblingRev}${siblingDirty ? " (dirty)" : ""}` : "未启用（按钉住的 rev 构建）",
+    pathOverride: overrideRev ? `${overrideRev}${overrideDirty ? " (dirty)" : ""}` : "未启用（按钉住的 rev 构建）",
     addon,
     dataset: `${DATASET} 篇 × ~${JSON.stringify(documentOf(0)).length}B；bulk ${BULK_ROWS} 篇；大文档 ${BIG_DOCS} × ${BIG_KB}KB；规模 ${SCALE_SIZES.join(",")}`,
   };
@@ -595,6 +718,18 @@ async function main() {
     `真实 mongod：${real ? `\`${REAL.host}:${REAL.port}\`` : "本机未配置（CI-only 列，不伪造真机数字）"}。`,
     "统计口径：median/p95 走上游 `database.harness` 的 `benchSummary`（nearest-rank，golden vector 钉死），不在脚本里重写算法。",
     "",
+    "## Workloads",
+    "",
+    "每轮都以「drop 集合并重灌固定种子 → 执行 `setup` → 计时」执行，`setup` 与灌种子不计时。",
+    "单位 `commands` / `connections` 记每命令（每连接）耗时，`rows` / `documents` 记每行（每页返回的文档）耗时。",
+    "",
+    "| 工作负载 | 单位 | 每轮量 | 覆盖与断言 |",
+    "|---------:|-----:|------:|------------|",
+    ...WORKLOADS.map((workload) => {
+      const amount = workload.rows ?? workload.ops ?? 1;
+      return `| ${workload.name} | ${workload.unit} | ${amount} | ${WORKLOAD_NOTES[workload.name] ?? ""} |`;
+    }),
+    "",
     "## 溯源",
     "",
     `| 项 | 值 |`,
@@ -658,6 +793,13 @@ async function main() {
     "- **`update` 按 `_id` 等值走点读 + 索引项探针**：上游 `mongo::commands::update` 对单 `_id` 等值过滤直接点读定位，",
     "  唯一键冲突改为按已落盘索引项前缀探针检查，不再为每条更新命令整命名空间扫描；事务内或索引条目缺失时",
     "  仍退回整表 map，宁可慢也不放行重复键。非 `_id` 过滤（如 `update-many` 按 `grp`）没有可用索引时仍是扫描，属预期。",
+    "- **读命令回复直接写原生 `OP_MSG` 帧**：`find` / `getMore` / `aggregate` 的回复由 Rust 一侧编码成 BSON 载荷，",
+    "  宿主写帧时不再把文档转成 Extended JSON、在 JS 里 `JSON.parse` 后再 `JSON.stringify` 回 Rust 重新编码。",
+    "  改造前一条 250 篇的回复光这一步 JSON 桥约 1.1 ms（探针拆分：Rust 写文本 0.25 ms、JS 解析 0.25 ms、",
+    "  序列化 0.09 ms、Rust 重新解析并编码 BSON 0.93 ms），`find-all` 一轮 1000 篇要付两次。",
+    "- **排序每篇只取一次键**：`sort_documents` 改用 `sort_by_cached_key`，`n log n` 次比较不再各解析一次字段路径。",
+    "- **早停查询按页扫描**：无排序且带 `limit` 的 `find` 按 256 篇一页推进，凑够命中就停，不再先整集合取回再丢弃；",
+    "  索引等值/区间仍走上游索引扫描，不受影响。",
     "- **整集合读、排序与聚合是扫描成本**：`find-all` / `find-order-limit` / `aggregate-group` 都要读出并解码全部文档，",
     "  与 1000 篇的规模成正比，这部分属预期内的线性开销，不是缺陷。",
     "- **`create-index` 是两次快照提交加一次全集合回填**：目录写入与索引条目回填各提交一次整份快照，",

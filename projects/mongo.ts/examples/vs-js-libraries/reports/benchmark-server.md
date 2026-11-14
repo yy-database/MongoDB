@@ -6,64 +6,101 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 真实 mongod：本机未配置（CI-only 列，不伪造真机数字）。
 统计口径：median/p95 走上游 `database.harness` 的 `benchSummary`（nearest-rank，golden vector 钉死），不在脚本里重写算法。
 
+## Workloads
+
+每轮都以「drop 集合并重灌固定种子 → 执行 `setup` → 计时」执行，`setup` 与灌种子不计时。
+单位 `commands` / `connections` 记每命令（每连接）耗时，`rows` / `documents` 记每行（每页返回的文档）耗时。
+
+| 工作负载 | 单位 | 每轮量 | 覆盖与断言 |
+|---------:|-----:|------:|------------|
+| ping | commands | 200 | 空 `ping`；协议解析与回包编码的地板 |
+| insert-single | commands | 50 | 单条 `insert`，含一次整快照落盘 |
+| insert-multi | rows | 200 | 一次 `insert` 写 200 篇 |
+| find-all | commands | 20 | `find {}` 按 `batchSize 250` 抽干整个集合 |
+| find-point-pk | commands | 100 | 按 `_id` 单点 `find` |
+| find-point-uk | commands | 100 | 按唯一索引 `sku` 单点 `find` |
+| find-range-limit | commands | 20 | 无索引区间 `seq`，`limit 20`（早停扫描） |
+| find-order-limit | commands | 20 | 无索引排序 `price desc, seq asc` 取 20 |
+| find-index-equality | commands | 50 | 建 `grp_1` 后按 `grp` 等值取 10（索引等值路径） |
+| find-projection-sort | commands | 20 | 投影 `{seq, price}` 加 `price desc, seq asc` 排序取 20 |
+| cursor-paginate | documents | 1000 | `batchSize 100` 分页抽干 1000 篇（每页一条 `getMore`） |
+| error-command | commands | 100 | 未知命令往返，断言 `code 59 CommandNotFound` |
+| aggregate-group | commands | 10 | `$group` 十组计数与求和 |
+| bulk-insert | rows | 5000 | 5000 篇按 200 篇/批写入 |
+| aggregate-multistage | commands | 10 | `$match → $group → $sort → $limit → $project` |
+| create-index | commands | 5 | 5 种键型各建一次 |
+| big-doc-write | rows | 20 | 20 篇 64KB 文档逐条写 |
+| big-doc-read | rows | 20 | 20 篇 64KB 文档按 `_id` 读并校验长度 |
+| update-many | rows | 1000 | 10 条 `multi: true` 更新覆盖 1000 篇 |
+| delete-many | rows | 500 | 5 条 `limit: 0` 删除覆盖 500 篇 |
+| connect | connections | 20 | 20 次新建 `OP_MSG` 连接 |
+
 ## 溯源
 
 | 项 | 值 |
 |----|----|
 | node | v24.18.0 |
-| rustc | rustc 1.101.0-nightly (1c3a65069 2026-11-02) |
-| MongoDB rev | 750e69b |
-| facade 钉住的 database.rs rev | ee57adaa0ce12039ad22a80cfee2f4b6cd504ead |
-| 本地 path override | 未启用（按钉住的 rev 构建） |
-| addon 产物 | 5198848 bytes, mtime 2026-11-14T11:37:12.575Z |
+| rustc | rustc 1.99.1 (58cf8f9c3 2026-10-13) |
+| MongoDB rev | 9f08c25 |
+| facade 钉住的 database.rs rev | 70aee1ebc60e0104a88f214ee46af37477b402a7 |
+| 本地 path override | 2e70f3d (dirty) |
+| addon 产物 | 5209088 bytes, mtime 2026-11-14T12:28:55.657Z |
 | 数据规模 | 1000 篇 × ~87B；bulk 5000 篇；大文档 20 × 64KB；规模 200,1000,5000 |
 
 ## 按本仓耗时排序
 
 | 工作负载 | 单位 | 本仓 ms/op | 本仓 p95 ms/op | 真机 ms/op | 倍数 |
 |---------:|-----:|-----------:|---------------:|-----------:|-----:|
-| create-index | commands | 16.826 | 18.936 | CI-only | n/a |
-| find-all | commands | 10.558 | 10.667 | CI-only | n/a |
-| big-doc-write | rows | 6.115 | 12.780 | CI-only | n/a |
-| insert-single | commands | 4.218 | 4.229 | CI-only | n/a |
-| find-order-limit | commands | 1.896 | 2.818 | CI-only | n/a |
-| aggregate-group | commands | 1.699 | 1.862 | CI-only | n/a |
-| aggregate-multistage | commands | 1.671 | 2.949 | CI-only | n/a |
-| find-range-limit | commands | 1.144 | 1.776 | CI-only | n/a |
-| connect | connections | 0.968 | 0.999 | CI-only | n/a |
-| big-doc-read | rows | 0.578 | 0.713 | CI-only | n/a |
-| update-many | rows | 0.118 | 0.143 | CI-only | n/a |
-| delete-many | rows | 0.109 | 0.117 | CI-only | n/a |
-| find-point-uk | commands | 0.102 | 0.119 | CI-only | n/a |
-| ping | commands | 0.086 | 0.099 | CI-only | n/a |
-| bulk-insert | rows | 0.086 | 0.094 | CI-only | n/a |
-| find-point-pk | commands | 0.085 | 0.088 | CI-only | n/a |
-| insert-multi | rows | 0.055 | 0.063 | CI-only | n/a |
+| create-index | commands | 14.434 | 15.841 | CI-only | n/a |
+| big-doc-write | rows | 5.899 | 12.884 | CI-only | n/a |
+| insert-single | commands | 4.709 | 5.197 | CI-only | n/a |
+| find-all | commands | 4.076 | 5.042 | CI-only | n/a |
+| find-order-limit | commands | 1.447 | 1.721 | CI-only | n/a |
+| aggregate-group | commands | 1.385 | 1.524 | CI-only | n/a |
+| aggregate-multistage | commands | 1.275 | 1.507 | CI-only | n/a |
+| find-projection-sort | commands | 1.209 | 1.351 | CI-only | n/a |
+| find-range-limit | commands | 0.575 | 0.705 | CI-only | n/a |
+| big-doc-read | rows | 0.504 | 0.587 | CI-only | n/a |
+| connect | connections | 0.459 | 0.526 | CI-only | n/a |
+| update-many | rows | 0.140 | 0.162 | CI-only | n/a |
+| find-index-equality | commands | 0.126 | 0.221 | CI-only | n/a |
+| error-command | commands | 0.108 | 0.126 | CI-only | n/a |
+| delete-many | rows | 0.104 | 0.104 | CI-only | n/a |
+| find-point-uk | commands | 0.085 | 0.120 | CI-only | n/a |
+| bulk-insert | rows | 0.073 | 0.082 | CI-only | n/a |
+| find-point-pk | commands | 0.070 | 0.127 | CI-only | n/a |
+| insert-multi | rows | 0.065 | 0.075 | CI-only | n/a |
+| ping | commands | 0.042 | 0.065 | CI-only | n/a |
+| cursor-paginate | documents | 0.004 | 0.005 | CI-only | n/a |
 
 ## 阶段差分
 
-以 `ping`（0.086 ms/命令）作为传输 + 解析 + 回包编码地板，其余项的额外成本如下。
+以 `ping`（0.042 ms/命令）作为传输 + 解析 + 回包编码地板，其余项的额外成本如下。
 线上协议不暴露服务端内部分阶段耗时，这里是差分估计，不是插桩测量。
 以行为单位的项先按单条命令的行数折算成每命令耗时，再与地板相减。
 
 | 工作负载 | 额外 ms/命令 |
 |---------:|-------------:|
-| create-index | 16.739 |
-| find-all | 10.472 |
-| big-doc-write | 6.028 |
-| insert-single | 4.131 |
-| find-order-limit | 1.810 |
-| aggregate-group | 1.613 |
-| aggregate-multistage | 1.584 |
-| find-range-limit | 1.058 |
-| connect | 0.882 |
-| big-doc-read | 0.491 |
-| update-many | 11.706 |
-| delete-many | 10.806 |
-| find-point-uk | 0.016 |
-| bulk-insert | 17.089 |
-| find-point-pk | -0.002 |
-| insert-multi | 10.896 |
+| create-index | 14.391 |
+| big-doc-write | 5.857 |
+| insert-single | 4.666 |
+| find-all | 4.034 |
+| find-order-limit | 1.404 |
+| aggregate-group | 1.343 |
+| aggregate-multistage | 1.232 |
+| find-projection-sort | 1.167 |
+| find-range-limit | 0.533 |
+| big-doc-read | 0.461 |
+| connect | 0.417 |
+| update-many | 13.951 |
+| find-index-equality | 0.083 |
+| error-command | 0.065 |
+| delete-many | 10.314 |
+| find-point-uk | 0.043 |
+| bulk-insert | 14.487 |
+| find-point-pk | 0.028 |
+| insert-multi | 12.899 |
+| cursor-paginate | -0.038 |
 
 ## 规模扩展
 
@@ -72,9 +109,9 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 
 | 文档数 | `_id` 单查 ms/op | 唯一索引单查 ms/op | `updateOne` ms/op | 未命中 `delete` ms/op |
 |------:|-----------------:|-------------------:|------------------:|----------------------:|
-| 200 | 0.152 | 0.123 | 4.199 | 0.076 |
-| 1000 | 0.090 | 0.095 | 3.986 | 0.059 |
-| 5000 | 0.081 | 0.065 | 6.643 | 0.060 |
+| 200 | 0.067 | 0.094 | 3.888 | 0.060 |
+| 1000 | 0.079 | 0.082 | 4.289 | 0.068 |
+| 5000 | 0.063 | 0.064 | 7.141 | 0.075 |
 
 ## 根因
 
@@ -88,6 +125,13 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 - **`update` 按 `_id` 等值走点读 + 索引项探针**：上游 `mongo::commands::update` 对单 `_id` 等值过滤直接点读定位，
   唯一键冲突改为按已落盘索引项前缀探针检查，不再为每条更新命令整命名空间扫描；事务内或索引条目缺失时
   仍退回整表 map，宁可慢也不放行重复键。非 `_id` 过滤（如 `update-many` 按 `grp`）没有可用索引时仍是扫描，属预期。
+- **读命令回复直接写原生 `OP_MSG` 帧**：`find` / `getMore` / `aggregate` 的回复由 Rust 一侧编码成 BSON 载荷，
+  宿主写帧时不再把文档转成 Extended JSON、在 JS 里 `JSON.parse` 后再 `JSON.stringify` 回 Rust 重新编码。
+  改造前一条 250 篇的回复光这一步 JSON 桥约 1.1 ms（探针拆分：Rust 写文本 0.25 ms、JS 解析 0.25 ms、
+  序列化 0.09 ms、Rust 重新解析并编码 BSON 0.93 ms），`find-all` 一轮 1000 篇要付两次。
+- **排序每篇只取一次键**：`sort_documents` 改用 `sort_by_cached_key`，`n log n` 次比较不再各解析一次字段路径。
+- **早停查询按页扫描**：无排序且带 `limit` 的 `find` 按 256 篇一页推进，凑够命中就停，不再先整集合取回再丢弃；
+  索引等值/区间仍走上游索引扫描，不受影响。
 - **整集合读、排序与聚合是扫描成本**：`find-all` / `find-order-limit` / `aggregate-group` 都要读出并解码全部文档，
   与 1000 篇的规模成正比，这部分属预期内的线性开销，不是缺陷。
 - **`create-index` 是两次快照提交加一次全集合回填**：目录写入与索引条目回填各提交一次整份快照，
@@ -95,10 +139,10 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 
 ## 预计收益（按差分估算）
 
-- 写路径改成追加或增量落盘：单条写命令从 `insert-single` 的 4.218 ms 降到与 `ping` 同量级，约省 4.131 ms/命令；这也是 `updateOne` 与 `big-doc-write` 剩余成本的主体。
+- 写路径改成追加或增量落盘：单条写命令从 `insert-single` 的 4.709 ms 降到与 `ping` 同量级，约省 4.666 ms/命令；这也是 `updateOne` 与 `big-doc-write` 剩余成本的主体。
 - `update` 点读化已落地：修复前每条 `updateOne` 整命名空间扫描匹配并整表建唯一 map，5000 篇下约 43 ms/op（历史捕获，同一脚本旧版数字）；
-  现在 6.643 ms/op，剩余增长跟随快照提交随数据量的增长（1000 篇 `insert-single` 地板 4.218 ms/op），不再是匹配扫描。
-- 未命中 `delete` 与 `_id` / 唯一索引单查都稳定在 0.060 ms 量级，读路径没有再随规模增长的缺陷。
+  现在 7.141 ms/op，剩余增长跟随快照提交随数据量的增长（1000 篇 `insert-single` 地板 4.709 ms/op），不再是匹配扫描。
+- 未命中 `delete` 与 `_id` / 唯一索引单查都稳定在 0.075 ms 量级，读路径没有再随规模增长的缺陷。
 
 ## 不计入比值的边界
 

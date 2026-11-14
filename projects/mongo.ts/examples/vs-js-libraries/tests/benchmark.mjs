@@ -4,7 +4,8 @@
 //
 // Run: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark`
 // Env: BENCH_INSERT (200), BENCH_FIND (200), BENCH_POINT (200),
-//      BENCH_UPDATE (200), BENCH_ROUNDS (3)
+//      BENCH_UPDATE (200), BENCH_PROJECTION (200), BENCH_PAGES (200),
+//      BENCH_GROUP (20), BENCH_ROUNDS (3)
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,11 +28,24 @@ function envInt(name, fallback) {
 }
 
 const ROUNDS = envInt("BENCH_ROUNDS", 3);
+const COUNTS = {
+  insert: envInt("BENCH_INSERT", 200),
+  find: envInt("BENCH_FIND", 200),
+  point: envInt("BENCH_POINT", 200),
+  update: envInt("BENCH_UPDATE", 200),
+  projection: envInt("BENCH_PROJECTION", 200),
+  pages: envInt("BENCH_PAGES", 200),
+  group: envInt("BENCH_GROUP", 20),
+};
 const WORKLOADS = [
-  { name: "insert-200", count: envInt("BENCH_INSERT", 200) },
-  { name: "find-all-200", count: envInt("BENCH_FIND", 200) },
-  { name: "find-point", count: envInt("BENCH_POINT", 200) },
-  { name: "update-one", count: envInt("BENCH_UPDATE", 200) },
+  { name: "insert-200", count: COUNTS.insert },
+  { name: "find-all-200", count: COUNTS.find },
+  { name: "find-point", count: COUNTS.point },
+  { name: "update-one", count: COUNTS.update },
+  { name: "find-projection", count: COUNTS.projection },
+  { name: "cursor-paginate", count: COUNTS.pages },
+  // One round runs `BENCH_GROUP` aggregates over the 200-document set.
+  { name: "aggregate-group", count: COUNTS.group, dataset: COUNTS.find },
 ];
 
 const CLIENTS = [
@@ -78,9 +92,16 @@ async function seed(port, documents) {
   }
 }
 
+/** Page size of the `cursor-paginate` workload; each page is one `getMore`. */
+const PAGE_SIZE = 25;
+
+const GROUP_PIPELINE = [{ $group: { _id: "$category", n: { $sum: 1 }, total: { $sum: "$price" } } }];
+const PROJECTION = { _id: 0, sku: 1, price: 1 };
+
 async function execute(kind, client, workload, documents) {
   const count = documents.length;
   let observed = 0;
+  let expected = count;
   if (kind === "minimal") {
     switch (workload) {
       case "insert-200":
@@ -104,6 +125,42 @@ async function execute(kind, client, workload, documents) {
           );
         }
         break;
+      case "find-projection": {
+        const rows = await client.find(DB, COLLECTION, {}, {
+          projection: PROJECTION,
+          sort: { price: -1, sku: 1 },
+          limit: count,
+          batchSize: count,
+        });
+        if (rows.length > 0 && (Object.hasOwn(rows[0], "name") || !Object.hasOwn(rows[0], "price"))) {
+          throw new Error(`projection leaked fields: ${Object.keys(rows[0]).join(",")}`);
+        }
+        observed = rows.length;
+        break;
+      }
+      case "cursor-paginate": {
+        const first = await client.command({ find: COLLECTION, filter: {}, batchSize: PAGE_SIZE, $db: DB });
+        observed += (first.cursor?.firstBatch ?? []).length;
+        let id = numberValue(first.cursor?.id);
+        while (id !== 0) {
+          const more = await client.command({ getMore: id, collection: COLLECTION, batchSize: PAGE_SIZE, $db: DB });
+          observed += (more.cursor?.nextBatch ?? []).length;
+          id = numberValue(more.cursor?.id);
+        }
+        break;
+      }
+      case "aggregate-group": {
+        expected = COUNTS.group;
+        for (let index = 0; index < expected; index += 1) {
+          const reply = await client.command({ aggregate: COLLECTION, pipeline: GROUP_PIPELINE, cursor: {}, $db: DB });
+          const rows = [...(reply.cursor?.firstBatch ?? [])];
+          if (rows.length !== new Set(documents.map((document) => document.category)).size) {
+            throw new Error(`aggregate-group rows=${rows.length}`);
+          }
+          observed += 1;
+        }
+        break;
+      }
       default:
         throw new Error(`unknown workload ${workload}`);
     }
@@ -129,25 +186,49 @@ async function execute(kind, client, workload, documents) {
           observed += (await collection.updateOne({ _id: document._id }, { $set: { seen: true } })).matchedCount;
         }
         break;
+      case "find-projection": {
+        const rows = await collection
+          .find({}, { projection: PROJECTION, sort: { price: -1, sku: 1 }, limit: count, batchSize: count })
+          .toArray();
+        if (rows.length > 0 && (Object.hasOwn(rows[0], "name") || !Object.hasOwn(rows[0], "price"))) {
+          throw new Error(`projection leaked fields: ${Object.keys(rows[0]).join(",")}`);
+        }
+        observed = rows.length;
+        break;
+      }
+      case "cursor-paginate":
+        observed = (await collection.find({}, { batchSize: PAGE_SIZE }).toArray()).length;
+        break;
+      case "aggregate-group": {
+        expected = COUNTS.group;
+        for (let index = 0; index < expected; index += 1) {
+          const rows = await collection.aggregate(GROUP_PIPELINE).toArray();
+          if (rows.length !== new Set(documents.map((document) => document.category)).size) {
+            throw new Error(`aggregate-group rows=${rows.length}`);
+          }
+          observed += 1;
+        }
+        break;
+      }
       default:
         throw new Error(`unknown workload ${workload}`);
     }
   }
-  if (observed !== count) throw new Error(`${workload}: observed ${observed}, expected ${count}`);
+  if (observed !== expected) throw new Error(`${workload}: observed ${observed}, expected ${expected}`);
 }
 
 /** One fresh data dir and server; server start/stop and seeding stay outside the timed region. */
-async function measure(workload, kind, count) {
+async function measure(workload, kind) {
   const dataDir = await mkdtemp(join(tmpdir(), "mongo-bench-"));
   const server = createServer({ dataDir, port: 0 });
   const { port } = await server.listening;
-  const documents = makeDocuments(count);
+  const documents = makeDocuments(workload.dataset ?? workload.count);
   let client = null;
   try {
     client = await openClient(kind, port);
-    if (workload !== "insert-200") await seed(port, documents);
+    if (workload.name !== "insert-200") await seed(port, documents);
     const start = process.hrtime.bigint();
-    await execute(kind, client, workload, documents);
+    await execute(kind, client, workload.name, documents);
     return elapsedMs(start);
   } finally {
     if (client) await client.close();
@@ -165,7 +246,7 @@ for (const workload of WORKLOADS) {
   const samples = { official: [], minimal: [] };
   for (const client of CLIENTS) {
     for (let round = 0; round <= ROUNDS; round += 1) {
-      const ms = await measure(workload.name, client.key, workload.count);
+      const ms = await measure(workload, client.key);
       if (round > 0) samples[client.key].push(ms);
     }
   }
@@ -178,7 +259,10 @@ for (const workload of WORKLOADS) {
 }
 
 console.log("MongoDB workload benchmark");
-console.log(`Defaults: BENCH_INSERT=${WORKLOADS[0].count} BENCH_FIND=${WORKLOADS[1].count} BENCH_POINT=${WORKLOADS[2].count} BENCH_UPDATE=${WORKLOADS[3].count} BENCH_ROUNDS=${ROUNDS}`);
+console.log(
+  `Defaults: BENCH_INSERT=${COUNTS.insert} BENCH_FIND=${COUNTS.find} BENCH_POINT=${COUNTS.point} BENCH_UPDATE=${COUNTS.update} ` +
+    `BENCH_PROJECTION=${COUNTS.projection} BENCH_PAGES=${COUNTS.pages} BENCH_GROUP=${COUNTS.group} BENCH_ROUNDS=${ROUNDS}`,
+);
 console.log("Baseline: mongodb (official driver) = 1.00x");
 console.log("Ratio: subject_time / baseline_time (smaller is faster)");
 console.log("Setup: 1 untimed warmup round + measured rounds; fresh data dir and server per run");
