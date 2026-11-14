@@ -149,6 +149,11 @@ function stampsReplies(state: ReplicaState): boolean {
     return state.name !== null && state.initialized && state.electionId !== null
 }
 
+/** Whether replies carry cluster-time stamps at all; hosts use it to skip stamping. */
+export function repliesAreStamped(state: ReplicaState): boolean {
+    return stampsReplies(state)
+}
+
 /**
  * Appends `$clusterTime` and `operationTime` to a reply in the position
  * `mongod 8.0.9` puts them: after `ok`, `$clusterTime` first. `operationTime`

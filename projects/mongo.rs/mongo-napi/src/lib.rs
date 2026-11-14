@@ -35,6 +35,21 @@ fn command_reply(result: std::result::Result<BsonDocument, CommandError>) -> Str
     }
 }
 
+/// One `OP_MSG` payload: zero flags, one body section, then the BSON document.
+///
+/// Read replies reach the host as these bytes, so a document read never has to
+/// be rendered to extended JSON and parsed back before it goes on the wire.
+fn op_msg_body(document: &BsonDocument) -> Buffer {
+    Buffer::from(mongo::wire::encode_op_msg_body(document))
+}
+
+fn command_op_msg(result: std::result::Result<BsonDocument, CommandError>) -> Buffer {
+    match result {
+        Ok(document) => op_msg_body(&document),
+        Err(error) => op_msg_body(&commands::error_document(&error)),
+    }
+}
+
 /// Document store backed by one `.yykv` shard.
 #[napi]
 pub struct MongoStore {
@@ -175,6 +190,12 @@ pub fn find(store: &MongoStore, cursors: &mut MongoCursors, command: String) -> 
     Ok(command_reply(commands::find(&decode_command(&command)?, store_of(store), &mut cursors.inner)))
 }
 
+/// `find` reply as an `OP_MSG` payload.
+#[napi]
+pub fn find_op_msg(store: &MongoStore, cursors: &mut MongoCursors, command: String) -> Result<Buffer> {
+    Ok(command_op_msg(commands::find(&decode_command(&command)?, store_of(store), &mut cursors.inner)))
+}
+
 /// `count` reply.
 #[napi]
 pub fn count(store: &MongoStore, command: String) -> Result<String> {
@@ -193,6 +214,12 @@ pub fn aggregate(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::aggregate(&decode_command(&command)?, store_of(store))))
 }
 
+/// `aggregate` reply as an `OP_MSG` payload.
+#[napi]
+pub fn aggregate_op_msg(store: &MongoStore, command: String) -> Result<Buffer> {
+    Ok(command_op_msg(commands::aggregate(&decode_command(&command)?, store_of(store))))
+}
+
 /// `delete` reply.
 #[napi]
 pub fn delete(store: &MongoStore, command: String) -> Result<String> {
@@ -209,6 +236,12 @@ pub fn update(store: &MongoStore, command: String) -> Result<String> {
 #[napi]
 pub fn get_more(cursors: &mut MongoCursors, command: String) -> Result<String> {
     Ok(command_reply(commands::get_more(&decode_command(&command)?, &mut cursors.inner)))
+}
+
+/// `getMore` reply as an `OP_MSG` payload.
+#[napi]
+pub fn get_more_op_msg(cursors: &mut MongoCursors, command: String) -> Result<Buffer> {
+    Ok(command_op_msg(commands::get_more(&decode_command(&command)?, &mut cursors.inner)))
 }
 
 /// `killCursors` reply.

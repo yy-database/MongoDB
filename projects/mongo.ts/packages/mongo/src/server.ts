@@ -32,6 +32,7 @@ import {
     numberValue,
     replicaCommand,
     replicaError,
+    repliesAreStamped,
     restoreReplicaConfig,
     stampReply,
     topologyHandshake,
@@ -195,6 +196,37 @@ interface WriteSlot {
 }
 
 const OK = { $numberDouble: '1.0' }
+
+/**
+ * A reply the primitive already encoded as an `OP_MSG` payload (zero flags, one
+ * body section, then the BSON document). It goes on the wire untouched unless
+ * the server has to stamp it, so a document read never crosses the
+ * extended-JSON bridge on its way out.
+ */
+class RawReply {
+    readonly payload: Buffer
+
+    constructor(payload: Buffer) {
+        this.payload = payload
+    }
+}
+
+/** Extended-JSON view of a raw reply, for the few paths that must rewrite it. */
+function unwrapRawReply(reply: RawReply): any {
+    return document(binding.decodeDocument(reply.payload.subarray(5)))
+}
+
+/**
+ * Adds the replica-set stamps to a reply. A raw payload is decoded only when
+ * the member really stamps replies, which a standalone server never does.
+ */
+function stampedReply(state: ReplicaState, command: any, body: any): any {
+    if (body instanceof RawReply) {
+        if (!repliesAreStamped(state)) return body
+        return stampReply(state, command, unwrapRawReply(body))
+    }
+    return stampReply(state, command, body)
+}
 
 /** Commands that advance the replica-set `optime`, as `mongod`'s writes do. */
 const WRITE_COMMANDS = WRITE_CONCERN_COMMANDS
@@ -661,19 +693,19 @@ function dispatch(
         case 'insert':
             return document(binding.insert(session.store, text))
         case 'find':
-            return document(binding.find(session.store, session.cursors, text))
+            return new RawReply(binding.findOpMsg(session.store, session.cursors, text))
         case 'count':
             return document(binding.count(session.store, text))
         case 'explain':
             return document(binding.explain(session.store, text))
         case 'aggregate':
-            return document(binding.aggregate(session.store, text))
+            return new RawReply(binding.aggregateOpMsg(session.store, text))
         case 'delete':
             return document(binding.delete(session.store, text))
         case 'update':
             return document(binding.update(session.store, text))
         case 'getMore':
-            return document(binding.getMore(session.cursors, text))
+            return new RawReply(binding.getMoreOpMsg(session.cursors, text))
         case 'killCursors':
             return document(binding.killCursors(session.cursors, text))
         case 'findAndModify':
@@ -927,14 +959,18 @@ export function createServer(options: ServerOptions): MongoServer {
         }
 
         const reply = (requestId: number, inbound: InboundFrame, body: any) => {
-            const json = commandText(body)
+            const raw: Buffer | null = body instanceof RawReply ? body.payload : null
             if (inbound.opcode === OP_QUERY) {
-                const frame = encodeReplyFrame(replyId++, requestId, binding.encodeDocument(json))
+                const frame = encodeReplyFrame(
+                    replyId++,
+                    requestId,
+                    raw === null ? binding.encodeDocument(commandText(body)) : raw.subarray(5)
+                )
                 counters.network.bytesOut += frame.length
                 socket.write(frame)
                 return
             }
-            const payload = binding.encodeOpMsg(json)
+            const payload = raw ?? binding.encodeOpMsg(commandText(body))
             if (inbound.envelope === null) {
                 const frame = encodeMsgFrame(replyId++, requestId, payload)
                 counters.network.bytesOut += frame.length
@@ -980,7 +1016,7 @@ export function createServer(options: ServerOptions): MongoServer {
                         // `mongod` replays the stored reply and never runs the write again.
                         const replay = replayedReply(cached.reply, key.slice(key.lastIndexOf('|') + 1))
                         stats.negotiated = session.negotiated
-                        if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampReply(replica, command, replay))
+                        if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampedReply(replica, command, replay))
                         return
                     }
                 }
@@ -1005,7 +1041,7 @@ export function createServer(options: ServerOptions): MongoServer {
                 const settled = settleWrite(store, replica, commandName, body, write.decision)
                 if (key !== null && replyOk(settled)) retries.store(key, settled)
                 stats.negotiated = session.negotiated
-                if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampReply(replica, command, settled))
+                if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampedReply(replica, command, settled))
             } catch (error) {
                 binding.discardOplog(store)
                 stats.negotiated = session.negotiated
