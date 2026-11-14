@@ -8,7 +8,8 @@
 // - 环境变量：BENCH_DATASET BENCH_ROUNDS BENCH_PING BENCH_INSERT BENCH_FIND BENCH_POINT
 //   BENCH_RANGE BENCH_ORDER BENCH_GROUP BENCH_PIPELINE BENCH_INDEX BENCH_BULK
 //   BENCH_BIG_DOCS BENCH_BIG_KB BENCH_CONNECT BENCH_SCALE_SIZES BENCH_SCALE_OPS BENCH_SCALE_ROUNDS
-//   BENCH_INDEX_EQ BENCH_PROJECTION BENCH_PAGE BENCH_ERROR
+//   BENCH_INDEX_EQ BENCH_PROJECTION BENCH_PAGE BENCH_ERROR BENCH_COUNT BENCH_DISTINCT
+//   BENCH_HINT BENCH_SORT BENCH_TXN
 // - `ping` 是协议 + 解析 + 回包编码的地板，其余项的耗时减去它就是该路径的额外成本；
 // - 真实 `mongod` 列是可选的：设置 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 时才测量，
 //   连不上直接失败，不降级成自比、不伪造真机数字。本机没有 `mongod`，该列记为 CI-only。
@@ -232,6 +233,113 @@ const WORKLOADS = [
           throw new Error(`index-equality rows=${rows.length} grp=${grp}`);
         }
       }
+      return ops;
+    },
+  },
+  {
+    name: "find-hint-index",
+    unit: "commands",
+    ops: Number(process.env.BENCH_HINT ?? 50),
+    async setup(client) {
+      const created = await client.command({
+        createIndexes: COLLECTION,
+        indexes: [{ key: { grp: 1 }, name: "grp_hint_1" }],
+        $db: DB,
+      });
+      if (numberValue(created.ok) !== 1) throw new Error(`hint setup failed: ${JSON.stringify(created)}`);
+    },
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const grp = index % 10;
+        const rows = await client.find(DB, COLLECTION, { grp }, { hint: { grp: 1 }, limit: 10, batchSize: 10 });
+        if (rows.length !== 10 || rows.some((row) => numberValue(row.grp) !== grp)) {
+          throw new Error(`hint rows=${rows.length} grp=${grp}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "count-command",
+    unit: "commands",
+    ops: Number(process.env.BENCH_COUNT ?? 50),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const reply = await client.command({ count: COLLECTION, query: {}, $db: DB });
+        if (countOf(reply) !== DATASET) throw new Error(`count rows=${countOf(reply)}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "distinct-command",
+    unit: "commands",
+    ops: Number(process.env.BENCH_DISTINCT ?? 50),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const reply = await client.command({ distinct: COLLECTION, key: "grp", $db: DB });
+        if (!Array.isArray(reply.values) || reply.values.length !== 10) {
+          throw new Error(`distinct values=${reply.values?.length}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "aggregate-sort",
+    unit: "commands",
+    ops: Number(process.env.BENCH_SORT ?? 20),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { grp: { $gte: 0 } } },
+          { $sort: { price: -1, seq: 1 } },
+          { $limit: 20 },
+        ]);
+        if (rows.length !== 20) throw new Error(`aggregate-sort rows=${rows.length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "transaction-range",
+    unit: "commands",
+    ops: Number(process.env.BENCH_TXN ?? 20),
+    async run(client, ops) {
+      // One read-only transaction: the first `find` starts it, the rest reuse the
+      // same `(lsid, txnNumber)`, then `commitTransaction` closes it. Every
+      // command reads the first 20-document window, so the measured cost is the
+      // transaction view's read amplification rather than scan position.
+      const lsid = { id: { $binary: { base64: Buffer.from("bench-bench-bench").toString("base64"), subType: "04" } } };
+      const txnNumber = { $numberLong: "1" };
+      const filter = { seq: { $gte: 0, $lt: 20 } };
+      const first = await client.command({
+        find: COLLECTION,
+        filter,
+        limit: 20,
+        batchSize: 20,
+        lsid,
+        txnNumber,
+        startTransaction: true,
+        autocommit: false,
+        $db: DB,
+      });
+      if ((first.cursor?.firstBatch ?? []).length !== 20) throw new Error("transaction-range first page short");
+      for (let index = 1; index < ops; index += 1) {
+        const reply = await client.command({
+          find: COLLECTION,
+          filter,
+          limit: 20,
+          batchSize: 20,
+          lsid,
+          txnNumber,
+          autocommit: false,
+          $db: DB,
+        });
+        if ((reply.cursor?.firstBatch ?? []).length !== 20) throw new Error(`transaction-range page ${index} short`);
+      }
+      const committed = await client.command({ commitTransaction: 1, lsid, txnNumber, autocommit: false, $db: "admin" });
+      if (numberValue(committed.ok) !== 1) throw new Error(`transaction-range commit failed: ${JSON.stringify(committed)}`);
       return ops;
     },
   },
@@ -485,6 +593,11 @@ const WORKLOAD_NOTES = {
   "find-range-limit": "无索引区间 `seq`，`limit 20`（早停扫描）",
   "find-order-limit": "无索引排序 `price desc, seq asc` 取 20",
   "find-index-equality": "建 `grp_1` 后按 `grp` 等值取 10（索引等值路径）",
+  "find-hint-index": "显式 `hint: {grp: 1}` 按 `grp` 等值取 10（强制索引路径）",
+  "count-command": "`count` 空查询，断言计数等于数据集",
+  "distinct-command": "`distinct` 取 `grp`，断言 10 个不同值",
+  "aggregate-sort": "`$match → $sort → $limit 20`（排序后取前 20）",
+  "transaction-range": "只读事务内 20 条区间 `find limit 20`（事务视图分页早停）",
   "find-projection-sort": "投影 `{seq, price}` 加 `price desc, seq asc` 排序取 20",
   "cursor-paginate": "`batchSize 100` 分页抽干 1000 篇（每页一条 `getMore`）",
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
@@ -793,6 +906,16 @@ async function main() {
     "- **`update` 按 `_id` 等值走点读 + 索引项探针**：上游 `mongo::commands::update` 对单 `_id` 等值过滤直接点读定位，",
     "  唯一键冲突改为按已落盘索引项前缀探针检查，不再为每条更新命令整命名空间扫描；事务内或索引条目缺失时",
     "  仍退回整表 map，宁可慢也不放行重复键。非 `_id` 过滤（如 `update-many` 按 `grp`）没有可用索引时仍是扫描，属预期。",
+    "- **`ping` / `count` / 写确认也走原生 `OP_MSG` 帧**：`insert` / `update` / `delete` 的成功应答由 Rust 直接编码，",
+    "  宿主只读一个 `ok` 位决定是否提交 oplog；只有副本集盖章、`writeConcernError` 或 `w: 0` 才解码重写，",
+    "  其余路径不再把应答转成 Extended JSON 再序列化回去。`ping` 的独立收益约 5%（对 200 条命令的中位数），",
+    "  写命令被整快照落盘淹没，差异在噪声内；本轮保留是为了与读路径统一字节语义，而不是把它记作提速项。",
+    "- **空查询 `count` 不再解码整集合**：没有 filter、`skip`、`limit` 与 `hint` 时，计数就是事务视图或已提交数据的条数，",
+    `  不必把每篇文档解析成 \`BsonDocument\`。\`count-command\` 从整表解析降到 ${format(
+      rows.find((row) => row.workload.name === "count-command").ours.perOp,
+    )} ms/命令量级，AB 中位数约 5 倍提升。`,
+    "- **只读事务的分页扫描按已提交数据推进**：事务没有写过该命名空间时，`find` 的 `limit` 早停直接走分页扫描，",
+    "  不再先合并整段事务视图；只有本命名空间存在暂存写入时才退回整段读。`transaction-range` 的 AB 中位数约 2.6 倍提升。",
     "- **读命令回复直接写原生 `OP_MSG` 帧**：`find` / `getMore` / `aggregate` 的回复由 Rust 一侧编码成 BSON 载荷，",
     "  宿主写帧时不再把文档转成 Extended JSON、在 JS 里 `JSON.parse` 后再 `JSON.stringify` 回 Rust 重新编码。",
     "  改造前一条 250 篇的回复光这一步 JSON 桥约 1.1 ms（探针拆分：Rust 写文本 0.25 ms、JS 解析 0.25 ms、",
@@ -819,6 +942,8 @@ async function main() {
     `- 未命中 \`delete\` 与 \`_id\` / 唯一索引单查都稳定在 ${format(
       scaling[scaling.length - 1].deleteMiss,
     )} ms 量级，读路径没有再随规模增长的缺陷。`,
+    "- 事务视图分页早停已落地：只读事务的 `limit` 查询不再先合并整段视图，AB 中位数从约 0.75 ms/命令降到约 0.29 ms/命令。",
+    "- 空查询 `count` 已跳过整表解码：AB 中位数从约 2.06 ms/命令降到约 0.42 ms/命令。",
     "",
     "## 不计入比值的边界",
     "",

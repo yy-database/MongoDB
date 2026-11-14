@@ -178,10 +178,41 @@ pub fn ping() -> String {
     reply(&commands::ping())
 }
 
+/// `ping` reply as an `OP_MSG` payload.
+#[napi]
+pub fn ping_op_msg() -> Buffer {
+    op_msg_body(&commands::ping())
+}
+
+/// 写命令的 `OP_MSG` 应答：已编码好的载荷加一个 `ok` 标志。
+///
+/// 宿主据此决定是否提交 oplog、是否把应答放进重试登记表，不必为了读一个
+/// `ok` 再把整份载荷解码回扩展 JSON。
+#[napi(object)]
+pub struct CommandFrame {
+    /// 零标志、一个 body section，然后是 BSON 文档。
+    pub payload: Buffer,
+    /// 命令是否成功（应答里的 `ok` 为真）。
+    pub ok: bool,
+}
+
+fn command_frame(result: std::result::Result<BsonDocument, CommandError>) -> CommandFrame {
+    match result {
+        Ok(document) => CommandFrame { payload: op_msg_body(&document), ok: true },
+        Err(error) => CommandFrame { payload: op_msg_body(&commands::error_document(&error)), ok: false },
+    }
+}
+
 /// `insert` reply.
 #[napi]
 pub fn insert(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::insert(&decode_command(&command)?, store_of(store))))
+}
+
+/// `insert` reply as an `OP_MSG` payload.
+#[napi]
+pub fn insert_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame> {
+    Ok(command_frame(commands::insert(&decode_command(&command)?, store_of(store))))
 }
 
 /// `find` reply.
@@ -200,6 +231,12 @@ pub fn find_op_msg(store: &MongoStore, cursors: &mut MongoCursors, command: Stri
 #[napi]
 pub fn count(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::count(&decode_command(&command)?, store_of(store))))
+}
+
+/// `count` reply as an `OP_MSG` payload.
+#[napi]
+pub fn count_op_msg(store: &MongoStore, command: String) -> Result<Buffer> {
+    Ok(command_op_msg(commands::count(&decode_command(&command)?, store_of(store))))
 }
 
 /// `explain` reply.
@@ -226,10 +263,22 @@ pub fn delete(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::delete(&decode_command(&command)?, store_of(store))))
 }
 
+/// `delete` reply as an `OP_MSG` payload.
+#[napi]
+pub fn delete_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame> {
+    Ok(command_frame(commands::delete(&decode_command(&command)?, store_of(store))))
+}
+
 /// `update` reply.
 #[napi]
 pub fn update(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::update(&decode_command(&command)?, store_of(store))))
+}
+
+/// `update` reply as an `OP_MSG` payload.
+#[napi]
+pub fn update_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame> {
+    Ok(command_frame(commands::update(&decode_command(&command)?, store_of(store))))
 }
 
 /// `getMore` reply.

@@ -205,15 +205,23 @@ const OK = { $numberDouble: '1.0' }
  */
 class RawReply {
     readonly payload: Buffer
+    /** `false` only for a primitive that answered with `ok: 0`. */
+    readonly ok: boolean
 
-    constructor(payload: Buffer) {
+    constructor(payload: Buffer, ok = true) {
         this.payload = payload
+        this.ok = ok
     }
 }
 
 /** Extended-JSON view of a raw reply, for the few paths that must rewrite it. */
 function unwrapRawReply(reply: RawReply): any {
     return document(binding.decodeDocument(reply.payload.subarray(5)))
+}
+
+/** Native write reply plus the `ok` bit the host needs to settle the write. */
+function rawWrite(frame: { payload: Buffer; ok: boolean }): RawReply {
+    return new RawReply(frame.payload, frame.ok)
 }
 
 /**
@@ -232,6 +240,7 @@ function stampedReply(state: ReplicaState, command: any, body: any): any {
 const WRITE_COMMANDS = WRITE_CONCERN_COMMANDS
 
 function replyOk(body: any): boolean {
+    if (body instanceof RawReply) return body.ok
     return body?.ok === 1 || body?.ok?.$numberDouble === '1.0' || body?.ok?.$numberInt === '1'
 }
 
@@ -270,7 +279,12 @@ function settleWrite(
         const optime = JSON.parse(last)
         noteWrite(state, { t: optime.t, i: optime.i })
     }
-    return writeConcernReply(name, body, decision, writeStamps(state), ok)
+    // The primitive already wrote `mongod`'s field order. Only a stamp, a
+    // write-concern error, or an unacknowledged reply really has to be
+    // rewritten, so the common path sends the native payload untouched.
+    const decorate = decision?.unacknowledged === true || decision?.writeConcernError != null || repliesAreStamped(state)
+    if (body instanceof RawReply && !decorate) return body
+    return writeConcernReply(name, body instanceof RawReply ? unwrapRawReply(body) : body, decision, writeStamps(state), ok)
 }
 
 /**
@@ -669,7 +683,7 @@ function dispatch(
     const text = commandText(command)
     switch (name) {
         case 'ping':
-            return document(binding.ping())
+            return new RawReply(binding.pingOpMsg())
         case 'saslStart':
             return saslStartCommand(session, command)
         case 'saslContinue':
@@ -691,19 +705,19 @@ function dispatch(
         case 'usersInfo':
             return usersInfoCommand(session, command)
         case 'insert':
-            return document(binding.insert(session.store, text))
+            return rawWrite(binding.insertOpMsg(session.store, text))
         case 'find':
             return new RawReply(binding.findOpMsg(session.store, session.cursors, text))
         case 'count':
-            return document(binding.count(session.store, text))
+            return new RawReply(binding.countOpMsg(session.store, text))
         case 'explain':
             return document(binding.explain(session.store, text))
         case 'aggregate':
             return new RawReply(binding.aggregateOpMsg(session.store, text))
         case 'delete':
-            return document(binding.delete(session.store, text))
+            return rawWrite(binding.deleteOpMsg(session.store, text))
         case 'update':
-            return document(binding.update(session.store, text))
+            return rawWrite(binding.updateOpMsg(session.store, text))
         case 'getMore':
             return new RawReply(binding.getMoreOpMsg(session.cursors, text))
         case 'killCursors':
@@ -1039,7 +1053,11 @@ export function createServer(options: ServerOptions): MongoServer {
                     write
                 )
                 const settled = settleWrite(store, replica, commandName, body, write.decision)
-                if (key !== null && replyOk(settled)) retries.store(key, settled)
+                if (key !== null && replyOk(settled)) {
+                    // The retry registry replays extended JSON, so only a retried
+                    // write pays for decoding the native payload.
+                    retries.store(key, settled instanceof RawReply ? unwrapRawReply(settled) : settled)
+                }
                 stats.negotiated = session.negotiated
                 if (!moreToCome(inbound)) reply(inbound.header.requestId, inbound, stampedReply(replica, command, settled))
             } catch (error) {
