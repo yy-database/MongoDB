@@ -200,7 +200,7 @@ function runCase(testCase) {
             case 'getMore': {
                 const command = { getMore: step.id, collection: step.collection }
                 if (step.batchSize !== undefined) command.batchSize = step.batchSize
-                return JSON.parse(binding.getMore(cursorTable(), commandText(testCase, step, command)))
+                return JSON.parse(binding.getMore(storeOf(step.store), cursorTable(), commandText(testCase, step, command)))
             }
             case 'killCursors': {
                 const command = { killCursors: step.collection, cursors: step.ids }

@@ -719,15 +719,15 @@ function dispatch(
         case 'update':
             return rawWrite(binding.updateOpMsg(session.store, text))
         case 'getMore':
-            return new RawReply(binding.getMoreOpMsg(session.cursors, text))
+            return new RawReply(binding.getMoreOpMsg(session.store, session.cursors, text))
         case 'killCursors':
             return document(binding.killCursors(session.cursors, text))
         case 'findAndModify':
-            return document(binding.findAndModify(session.store, text))
+            return rawWrite(binding.findAndModifyOpMsg(session.store, text))
         case 'distinct':
             return document(binding.distinct(session.store, text))
         case 'bulkWrite':
-            return document(binding.bulkWrite(session.store, text))
+            return rawWrite(binding.bulkWriteOpMsg(session.store, text))
         case 'create':
             return document(binding.create(session.store, text))
         case 'drop':

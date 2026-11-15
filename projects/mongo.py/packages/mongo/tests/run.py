@@ -505,7 +505,7 @@ def run_case(case):
             command = {"getMore": step.get("id"), "collection": step["collection"]}
             if "batchSize" in step:
                 command["batchSize"] = step["batchSize"]
-            reply = mongo.get_more(cursor_table(), json.dumps(command_of(case, step, command)))
+            reply = mongo.get_more(store_of(step.get("store")), cursor_table(), json.dumps(command_of(case, step, command)))
             return json.loads(reply)
         if op == "killCursors":
             command = {"killCursors": step["collection"], "cursors": step["ids"]}

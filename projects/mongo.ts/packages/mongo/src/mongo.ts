@@ -160,7 +160,7 @@ type LocalCommand = (engine: LocalEngine, text: string) => string
 const LOCAL_COMMANDS: Record<string, LocalCommand> = {
     insert: (engine, text) => binding.insert(engine.store, text),
     find: (engine, text) => binding.find(engine.store, engine.cursors, text),
-    getMore: (engine, text) => binding.getMore(engine.cursors, text),
+    getMore: (engine, text) => binding.getMore(engine.store, engine.cursors, text),
     killCursors: (engine, text) => binding.killCursors(engine.cursors, text),
     update: (engine, text) => binding.update(engine.store, text),
     delete: (engine, text) => binding.delete(engine.store, text),

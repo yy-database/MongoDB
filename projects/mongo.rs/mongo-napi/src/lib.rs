@@ -283,14 +283,14 @@ pub fn update_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame
 
 /// `getMore` reply.
 #[napi]
-pub fn get_more(cursors: &mut MongoCursors, command: String) -> Result<String> {
-    Ok(command_reply(commands::get_more(&decode_command(&command)?, &mut cursors.inner)))
+pub fn get_more(store: &MongoStore, cursors: &mut MongoCursors, command: String) -> Result<String> {
+    Ok(command_reply(commands::get_more(&decode_command(&command)?, store_of(store), &mut cursors.inner)))
 }
 
 /// `getMore` reply as an `OP_MSG` payload.
 #[napi]
-pub fn get_more_op_msg(cursors: &mut MongoCursors, command: String) -> Result<Buffer> {
-    Ok(command_op_msg(commands::get_more(&decode_command(&command)?, &mut cursors.inner)))
+pub fn get_more_op_msg(store: &MongoStore, cursors: &mut MongoCursors, command: String) -> Result<Buffer> {
+    Ok(command_op_msg(commands::get_more(&decode_command(&command)?, store_of(store), &mut cursors.inner)))
 }
 
 /// `killCursors` reply.
@@ -305,6 +305,12 @@ pub fn find_and_modify(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::find_and_modify(&decode_command(&command)?, store_of(store))))
 }
 
+/// `findAndModify` reply as an `OP_MSG` payload.
+#[napi]
+pub fn find_and_modify_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame> {
+    Ok(command_frame(commands::find_and_modify(&decode_command(&command)?, store_of(store))))
+}
+
 /// `distinct` reply.
 #[napi]
 pub fn distinct(store: &MongoStore, command: String) -> Result<String> {
@@ -315,6 +321,12 @@ pub fn distinct(store: &MongoStore, command: String) -> Result<String> {
 #[napi]
 pub fn bulk_write(store: &MongoStore, command: String) -> Result<String> {
     Ok(command_reply(commands::bulk_write(&decode_command(&command)?, store_of(store))))
+}
+
+/// `bulkWrite` reply as an `OP_MSG` payload.
+#[napi]
+pub fn bulk_write_op_msg(store: &MongoStore, command: String) -> Result<CommandFrame> {
+    Ok(command_frame(commands::bulk_write(&decode_command(&command)?, store_of(store))))
 }
 
 /// `create` reply.

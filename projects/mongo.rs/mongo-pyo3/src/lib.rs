@@ -181,9 +181,9 @@ fn update(store: PyRef<'_, MongoStore>, command: &str) -> PyResult<String> {
 
 /// `getMore` reply.
 #[pyfunction]
-fn get_more(cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<String> {
+fn get_more(store: PyRef<'_, MongoStore>, cursors: PyRefMut<'_, MongoCursors>, command: &str) -> PyResult<String> {
     let mut cursors = cursors;
-    Ok(command_reply(commands::get_more(&decode_command(command)?, &mut cursors.inner)))
+    Ok(command_reply(commands::get_more(&decode_command(command)?, store.inner.as_ref(), &mut cursors.inner)))
 }
 
 /// `killCursors` reply.
