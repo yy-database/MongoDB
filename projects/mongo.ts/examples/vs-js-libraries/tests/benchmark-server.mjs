@@ -684,6 +684,55 @@ const WORKLOADS = [
     },
   },
   {
+    name: "aggregate-facet",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PIPELINE ?? 10),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        // 一条 `$facet` 同时算总量、价格最高的五篇和十组计数，测多分支单遍扫描。
+        const rows = await aggregateAll(client, [
+          {
+            $facet: {
+              totals: [{ $group: { _id: null, n: { $sum: 1 }, avg: { $avg: "$price" } } }],
+              top: [{ $sort: { price: -1, seq: 1 } }, { $limit: 5 }, { $project: { _id: 0, sku: 1, price: 1 } }],
+              groups: [{ $group: { _id: "$grp", n: { $sum: 1 } } }, { $sort: { _id: 1 } }],
+            },
+          },
+        ]);
+        const bucket = rows[0] ?? {};
+        if (numberValue(bucket.totals?.[0]?.n) !== DATASET) throw new Error(`aggregate-facet total=${JSON.stringify(bucket.totals)}`);
+        if ((bucket.top ?? []).length !== 5) throw new Error(`aggregate-facet top=${(bucket.top ?? []).length}`);
+        if ((bucket.groups ?? []).length !== 10) throw new Error(`aggregate-facet groups=${(bucket.groups ?? []).length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "aggregate-bucket",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PIPELINE ?? 10),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        // 价格 100–149 落进五个固定区间，`default` 只在越界时才出现。
+        const rows = await aggregateAll(client, [
+          {
+            $bucket: {
+              groupBy: "$price",
+              boundaries: [100, 110, 120, 130, 140, 150],
+              default: "other",
+              output: { n: { $sum: 1 }, avgSeq: { $avg: "$seq" } },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ]);
+        if (rows.length !== 5) throw new Error(`aggregate-bucket buckets=${rows.length}`);
+        const counted = rows.reduce((total, row) => total + numberValue(row.n), 0);
+        if (counted !== DATASET) throw new Error(`aggregate-bucket rows=${counted}`);
+      }
+      return ops;
+    },
+  },
+  {
     name: "aggregate-lookup-unwind",
     unit: "commands",
     ops: Number(process.env.BENCH_PIPELINE ?? 10),
@@ -907,6 +956,8 @@ const WORKLOAD_NOTES = {
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
   "aggregate-group": "`$group` 十组计数与求和",
   "aggregate-multistage": "`$match → $group → $sort → $limit → $project`",
+  "aggregate-facet": "一条 `$facet` 并行算总量、价格前五与十组计数",
+  "aggregate-bucket": "`$bucket` 按 `price` 切成五个固定区间并汇总",
   "aggregate-lookup-unwind": "`$match → $lookup → $unwind → $group → $sort` 关联边表",
   "find-in-filter": "20 个稀疏 `seq` 值的 `$in` 过滤（候选集拼接）",
   "find-regex-prefix": "`sku` 前缀正则 `^sku-0001` 命中 10 篇（正则候选集）",

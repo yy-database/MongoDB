@@ -103,6 +103,10 @@ Workloads:
 - `aggregate-multistage` — `$match` → `$group` → `$sort` → `$limit` → `$project`.
 - `aggregate-lookup` — `$match` → `$limit` → `$lookup` self-join on `grp`, asserting the
   joined array length.
+- `aggregate-facet` — one `$facet` computing the document total, the five highest prices
+  and the ten-group counts in a single pass.
+- `aggregate-bucket` — `$bucket` over five fixed `price` boundaries with a per-bucket
+  `$sum`/`$avg`, asserting every document lands in a bucket.
 - `aggregate-lookup-unwind` — `$match` → `$lookup` into a ten-document side collection →
   `$unwind` → `$group` → `$sort`, asserting ten groups.
 - `find-in-filter` — twenty sparse `seq` values through `$in`.
