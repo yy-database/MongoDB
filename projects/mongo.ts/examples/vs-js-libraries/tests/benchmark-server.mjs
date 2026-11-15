@@ -684,6 +684,53 @@ const WORKLOADS = [
     },
   },
   {
+    name: "find-in-filter",
+    unit: "commands",
+    ops: Number(process.env.BENCH_FIND ?? 20),
+    async run(client, ops) {
+      // 20 个稀疏 `seq` 值走 `$in` 候选集，与单区间扫描分开计量。
+      const values = Array.from({ length: 20 }, (_, index) => index * 50);
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await client.find(DB, COLLECTION, { seq: { $in: values } }, { batchSize: 25 });
+        if (rows.length !== values.length) throw new Error(`find-in rows=${rows.length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "find-regex-prefix",
+    unit: "commands",
+    ops: Number(process.env.BENCH_FIND ?? 20),
+    async run(client, ops) {
+      // `sku` 五位数补零，`^sku-0001` 恰好命中 10 篇（00010..00019）。
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await client.find(DB, COLLECTION, { sku: { $regex: "^sku-0001" } }, { batchSize: 25 });
+        if (rows.length !== 10) throw new Error(`find-regex rows=${rows.length}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "aggregate-lookup",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PIPELINE ?? 10),
+    async run(client, ops) {
+      // 同一集合自连接：先取一组，再把同组文档全部聚到 `side`。
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { grp: 0 } },
+          { $limit: 1 },
+          { $lookup: { from: COLLECTION, localField: "grp", foreignField: "grp", as: "side" } },
+        ]);
+        if (rows.length !== 1) throw new Error(`aggregate-lookup rows=${rows.length}`);
+        if (!Array.isArray(rows[0].side) || rows[0].side.length !== GROUP_SIZE) {
+          throw new Error(`aggregate-lookup side=${rows[0].side?.length}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "create-index",
     unit: "commands",
     ops: Number(process.env.BENCH_INDEX ?? 5),
@@ -835,6 +882,9 @@ const WORKLOAD_NOTES = {
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
   "aggregate-group": "`$group` 十组计数与求和",
   "aggregate-multistage": "`$match → $group → $sort → $limit → $project`",
+  "find-in-filter": "20 个稀疏 `seq` 值的 `$in` 过滤（候选集拼接）",
+  "find-regex-prefix": "`sku` 前缀正则 `^sku-0001` 命中 10 篇（正则候选集）",
+  "aggregate-lookup": "`$match → $limit → $lookup` 同集合自连接，断言关联数组长度",
   "create-index": "5 种键型各建一次",
   "big-doc-write": "20 篇 64KB 文档逐条写",
   "big-doc-read": "20 篇 64KB 文档按 `_id` 读并校验长度",
