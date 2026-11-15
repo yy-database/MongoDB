@@ -11,7 +11,8 @@
 //   BENCH_INDEX_EQ BENCH_PROJECTION BENCH_PAGE BENCH_ERROR BENCH_COUNT BENCH_DISTINCT
 //   BENCH_HINT BENCH_SORT BENCH_TXN BENCH_FIND_AND_MODIFY BENCH_BULK_WRITE BENCH_UPSERT
 //   BENCH_PAGINATION BENCH_DELETE_RANGE BENCH_DUPKEY BENCH_SKIP BENCH_COUNT_WINDOW
-//   BENCH_TXN_WRITE
+//   BENCH_TXN_WRITE BENCH_EXPLAIN BENCH_REPLACE BENCH_EXCLUDE BENCH_ADDFIELDS
+//   BENCH_WINDOW BENCH_GRAPH
 // - `ping` 是协议 + 解析 + 回包编码的地板，其余项的耗时减去它就是该路径的额外成本；
 // - 真实 `mongod` 列是可选的：设置 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 时才测量，
 //   连不上直接失败，不降级成自比、不伪造真机数字。本机没有 `mongod`，该列记为 CI-only。
@@ -85,19 +86,23 @@ async function seedCollection(client, count) {
   if (numberValue(created.ok) !== 1) throw new Error(`createIndexes failed: ${JSON.stringify(created)}`);
 }
 
-async function drain(client, reply) {
+async function drain(client, reply, collection = COLLECTION) {
   const documents_ = [...(reply.cursor?.firstBatch ?? [])];
   let id = numberValue(reply.cursor?.id);
   while (id !== 0) {
-    const more = await client.command({ getMore: id, collection: COLLECTION, $db: DB });
+    const more = await client.command({ getMore: id, collection, $db: DB });
     documents_.push(...(more.cursor?.nextBatch ?? []));
     id = numberValue(more.cursor?.id);
   }
   return documents_;
 }
 
+async function aggregateOn(client, collection, pipeline) {
+  return drain(client, await client.command({ aggregate: collection, pipeline, cursor: {}, $db: DB }), collection);
+}
+
 async function aggregateAll(client, pipeline) {
-  return drain(client, await client.command({ aggregate: COLLECTION, pipeline, cursor: {}, $db: DB }));
+  return aggregateOn(client, COLLECTION, pipeline);
 }
 
 function countOf(reply) {
@@ -308,6 +313,46 @@ const WORKLOADS = [
     },
   },
   {
+    name: "explain-find",
+    unit: "commands",
+    ops: Number(process.env.BENCH_EXPLAIN ?? 50),
+    async setup(client) {
+      const created = await client.command({
+        createIndexes: COLLECTION,
+        indexes: [{ key: { grp: 1 }, name: "grp_explain_1" }],
+        $db: DB,
+      });
+      if (numberValue(created.ok) !== 1) throw new Error(`explain setup failed: ${JSON.stringify(created)}`);
+    },
+    async run(client, ops) {
+      // `explain` 必须回报真实的计划树，而不是空壳：等值过滤走 `IXSCAN` 后回表 `FETCH`，
+      // 命中索引名与命名空间都要与请求一致，解析后的谓词也要归一成 `$eq`。
+      for (let index = 0; index < ops; index += 1) {
+        const grp = index % 10;
+        const reply = await client.command({
+          explain: { find: COLLECTION, filter: { grp } },
+          verbosity: "queryPlanner",
+          $db: DB,
+        });
+        const planner = reply.queryPlanner ?? {};
+        const winning = planner.winningPlan ?? {};
+        const parsed = planner.parsedQuery?.grp?.$eq;
+        if (numberValue(reply.ok) !== 1 || !reply.explainVersion) {
+          throw new Error(`explain-find envelope: ${JSON.stringify(reply).slice(0, 200)}`);
+        }
+        if (planner.namespace !== `${DB}.${COLLECTION}`) throw new Error(`explain-find namespace=${planner.namespace}`);
+        if (numberValue(parsed) !== grp) throw new Error(`explain-find parsedQuery=${JSON.stringify(planner.parsedQuery)}`);
+        if (winning.stage !== "FETCH" || winning.inputStage?.stage !== "IXSCAN") {
+          throw new Error(`explain-find plan=${winning.stage}/${winning.inputStage?.stage}`);
+        }
+        if (winning.inputStage?.indexName !== "grp_explain_1") {
+          throw new Error(`explain-find index=${winning.inputStage?.indexName}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "count-command",
     unit: "commands",
     ops: Number(process.env.BENCH_COUNT ?? 50),
@@ -466,6 +511,50 @@ const WORKLOADS = [
     },
   },
   {
+    name: "replace-one",
+    unit: "commands",
+    ops: Number(process.env.BENCH_REPLACE ?? 50),
+    async setup(client) {
+      // 先给每篇打上 `stale`，替换后该字段必须消失，才能区分「整篇替换」与「部分更新」。
+      const marked = await client.command({
+        update: COLLECTION,
+        updates: [{ q: { seq: { $gte: 0 } }, u: { $set: { stale: true } }, multi: true }],
+        $db: DB,
+      });
+      if (countOf(marked) !== DATASET) throw new Error(`replace-one setup matched=${countOf(marked)}`);
+    },
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const seq = index % DATASET;
+        const source = documentOf(seq);
+        const reply = await client.command({
+          update: COLLECTION,
+          updates: [
+            {
+              q: { _id: source._id },
+              u: { sku: source.sku, seq, grp: source.grp, price: 900 + seq, pad: `replaced-${seq}` },
+              multi: false,
+            },
+          ],
+          $db: DB,
+        });
+        if (countOf(reply) !== 1) throw new Error(`replace-one matched=${countOf(reply)} seq=${seq}`);
+      }
+      for (const seq of [0, (ops - 1) % DATASET]) {
+        const source = documentOf(seq);
+        const replaced = await client.findOne(DB, COLLECTION, { _id: source._id });
+        if (!replaced) throw new Error(`replace-one readback miss ${source._id}`);
+        if (numberValue(replaced.price) !== 900 + seq || replaced.pad !== `replaced-${seq}`) {
+          throw new Error(`replace-one readback=${JSON.stringify(replaced)}`);
+        }
+        if (replaced.sku !== source.sku || Object.hasOwn(replaced, "stale")) {
+          throw new Error(`replace-one kept stale fields: ${Object.keys(replaced).join(",")}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "bulk-write-mixed",
     unit: "commands",
     ops: Number(process.env.BENCH_BULK_WRITE ?? 4),
@@ -592,6 +681,36 @@ const WORKLOADS = [
     },
   },
   {
+    name: "find-projection-exclusion",
+    unit: "commands",
+    ops: Number(process.env.BENCH_EXCLUDE ?? 20),
+    async run(client, ops) {
+      // 排除式投影：`seq` 与 `pad` 不出现在结果里，其余字段（含 `_id`）保留；
+      // 排序键 `seq` 虽然被投影排除，排序仍必须按它生效，因此 `_id` 必须升序。
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await client.find(
+          DB,
+          COLLECTION,
+          {},
+          { projection: { seq: 0, pad: 0 }, sort: { seq: 1 }, limit: 20, batchSize: 20 },
+        );
+        if (rows.length !== 20) throw new Error(`projection-exclusion rows=${rows.length}`);
+        for (const row of rows) {
+          if (Object.hasOwn(row, "seq") || Object.hasOwn(row, "pad")) {
+            throw new Error(`projection-exclusion leaked: ${Object.keys(row).join(",")}`);
+          }
+          if (!Object.hasOwn(row, "_id") || !Object.hasOwn(row, "sku") || !Object.hasOwn(row, "grp") || !Object.hasOwn(row, "price")) {
+            throw new Error(`projection-exclusion dropped kept fields: ${Object.keys(row).join(",")}`);
+          }
+        }
+        for (let at = 1; at < rows.length; at += 1) {
+          if (rows[at - 1]._id >= rows[at]._id) throw new Error("projection-exclusion sort by excluded seq regressed");
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "cursor-paginate",
     unit: "documents",
     rows: DATASET,
@@ -684,6 +803,68 @@ const WORKLOADS = [
     },
   },
   {
+    name: "aggregate-add-fields",
+    unit: "commands",
+    ops: Number(process.env.BENCH_ADDFIELDS ?? 10),
+    async run(client, ops) {
+      // `$addFields` 每篇算三个新字段：字符串拼接、算术与常量字面量，逐行比对回种子值。
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { seq: { $lt: 100 } } },
+          { $addFields: { label: { $concat: ["$sku", "-ok"] }, net: { $subtract: ["$price", 100] }, tag: "fixed" } },
+          { $project: { _id: 0, seq: 1, label: 1, net: 1, tag: 1 } },
+        ]);
+        if (rows.length !== 100) throw new Error(`add-fields rows=${rows.length} expected=100`);
+        for (const row of rows) {
+          const source = documentOf(numberValue(row.seq));
+          if (row.label !== `${source.sku}-ok`) throw new Error(`add-fields label=${row.label} seq=${row.seq}`);
+          if (numberValue(row.net) !== source.price - 100) throw new Error(`add-fields net=${row.net} seq=${row.seq}`);
+          if (row.tag !== "fixed") throw new Error(`add-fields tag=${row.tag}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "aggregate-window",
+    unit: "commands",
+    ops: Number(process.env.BENCH_WINDOW ?? 10),
+    async run(client, ops) {
+      // 按 `grp` 分十区、`seq` 排序，`$documentNumber` 必须每区从 1 起，
+      // `$sum` 的 `[unbounded, current]` 窗口必须等于该区逐行累加值。
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { seq: { $lt: 100 } } },
+          {
+            $setWindowFields: {
+              partitionBy: "$grp",
+              sortBy: { seq: 1 },
+              output: {
+                rowNo: { $documentNumber: {} },
+                running: { $sum: "$price", window: { documents: ["unbounded", "current"] } },
+              },
+            },
+          },
+          { $project: { _id: 0, seq: 1, grp: 1, rowNo: 1, running: 1 } },
+        ]);
+        if (rows.length !== 100) throw new Error(`window rows=${rows.length} expected=100`);
+        for (let grp = 0; grp < 10; grp += 1) {
+          const partition = rows
+            .filter((row) => numberValue(row.grp) === grp)
+            .sort((left, right) => numberValue(left.seq) - numberValue(right.seq));
+          if (partition.length !== 10) throw new Error(`window partition ${grp} rows=${partition.length}`);
+          let cumulative = 0;
+          partition.forEach((row, at) => {
+            cumulative += documentOf(numberValue(row.seq)).price;
+            if (numberValue(row.rowNo) !== at + 1) throw new Error(`window rowNo=${row.rowNo} grp=${grp} at=${at}`);
+            if (numberValue(row.running) !== cumulative) throw new Error(`window running=${row.running} grp=${grp} at=${at}`);
+          });
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "aggregate-facet",
     unit: "commands",
     ops: Number(process.env.BENCH_PIPELINE ?? 10),
@@ -753,6 +934,51 @@ const WORKLOADS = [
           { $sort: { _id: 1 } },
         ]);
         if (rows.length !== 10) throw new Error(`aggregate-lookup-unwind groups=${rows.length} expected=10`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "aggregate-graph-lookup",
+    unit: "commands",
+    ops: Number(process.env.BENCH_GRAPH ?? 10),
+    async setup(client) {
+      // 十节点链 `n-9 → n-8 → … → n-0`，边表只存 `parent`；`restrictSearchWithMatch`
+      // 把 `n < 2` 的前两环过滤掉，因此从 `n-9` 出发应恰好递归到七个祖先。
+      await client.command({ drop: "chain", $db: DB });
+      const chain = Array.from({ length: 10 }, (_, index) => ({
+        _id: `n-${index}`,
+        parent: index === 0 ? null : `n-${index - 1}`,
+        n: index,
+      }));
+      const inserted = await client.insert(DB, "chain", chain);
+      if (countOf(inserted) !== chain.length) throw new Error(`graph-lookup setup inserted=${countOf(inserted)}`);
+    },
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateOn(client, "chain", [
+          { $match: { _id: "n-9" } },
+          {
+            $graphLookup: {
+              from: "chain",
+              startWith: "$parent",
+              connectFromField: "parent",
+              connectToField: "_id",
+              as: "ancestors",
+              depthField: "depth",
+              restrictSearchWithMatch: { n: { $gte: 2 } },
+            },
+          },
+          { $project: { _id: 1, ancestors: 1 } },
+        ]);
+        if (rows.length !== 1 || rows[0]._id !== "n-9") throw new Error(`graph-lookup rows=${JSON.stringify(rows.map((row) => row._id))}`);
+        const ancestors = rows[0].ancestors ?? [];
+        if (ancestors.length !== 7) throw new Error(`graph-lookup ancestors=${ancestors.length} expected=7`);
+        ancestors.forEach((row, at) => {
+          if (row._id !== `n-${8 - at}` || numberValue(row.depth) !== at) {
+            throw new Error(`graph-lookup hop=${row._id}@${row.depth} at=${at}`);
+          }
+        });
       }
       return ops;
     },
@@ -940,6 +1166,7 @@ const WORKLOAD_NOTES = {
   "find-skip-sort-page": "排序后 `skip 500 / limit 20` 的偏移分页，断言价格与 `seq` 单调",
   "find-index-equality": "建 `grp_1` 后按 `grp` 等值取 10（索引等值路径）",
   "find-hint-index": "显式 `hint: {grp: 1}` 按 `grp` 等值取 10（强制索引路径）",
+  "explain-find": "`explain` 等值过滤，断言 `FETCH` 盖 `IXSCAN`、命中索引名与命名空间、谓词归一为 `$eq`",
   "count-command": "非空 `query {grp: {$gte: 0}}`，断言计数等于数据集",
   "count-window": "非空 `query` 加 `skip 200 / limit 300`，断言窗口计数为 300（早停边界）",
   "distinct-command": "非空 `query {grp: {$gte: 0}}` 取 `grp`，断言 10 个不同值",
@@ -947,18 +1174,23 @@ const WORKLOAD_NOTES = {
   "transaction-range": "只读事务内 20 条区间 `find limit 20`（事务视图分页早停）",
   "transaction-write-read": "事务内 `insert` 后立即 `find` 回读暂存写入，再 `abortTransaction`（合并视图）",
   "find-and-modify": "按 `seq` 命中一篇后 `$set`，`new: true` 回读（先定位再写）",
+  "replace-one": "按 `_id` 整篇替换，断言命中 1、回读新值且 setup 打的 `stale` 字段被丢弃",
   "bulk-write-mixed": "一条 `bulkWrite` 混合 2 insert / 2 update / 2 delete（`admin` + `nsInfo`）",
   "update-one-upsert": "`_id` 不存在时 `updateOne upsert`，断言每条都走 upsert 分支",
   "getMore-pagination": "首包 `batchSize 25` 后续每页 `batchSize 100` 抽干（校验页数与游标存活）",
   "delete-many-range": "10 条 `seq` 区间删除各 100 篇（`limit: 0`）",
   "find-projection-sort": "投影 `{seq, price}` 加 `price desc, seq asc` 排序取 20",
+  "find-projection-exclusion": "排除式投影 `{seq: 0, pad: 0}` 取 20，断言被排除字段不出现、排序键仍生效",
   "cursor-paginate": "`batchSize 100` 分页抽干 1000 篇（每页一条 `getMore`）",
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
   "aggregate-group": "`$group` 十组计数与求和",
   "aggregate-multistage": "`$match → $group → $sort → $limit → $project`",
+  "aggregate-add-fields": "`$addFields` 算 `$concat` / `$subtract` / 字面量三列，逐行比对回种子值",
+  "aggregate-window": "`$setWindowFields` 按 `grp` 分区分、`seq` 排序，断言 `$documentNumber` 与累加窗口",
   "aggregate-facet": "一条 `$facet` 并行算总量、价格前五与十组计数",
   "aggregate-bucket": "`$bucket` 按 `price` 切成五个固定区间并汇总",
   "aggregate-lookup-unwind": "`$match → $lookup → $unwind → $group → $sort` 关联边表",
+  "aggregate-graph-lookup": "`$graphLookup` 沿 `parent` 递归十节点链，断言七环祖先与 `depth` 递进",
   "find-in-filter": "20 个稀疏 `seq` 值的 `$in` 过滤（候选集拼接）",
   "find-regex-prefix": "`sku` 前缀正则 `^sku-0001` 命中 10 篇（正则候选集）",
   "aggregate-lookup": "`$match → $limit → $lookup` 同集合自连接，断言关联数组长度",

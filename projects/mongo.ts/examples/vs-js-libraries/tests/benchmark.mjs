@@ -42,7 +42,9 @@ const WORKLOADS = [
   { name: "find-all-200", count: COUNTS.find },
   { name: "find-point", count: COUNTS.point },
   { name: "update-one", count: COUNTS.update },
+  { name: "replace-one", count: COUNTS.update },
   { name: "find-projection", count: COUNTS.projection },
+  { name: "find-projection-exclusion", count: COUNTS.projection },
   { name: "cursor-paginate", count: COUNTS.pages },
   // One round runs `BENCH_GROUP` aggregates over the 200-document set.
   { name: "aggregate-group", count: COUNTS.group, dataset: COUNTS.find },
@@ -97,6 +99,7 @@ const PAGE_SIZE = 25;
 
 const GROUP_PIPELINE = [{ $group: { _id: "$category", n: { $sum: 1 }, total: { $sum: "$price" } } }];
 const PROJECTION = { _id: 0, sku: 1, price: 1 };
+const EXCLUSION = { name: 0, note: 0 };
 
 async function execute(kind, client, workload, documents) {
   const count = documents.length;
@@ -125,6 +128,14 @@ async function execute(kind, client, workload, documents) {
           );
         }
         break;
+      case "replace-one":
+        for (const document of documents) {
+          // Whole-document replacement on the wire (`u` is a replacement doc, not `$set`).
+          const reply = await client.updateOne(DB, COLLECTION, { _id: document._id }, { ...document, seen: true });
+          if (numberValue(reply.n) !== 1) throw new Error(`replace-one missed ${document._id}`);
+          observed += 1;
+        }
+        break;
       case "find-projection": {
         const rows = await client.find(DB, COLLECTION, {}, {
           projection: PROJECTION,
@@ -134,6 +145,26 @@ async function execute(kind, client, workload, documents) {
         });
         if (rows.length > 0 && (Object.hasOwn(rows[0], "name") || !Object.hasOwn(rows[0], "price"))) {
           throw new Error(`projection leaked fields: ${Object.keys(rows[0]).join(",")}`);
+        }
+        observed = rows.length;
+        break;
+      }
+      case "find-projection-exclusion": {
+        const rows = await client.find(DB, COLLECTION, {}, {
+          projection: EXCLUSION,
+          sort: { price: -1, sku: 1 },
+          limit: count,
+          batchSize: count,
+        });
+        if (
+          rows.length > 0 &&
+          (Object.hasOwn(rows[0], "name") ||
+            Object.hasOwn(rows[0], "note") ||
+            !Object.hasOwn(rows[0], "_id") ||
+            !Object.hasOwn(rows[0], "price") ||
+            !Object.hasOwn(rows[0], "sku"))
+        ) {
+          throw new Error(`exclusion projection wrong fields: ${Object.keys(rows[0]).join(",")}`);
         }
         observed = rows.length;
         break;
@@ -186,12 +217,36 @@ async function execute(kind, client, workload, documents) {
           observed += (await collection.updateOne({ _id: document._id }, { $set: { seen: true } })).matchedCount;
         }
         break;
+      case "replace-one":
+        for (const document of documents) {
+          const reply = await collection.replaceOne({ _id: document._id }, { ...document, seen: true });
+          if (reply.matchedCount !== 1) throw new Error(`replace-one missed ${document._id}`);
+          observed += 1;
+        }
+        break;
       case "find-projection": {
         const rows = await collection
           .find({}, { projection: PROJECTION, sort: { price: -1, sku: 1 }, limit: count, batchSize: count })
           .toArray();
         if (rows.length > 0 && (Object.hasOwn(rows[0], "name") || !Object.hasOwn(rows[0], "price"))) {
           throw new Error(`projection leaked fields: ${Object.keys(rows[0]).join(",")}`);
+        }
+        observed = rows.length;
+        break;
+      }
+      case "find-projection-exclusion": {
+        const rows = await collection
+          .find({}, { projection: EXCLUSION, sort: { price: -1, sku: 1 }, limit: count, batchSize: count })
+          .toArray();
+        if (
+          rows.length > 0 &&
+          (Object.hasOwn(rows[0], "name") ||
+            Object.hasOwn(rows[0], "note") ||
+            !Object.hasOwn(rows[0], "_id") ||
+            !Object.hasOwn(rows[0], "price") ||
+            !Object.hasOwn(rows[0], "sku"))
+        ) {
+          throw new Error(`exclusion projection wrong fields: ${Object.keys(rows[0]).join(",")}`);
         }
         observed = rows.length;
         break;
