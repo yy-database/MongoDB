@@ -1,7 +1,7 @@
 # 服务端成本基准
 
 Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server`
-数据集：1000 篇，固定 seed；3 轮测量 + 1 轮热身，取中位数并记 p95。
+数据集：1000 篇，固定 seed；5 轮测量 + 1 轮热身，取中位数并记 p95。
 口径：本仓每轮新起临时数据目录的服务端，灌种子、建索引与 setup 不计时；`ping` 是协议 + 解析 + 回包编码地板。
 真实 mongod：本机未配置（CI-only 列，不伪造真机数字）。
 统计口径：median/p95 走上游 `database.harness` 的 `benchSummary`（nearest-rank，golden vector 钉死），不在脚本里重写算法。
@@ -67,118 +67,118 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 |----|----|
 | node | v24.18.0 |
 | rustc | rustc 1.101.0-nightly (1c3a65069 2026-11-02) |
-| MongoDB rev | 818ae55 |
+| MongoDB rev | 534aed7 |
 | facade 钉住的 database.rs rev | 70aee1ebc60e0104a88f214ee46af37477b402a7 |
-| 本地 path override | 0a3b999 (dirty) |
-| addon 产物 | 5313536 bytes, mtime 2026-11-15T04:58:20.802Z |
+| 本地 path override | 2cee5d0 (dirty) |
+| addon 产物 | 5324800 bytes, mtime 2026-11-15T21:07:15.116Z |
 | 数据规模 | 1000 篇 × ~87B；bulk 5000 篇；大文档 20 × 64KB；规模 200,1000,5000 |
 
 ## 按本仓耗时排序
 
 | 工作负载 | 单位 | 本仓 ms/op | 本仓 p95 ms/op | 真机 ms/op | 倍数 |
 |---------:|-----:|-----------:|---------------:|-----------:|-----:|
-| create-index | commands | 15.953 | 16.077 | CI-only | n/a |
-| find-regex-prefix | commands | 15.261 | 15.347 | CI-only | n/a |
-| bulk-write-mixed | commands | 10.894 | 12.798 | CI-only | n/a |
-| big-doc-write | rows | 6.327 | 10.501 | CI-only | n/a |
-| find-and-modify | commands | 4.948 | 5.048 | CI-only | n/a |
-| replace-one | commands | 4.038 | 5.221 | CI-only | n/a |
-| update-one-upsert | commands | 3.988 | 4.952 | CI-only | n/a |
-| find-all | commands | 3.962 | 4.277 | CI-only | n/a |
-| aggregate-facet | commands | 3.864 | 3.865 | CI-only | n/a |
-| insert-single | commands | 3.808 | 4.322 | CI-only | n/a |
-| aggregate-lookup-unwind | commands | 2.268 | 2.333 | CI-only | n/a |
-| aggregate-lookup | commands | 2.185 | 2.310 | CI-only | n/a |
-| aggregate-add-fields | commands | 2.004 | 2.383 | CI-only | n/a |
-| aggregate-multistage | commands | 1.905 | 2.128 | CI-only | n/a |
-| aggregate-window | commands | 1.888 | 2.002 | CI-only | n/a |
-| aggregate-bucket | commands | 1.501 | 1.715 | CI-only | n/a |
-| aggregate-sort | commands | 1.495 | 1.598 | CI-only | n/a |
-| aggregate-group | commands | 1.433 | 1.499 | CI-only | n/a |
-| find-projection-exclusion | commands | 1.323 | 1.605 | CI-only | n/a |
-| explain-find | commands | 1.245 | 1.292 | CI-only | n/a |
-| find-in-filter | commands | 1.198 | 1.225 | CI-only | n/a |
-| find-projection-sort | commands | 1.188 | 1.472 | CI-only | n/a |
-| find-skip-sort-page | commands | 1.085 | 1.116 | CI-only | n/a |
-| find-order-limit | commands | 1.056 | 1.235 | CI-only | n/a |
-| find-range-limit | commands | 0.493 | 0.511 | CI-only | n/a |
-| distinct-command | commands | 0.485 | 0.593 | CI-only | n/a |
-| big-doc-read | rows | 0.414 | 0.489 | CI-only | n/a |
-| connect | connections | 0.389 | 0.392 | CI-only | n/a |
-| count-command | commands | 0.343 | 0.349 | CI-only | n/a |
-| transaction-write-read | commands | 0.281 | 0.434 | CI-only | n/a |
-| count-window | commands | 0.206 | 0.208 | CI-only | n/a |
-| transaction-range | commands | 0.203 | 0.298 | CI-only | n/a |
-| aggregate-graph-lookup | commands | 0.156 | 0.182 | CI-only | n/a |
-| insert-duplicate-key | commands | 0.128 | 0.152 | CI-only | n/a |
-| find-index-equality | commands | 0.112 | 0.142 | CI-only | n/a |
-| update-many | rows | 0.106 | 0.109 | CI-only | n/a |
-| find-hint-index | commands | 0.097 | 0.116 | CI-only | n/a |
-| find-point-uk | commands | 0.085 | 0.100 | CI-only | n/a |
-| find-point-pk | commands | 0.077 | 0.080 | CI-only | n/a |
-| error-command | commands | 0.070 | 0.073 | CI-only | n/a |
-| insert-multi | rows | 0.068 | 0.069 | CI-only | n/a |
-| delete-many | rows | 0.064 | 0.065 | CI-only | n/a |
-| bulk-insert | rows | 0.055 | 0.066 | CI-only | n/a |
-| delete-many-range | rows | 0.053 | 0.068 | CI-only | n/a |
-| ping | commands | 0.052 | 0.065 | CI-only | n/a |
-| cursor-paginate | documents | 0.006 | 0.006 | CI-only | n/a |
-| getMore-pagination | documents | 0.005 | 0.007 | CI-only | n/a |
+| create-index | commands | 17.369 | 17.673 | CI-only | n/a |
+| bulk-write-mixed | commands | 11.262 | 12.245 | CI-only | n/a |
+| find-regex-prefix | commands | 7.526 | 7.826 | CI-only | n/a |
+| big-doc-write | rows | 6.189 | 10.862 | CI-only | n/a |
+| aggregate-facet | commands | 4.512 | 4.827 | CI-only | n/a |
+| replace-one | commands | 3.978 | 4.020 | CI-only | n/a |
+| find-and-modify | commands | 3.836 | 6.834 | CI-only | n/a |
+| update-one-upsert | commands | 3.795 | 3.879 | CI-only | n/a |
+| find-all | commands | 3.283 | 3.790 | CI-only | n/a |
+| aggregate-lookup-unwind | commands | 2.832 | 3.677 | CI-only | n/a |
+| aggregate-lookup | commands | 2.777 | 2.933 | CI-only | n/a |
+| insert-single | commands | 2.524 | 2.663 | CI-only | n/a |
+| aggregate-window | commands | 2.222 | 2.683 | CI-only | n/a |
+| aggregate-add-fields | commands | 1.825 | 2.292 | CI-only | n/a |
+| aggregate-group | commands | 1.770 | 1.945 | CI-only | n/a |
+| aggregate-bucket | commands | 1.753 | 2.172 | CI-only | n/a |
+| aggregate-multistage | commands | 1.722 | 2.069 | CI-only | n/a |
+| find-projection-sort | commands | 1.476 | 1.822 | CI-only | n/a |
+| find-in-filter | commands | 1.462 | 2.084 | CI-only | n/a |
+| find-projection-exclusion | commands | 1.303 | 1.540 | CI-only | n/a |
+| find-skip-sort-page | commands | 1.081 | 1.114 | CI-only | n/a |
+| aggregate-sort | commands | 1.069 | 1.428 | CI-only | n/a |
+| find-order-limit | commands | 1.038 | 1.173 | CI-only | n/a |
+| explain-find | commands | 1.034 | 1.201 | CI-only | n/a |
+| connect | connections | 0.559 | 0.611 | CI-only | n/a |
+| big-doc-read | rows | 0.500 | 0.582 | CI-only | n/a |
+| distinct-command | commands | 0.483 | 0.505 | CI-only | n/a |
+| find-range-limit | commands | 0.478 | 0.540 | CI-only | n/a |
+| transaction-write-read | commands | 0.464 | 0.641 | CI-only | n/a |
+| count-command | commands | 0.392 | 0.590 | CI-only | n/a |
+| transaction-range | commands | 0.297 | 0.361 | CI-only | n/a |
+| count-window | commands | 0.214 | 0.261 | CI-only | n/a |
+| aggregate-graph-lookup | commands | 0.205 | 0.258 | CI-only | n/a |
+| update-many | rows | 0.119 | 0.125 | CI-only | n/a |
+| find-index-equality | commands | 0.105 | 0.168 | CI-only | n/a |
+| find-hint-index | commands | 0.105 | 0.121 | CI-only | n/a |
+| insert-duplicate-key | commands | 0.102 | 0.123 | CI-only | n/a |
+| error-command | commands | 0.087 | 0.127 | CI-only | n/a |
+| find-point-uk | commands | 0.067 | 0.077 | CI-only | n/a |
+| bulk-insert | rows | 0.064 | 0.065 | CI-only | n/a |
+| delete-many | rows | 0.062 | 0.066 | CI-only | n/a |
+| find-point-pk | commands | 0.060 | 0.075 | CI-only | n/a |
+| delete-many-range | rows | 0.048 | 0.050 | CI-only | n/a |
+| insert-multi | rows | 0.046 | 0.046 | CI-only | n/a |
+| ping | commands | 0.045 | 0.065 | CI-only | n/a |
+| cursor-paginate | documents | 0.006 | 0.007 | CI-only | n/a |
+| getMore-pagination | documents | 0.006 | 0.009 | CI-only | n/a |
 
 ## 阶段差分
 
-以 `ping`（0.052 ms/命令）作为传输 + 解析 + 回包编码地板，其余项的额外成本如下。
+以 `ping`（0.045 ms/命令）作为传输 + 解析 + 回包编码地板，其余项的额外成本如下。
 线上协议不暴露服务端内部分阶段耗时，这里是差分估计，不是插桩测量。
 以行为单位的项先按单条命令的行数折算成每命令耗时，再与地板相减。
 
 | 工作负载 | 额外 ms/命令 |
 |---------:|-------------:|
-| create-index | 15.901 |
-| find-regex-prefix | 15.210 |
-| bulk-write-mixed | 10.842 |
-| big-doc-write | 6.275 |
-| find-and-modify | 4.896 |
-| replace-one | 3.986 |
-| update-one-upsert | 3.936 |
-| find-all | 3.910 |
-| aggregate-facet | 3.812 |
-| insert-single | 3.756 |
-| aggregate-lookup-unwind | 2.216 |
-| aggregate-lookup | 2.133 |
-| aggregate-add-fields | 1.952 |
-| aggregate-multistage | 1.853 |
-| aggregate-window | 1.837 |
-| aggregate-bucket | 1.450 |
-| aggregate-sort | 1.443 |
-| aggregate-group | 1.381 |
-| find-projection-exclusion | 1.272 |
-| explain-find | 1.193 |
-| find-in-filter | 1.146 |
-| find-projection-sort | 1.136 |
-| find-skip-sort-page | 1.033 |
-| find-order-limit | 1.004 |
-| find-range-limit | 0.441 |
-| distinct-command | 0.433 |
-| big-doc-read | 0.362 |
-| connect | 0.337 |
-| count-command | 0.291 |
-| transaction-write-read | 0.229 |
-| count-window | 0.154 |
-| transaction-range | 0.151 |
-| aggregate-graph-lookup | 0.104 |
-| insert-duplicate-key | 0.076 |
+| create-index | 17.324 |
+| bulk-write-mixed | 11.217 |
+| find-regex-prefix | 7.481 |
+| big-doc-write | 6.144 |
+| aggregate-facet | 4.467 |
+| replace-one | 3.933 |
+| find-and-modify | 3.791 |
+| update-one-upsert | 3.751 |
+| find-all | 3.238 |
+| aggregate-lookup-unwind | 2.787 |
+| aggregate-lookup | 2.732 |
+| insert-single | 2.479 |
+| aggregate-window | 2.177 |
+| aggregate-add-fields | 1.780 |
+| aggregate-group | 1.725 |
+| aggregate-bucket | 1.708 |
+| aggregate-multistage | 1.678 |
+| find-projection-sort | 1.431 |
+| find-in-filter | 1.417 |
+| find-projection-exclusion | 1.258 |
+| find-skip-sort-page | 1.036 |
+| aggregate-sort | 1.024 |
+| find-order-limit | 0.993 |
+| explain-find | 0.989 |
+| connect | 0.514 |
+| big-doc-read | 0.455 |
+| distinct-command | 0.439 |
+| find-range-limit | 0.433 |
+| transaction-write-read | 0.419 |
+| count-command | 0.347 |
+| transaction-range | 0.252 |
+| count-window | 0.169 |
+| aggregate-graph-lookup | 0.160 |
+| update-many | 11.862 |
 | find-index-equality | 0.060 |
-| update-many | 10.528 |
-| find-hint-index | 0.045 |
-| find-point-uk | 0.034 |
-| find-point-pk | 0.025 |
-| error-command | 0.018 |
-| insert-multi | 13.463 |
-| delete-many | 6.348 |
-| bulk-insert | 11.010 |
-| delete-many-range | 5.213 |
-| cursor-paginate | -0.046 |
-| getMore-pagination | -0.046 |
+| find-hint-index | 0.060 |
+| insert-duplicate-key | 0.057 |
+| error-command | 0.042 |
+| find-point-uk | 0.023 |
+| bulk-insert | 12.819 |
+| delete-many | 6.199 |
+| find-point-pk | 0.015 |
+| delete-many-range | 4.725 |
+| insert-multi | 9.096 |
+| cursor-paginate | -0.039 |
+| getMore-pagination | -0.039 |
 
 ## 规模扩展
 
@@ -187,9 +187,9 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 
 | 文档数 | `_id` 单查 ms/op | 唯一索引单查 ms/op | `updateOne` ms/op | 未命中 `delete` ms/op |
 |------:|-----------------:|-------------------:|------------------:|----------------------:|
-| 200 | 0.065 | 0.078 | 3.854 | 0.063 |
-| 1000 | 0.063 | 0.070 | 4.350 | 0.082 |
-| 5000 | 0.081 | 0.055 | 7.403 | 0.087 |
+| 200 | 0.091 | 0.094 | 3.032 | 0.064 |
+| 1000 | 0.097 | 0.092 | 3.372 | 0.061 |
+| 5000 | 0.064 | 0.111 | 7.064 | 0.083 |
 
 ## 根因
 
@@ -208,7 +208,7 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
   其余路径不再把应答转成 Extended JSON 再序列化回去。`ping` 的独立收益约 5%（对 200 条命令的中位数），
   写命令被整快照落盘淹没，差异在噪声内；本轮保留是为了与读路径统一字节语义，而不是把它记作提速项。
 - **空查询 `count` 不再解码整集合**：没有 filter、`skip`、`limit` 与 `hint` 时，计数就是事务视图或已提交数据的条数，
-  不必把每篇文档解析成 `BsonDocument`。`count-command`（非空 query）从整表解析降到 0.343 ms/命令量级。
+  不必把每篇文档解析成 `BsonDocument`。`count-command`（非空 query）从整表解析降到 0.392 ms/命令量级。
 - **非空 filter 的 `count` / `distinct` 只解码谓词与取值字段**：谓词引用的顶层字段之外按 BSON 长度跳过，
   `$where` / `$expr` 一类无法静态分析的算子自动退回整篇解码；`count` 同时复用 `skip + limit` 早停边界。
   AB 中位数：非空 `count` 约 2.0–2.6 ms → 0.8–0.9 ms，`distinct` 约 1.9–2.7 ms → 1.1–1.8 ms。
@@ -237,10 +237,10 @@ Command: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server
 
 ## 预计收益（按差分估算）
 
-- 写路径改成追加或增量落盘：单条写命令从 `insert-single` 的 3.808 ms 降到与 `ping` 同量级，约省 3.756 ms/命令；这也是 `updateOne` 与 `big-doc-write` 剩余成本的主体。
+- 写路径改成追加或增量落盘：单条写命令从 `insert-single` 的 2.524 ms 降到与 `ping` 同量级，约省 2.479 ms/命令；这也是 `updateOne` 与 `big-doc-write` 剩余成本的主体。
 - `update` 点读化已落地：修复前每条 `updateOne` 整命名空间扫描匹配并整表建唯一 map，5000 篇下约 43 ms/op（历史捕获，同一脚本旧版数字）；
-  现在 7.403 ms/op，剩余增长跟随快照提交随数据量的增长（1000 篇 `insert-single` 地板 3.808 ms/op），不再是匹配扫描。
-- 未命中 `delete` 与 `_id` / 唯一索引单查都稳定在 0.087 ms 量级，读路径没有再随规模增长的缺陷。
+  现在 7.064 ms/op，剩余增长跟随快照提交随数据量的增长（1000 篇 `insert-single` 地板 2.524 ms/op），不再是匹配扫描。
+- 未命中 `delete` 与 `_id` / 唯一索引单查都稳定在 0.083 ms 量级，读路径没有再随规模增长的缺陷。
 - 事务视图分页早停已落地：只读事务的 `limit` 查询不再先合并整段视图，AB 中位数从约 0.75 ms/命令降到约 0.29 ms/命令。
 - 空查询 `count` 已跳过整表解码：AB 中位数从约 2.06 ms/命令降到约 0.42 ms/命令。
 - 非空 filter 的 `count` / `distinct` 已按谓词字段投影解码：AB 中位数 `count` 约 2.0–2.6 → 0.8–0.9 ms，`distinct` 约 1.9–2.7 → 1.1–1.8 ms。
