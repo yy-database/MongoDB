@@ -101,6 +101,12 @@ Workloads:
 - `find-order-limit` — `sort` + `limit`.
 - `aggregate-group` — single-stage `$group`.
 - `aggregate-multistage` — `$match` → `$group` → `$sort` → `$limit` → `$project`.
+- `aggregate-lookup` — `$match` → `$limit` → `$lookup` self-join on `grp`, asserting the
+  joined array length.
+- `aggregate-lookup-unwind` — `$match` → `$lookup` into a ten-document side collection →
+  `$unwind` → `$group` → `$sort`, asserting ten groups.
+- `find-in-filter` — twenty sparse `seq` values through `$in`.
+- `find-regex-prefix` — the anchored `^sku-0001` pattern over the unique `sku` field.
 - `create-index` — build one new secondary index per command.
 - `bulk-insert` — 5000 documents in 200-document batches with a unique index.
 - `big-doc-write` — 20 × 64 KB documents, one per command.

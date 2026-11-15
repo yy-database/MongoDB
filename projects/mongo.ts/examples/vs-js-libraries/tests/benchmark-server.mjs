@@ -684,6 +684,31 @@ const WORKLOADS = [
     },
   },
   {
+    name: "aggregate-lookup-unwind",
+    unit: "commands",
+    ops: Number(process.env.BENCH_PIPELINE ?? 10),
+    async setup(client) {
+      // 关联集合每轮重建：十篇 `_id` 等于 `grp` 的边表，让 `$lookup` 有确定命中。
+      await client.command({ drop: "sides", $db: DB });
+      const sides = Array.from({ length: 10 }, (_, index) => ({ _id: index, label: `side-${index}` }));
+      const inserted = await client.insert(DB, "sides", sides);
+      if (countOf(inserted) !== sides.length) throw new Error(`aggregate-lookup-unwind setup inserted=${countOf(inserted)}`);
+    },
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await aggregateAll(client, [
+          { $match: { seq: { $lt: 200 } } },
+          { $lookup: { from: "sides", localField: "grp", foreignField: "_id", as: "side" } },
+          { $unwind: "$side" },
+          { $group: { _id: "$side.label", n: { $sum: 1 } } },
+          { $sort: { _id: 1 } },
+        ]);
+        if (rows.length !== 10) throw new Error(`aggregate-lookup-unwind groups=${rows.length} expected=10`);
+      }
+      return ops;
+    },
+  },
+  {
     name: "find-in-filter",
     unit: "commands",
     ops: Number(process.env.BENCH_FIND ?? 20),
@@ -882,6 +907,7 @@ const WORKLOAD_NOTES = {
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
   "aggregate-group": "`$group` 十组计数与求和",
   "aggregate-multistage": "`$match → $group → $sort → $limit → $project`",
+  "aggregate-lookup-unwind": "`$match → $lookup → $unwind → $group → $sort` 关联边表",
   "find-in-filter": "20 个稀疏 `seq` 值的 `$in` 过滤（候选集拼接）",
   "find-regex-prefix": "`sku` 前缀正则 `^sku-0001` 命中 10 篇（正则候选集）",
   "aggregate-lookup": "`$match → $limit → $lookup` 同集合自连接，断言关联数组长度",
