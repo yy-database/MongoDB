@@ -131,7 +131,18 @@ export class OpMsgClient {
   }
 
   async insert(db, collection, documents) {
-    return this.command({ insert: collection, documents, $db: db });
+    const reply = await this.command({ insert: collection, documents, $db: db });
+    // `mongod` answers a duplicate key with `ok: 1` plus `writeErrors`, so a
+    // client that only inspects `ok` would report a successful write. Official
+    // drivers surface the first write error, and the benchmark asserts on it.
+    const failure = Array.isArray(reply.writeErrors) ? reply.writeErrors[0] : undefined;
+    if (failure && typeof failure === "object") {
+      const error = new Error(failure.errmsg ?? "insert failed");
+      error.code = numberValue(failure.code);
+      error.reply = reply;
+      throw error;
+    }
+    return reply;
   }
 
   async find(db, collection, filter = {}, options = {}) {

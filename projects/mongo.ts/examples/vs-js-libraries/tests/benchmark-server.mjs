@@ -9,7 +9,9 @@
 //   BENCH_RANGE BENCH_ORDER BENCH_GROUP BENCH_PIPELINE BENCH_INDEX BENCH_BULK
 //   BENCH_BIG_DOCS BENCH_BIG_KB BENCH_CONNECT BENCH_SCALE_SIZES BENCH_SCALE_OPS BENCH_SCALE_ROUNDS
 //   BENCH_INDEX_EQ BENCH_PROJECTION BENCH_PAGE BENCH_ERROR BENCH_COUNT BENCH_DISTINCT
-//   BENCH_HINT BENCH_SORT BENCH_TXN
+//   BENCH_HINT BENCH_SORT BENCH_TXN BENCH_FIND_AND_MODIFY BENCH_BULK_WRITE BENCH_UPSERT
+//   BENCH_PAGINATION BENCH_DELETE_RANGE BENCH_DUPKEY BENCH_SKIP BENCH_COUNT_WINDOW
+//   BENCH_TXN_WRITE
 // - `ping` 是协议 + 解析 + 回包编码的地板，其余项的耗时减去它就是该路径的额外成本；
 // - 真实 `mongod` 列是可选的：设置 `BENCH_REAL_HOST` / `BENCH_REAL_PORT` 时才测量，
 //   连不上直接失败，不降级成自比、不伪造真机数字。本机没有 `mongod`，该列记为 CI-only。
@@ -143,6 +145,25 @@ const WORKLOADS = [
     },
   },
   {
+    name: "insert-duplicate-key",
+    unit: "commands",
+    ops: Number(process.env.BENCH_DUPKEY ?? 20),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        let code = 0;
+        try {
+          await client.insert(DB, COLLECTION, [
+            { _id: `dup-${index}`, sku: documentOf(index % DATASET).sku, seq: DATASET + index, grp: 0 },
+          ]);
+        } catch (error) {
+          code = error.code;
+        }
+        if (code !== 11000) throw new Error(`insert-duplicate-key code=${code}`);
+      }
+      return ops;
+    },
+  },
+  {
     name: "find-all",
     unit: "commands",
     ops: Number(process.env.BENCH_FIND ?? 20),
@@ -214,6 +235,33 @@ const WORKLOADS = [
     },
   },
   {
+    name: "find-skip-sort-page",
+    unit: "commands",
+    ops: Number(process.env.BENCH_SKIP ?? 20),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const rows = await client.find(
+          DB,
+          COLLECTION,
+          {},
+          { sort: { price: -1, seq: 1 }, skip: 500, limit: 20, batchSize: 20 },
+        );
+        if (rows.length !== 20) throw new Error(`skip-sort-page rows=${rows.length}`);
+        for (let at = 1; at < rows.length; at += 1) {
+          const previous = rows[at - 1];
+          const current = rows[at];
+          const previousPrice = numberValue(previous.price);
+          const currentPrice = numberValue(current.price);
+          if (previousPrice < currentPrice) throw new Error("skip-sort-page order regressed on price");
+          if (previousPrice === currentPrice && numberValue(previous.seq) > numberValue(current.seq)) {
+            throw new Error("skip-sort-page order regressed on seq");
+          }
+        }
+      }
+      return ops;
+    },
+  },
+  {
     name: "find-index-equality",
     unit: "commands",
     ops: Number(process.env.BENCH_INDEX_EQ ?? 50),
@@ -265,8 +313,20 @@ const WORKLOADS = [
     ops: Number(process.env.BENCH_COUNT ?? 50),
     async run(client, ops) {
       for (let index = 0; index < ops; index += 1) {
-        const reply = await client.command({ count: COLLECTION, query: {}, $db: DB });
+        const reply = await client.command({ count: COLLECTION, query: { grp: { $gte: 0 } }, $db: DB });
         if (countOf(reply) !== DATASET) throw new Error(`count rows=${countOf(reply)}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "count-window",
+    unit: "commands",
+    ops: Number(process.env.BENCH_COUNT_WINDOW ?? 50),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const reply = await client.command({ count: COLLECTION, query: { grp: { $gte: 0 } }, skip: 200, limit: 300, $db: DB });
+        if (countOf(reply) !== 300) throw new Error(`count-window rows=${countOf(reply)}`);
       }
       return ops;
     },
@@ -277,7 +337,7 @@ const WORKLOADS = [
     ops: Number(process.env.BENCH_DISTINCT ?? 50),
     async run(client, ops) {
       for (let index = 0; index < ops; index += 1) {
-        const reply = await client.command({ distinct: COLLECTION, key: "grp", $db: DB });
+        const reply = await client.command({ distinct: COLLECTION, key: "grp", query: { grp: { $gte: 0 } }, $db: DB });
         if (!Array.isArray(reply.values) || reply.values.length !== 10) {
           throw new Error(`distinct values=${reply.values?.length}`);
         }
@@ -341,6 +401,169 @@ const WORKLOADS = [
       const committed = await client.command({ commitTransaction: 1, lsid, txnNumber, autocommit: false, $db: "admin" });
       if (numberValue(committed.ok) !== 1) throw new Error(`transaction-range commit failed: ${JSON.stringify(committed)}`);
       return ops;
+    },
+  },
+  {
+    name: "transaction-write-read",
+    unit: "commands",
+    ops: Number(process.env.BENCH_TXN_WRITE ?? 10),
+    async run(client, ops) {
+      // 每个事务内先写后读：`find` 必须看到本事务暂存的写入，`abortTransaction`
+      // 再丢弃它。覆盖的是事务合并视图路径，而不是只读事务的已提交分页。
+      for (let index = 0; index < ops; index += 1) {
+        const lsid = { id: { $binary: { base64: Buffer.alloc(16, index).toString("base64"), subType: "04" } } };
+        const txnNumber = { $numberLong: String(index + 1) };
+        const inserted = await client.command({
+          insert: COLLECTION,
+          documents: [{ _id: `txn-${index}`, sku: `txn-${index}`, seq: DATASET + index, grp: index % 10 }],
+          lsid,
+          txnNumber,
+          startTransaction: true,
+          autocommit: false,
+          $db: DB,
+        });
+        if (numberValue(inserted.ok) !== 1 || countOf(inserted) !== 1) {
+          throw new Error(`transaction-write-read insert ${index}: ${JSON.stringify(inserted)}`);
+        }
+        const read = await client.command({
+          find: COLLECTION,
+          filter: { _id: `txn-${index}` },
+          batchSize: 10,
+          lsid,
+          txnNumber,
+          autocommit: false,
+          $db: DB,
+        });
+        const staged = read.cursor?.firstBatch ?? [];
+        if (staged.length !== 1 || staged[0]._id !== `txn-${index}`) {
+          throw new Error(`transaction-write-read misses its own write at ${index}`);
+        }
+        const aborted = await client.command({ abortTransaction: 1, lsid, txnNumber, autocommit: false, $db: "admin" });
+        if (numberValue(aborted.ok) !== 1) throw new Error(`transaction-write-read abort failed: ${JSON.stringify(aborted)}`);
+      }
+      return ops;
+    },
+  },
+  {
+    name: "find-and-modify",
+    unit: "commands",
+    ops: Number(process.env.BENCH_FIND_AND_MODIFY ?? 50),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const seq = index % DATASET;
+        const reply = await client.command({
+          findAndModify: COLLECTION,
+          query: { seq },
+          update: { $set: { fmod: index } },
+          new: true,
+          $db: DB,
+        });
+        if (numberValue(reply.ok) !== 1 || !reply.value || numberValue(reply.value.seq) !== seq) {
+          throw new Error(`find-and-modify miss seq=${seq}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "bulk-write-mixed",
+    unit: "commands",
+    ops: Number(process.env.BENCH_BULK_WRITE ?? 4),
+    seed: true,
+    async run(client, ops) {
+      const namespaces = [{ ns: `${DB}.${COLLECTION}` }];
+      for (let round = 0; round < ops; round += 1) {
+        const updateDocument = { $set: { bulk: round } };
+        const reply = await client.command({
+          bulkWrite: 1,
+          ops: [
+            { insert: 0, document: { _id: `bw-${round}-a`, sku: `bw-${round}-a`, seq: DATASET + round, grp: 0 } },
+            { insert: 0, document: { _id: `bw-${round}-b`, sku: `bw-${round}-b`, seq: DATASET + round, grp: 1 } },
+            { update: 0, filter: { seq: round }, updateMods: updateDocument },
+            { update: 0, filter: { seq: round + 1 }, updateMods: updateDocument },
+            { delete: 0, filter: { seq: 500 + round * 2 } },
+            { delete: 0, filter: { seq: 501 + round * 2 } },
+          ],
+          nsInfo: namespaces,
+          ordered: true,
+          $db: "admin",
+        });
+        if (numberValue(reply.ok) !== 1 || numberValue(reply.nErrors) !== 0) {
+          throw new Error(`bulk-write-mixed failed: ${JSON.stringify(reply)}`);
+        }
+        if (numberValue(reply.nInserted) !== 2 || numberValue(reply.nDeleted) !== 2 || numberValue(reply.nMatched) !== 2) {
+          throw new Error(`bulk-write-mixed counters: ${JSON.stringify(reply)}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "update-one-upsert",
+    unit: "commands",
+    ops: Number(process.env.BENCH_UPSERT ?? 50),
+    async run(client, ops) {
+      for (let index = 0; index < ops; index += 1) {
+        const reply = await client.updateOne(
+          DB,
+          COLLECTION,
+          { _id: `upsert-${index}` },
+          { $set: { sku: `upsert-${index}`, seq: index, grp: index % 10 } },
+          { upsert: true },
+        );
+        const upserted = Array.isArray(reply.upserted) ? reply.upserted : [];
+        if (numberValue(reply.n) !== 1 || upserted.length !== 1) {
+          throw new Error(`update-one-upsert miss ${index}: ${JSON.stringify(reply)}`);
+        }
+      }
+      return ops;
+    },
+  },
+  {
+    name: "getMore-pagination",
+    unit: "documents",
+    rows: DATASET,
+    rowsPerCommand: PAGE,
+    async run(client) {
+      const firstPage = 25;
+      const first = await client.command({ find: COLLECTION, filter: {}, batchSize: firstPage, $db: DB });
+      let read = (first.cursor?.firstBatch ?? []).length;
+      if (read !== firstPage) throw new Error(`getMore-pagination first batch=${read}`);
+      let id = numberValue(first.cursor?.id);
+      if (id === 0) throw new Error("getMore-pagination expected a live cursor");
+      let pages = 1;
+      while (id !== 0) {
+        const more = await client.command({ getMore: id, collection: COLLECTION, batchSize: PAGE, $db: DB });
+        const batch = more.cursor?.nextBatch ?? [];
+        if (batch.length === 0) throw new Error("getMore-pagination returned an empty page");
+        read += batch.length;
+        pages += 1;
+        id = numberValue(more.cursor?.id);
+      }
+      if (read !== DATASET) throw new Error(`getMore-pagination read=${read}`);
+      const expectedPages = Math.ceil((DATASET - firstPage) / PAGE) + 1;
+      if (pages !== expectedPages) throw new Error(`getMore-pagination pages=${pages}, expected ${expectedPages}`);
+      return read;
+    },
+  },
+  {
+    name: "delete-many-range",
+    unit: "rows",
+    rows: DATASET,
+    rowsPerCommand: 100,
+    async run(client) {
+      let deleted = 0;
+      for (let start = 0; start < DATASET; start += 100) {
+        const reply = await client.command({
+          delete: COLLECTION,
+          deletes: [{ q: { seq: { $gte: start, $lt: start + 100 } }, limit: 0 }],
+          $db: DB,
+        });
+        if (countOf(reply) !== 100) throw new Error(`delete-many-range short at ${start}: ${countOf(reply)}`);
+        deleted += countOf(reply);
+      }
+      if (deleted !== DATASET) throw new Error(`delete-many-range deleted=${deleted}`);
+      return deleted;
     },
   },
   {
@@ -587,17 +810,26 @@ const WORKLOAD_NOTES = {
   ping: "空 `ping`；协议解析与回包编码的地板",
   "insert-single": "单条 `insert`，含一次整快照落盘",
   "insert-multi": "一次 `insert` 写 200 篇",
+  "insert-duplicate-key": "复用种子 `sku` 触发唯一索引冲突，断言 `code 11000`（写错误路径）",
   "find-all": "`find {}` 按 `batchSize 250` 抽干整个集合",
   "find-point-pk": "按 `_id` 单点 `find`",
   "find-point-uk": "按唯一索引 `sku` 单点 `find`",
   "find-range-limit": "无索引区间 `seq`，`limit 20`（早停扫描）",
   "find-order-limit": "无索引排序 `price desc, seq asc` 取 20",
+  "find-skip-sort-page": "排序后 `skip 500 / limit 20` 的偏移分页，断言价格与 `seq` 单调",
   "find-index-equality": "建 `grp_1` 后按 `grp` 等值取 10（索引等值路径）",
   "find-hint-index": "显式 `hint: {grp: 1}` 按 `grp` 等值取 10（强制索引路径）",
-  "count-command": "`count` 空查询，断言计数等于数据集",
-  "distinct-command": "`distinct` 取 `grp`，断言 10 个不同值",
+  "count-command": "非空 `query {grp: {$gte: 0}}`，断言计数等于数据集",
+  "count-window": "非空 `query` 加 `skip 200 / limit 300`，断言窗口计数为 300（早停边界）",
+  "distinct-command": "非空 `query {grp: {$gte: 0}}` 取 `grp`，断言 10 个不同值",
   "aggregate-sort": "`$match → $sort → $limit 20`（排序后取前 20）",
   "transaction-range": "只读事务内 20 条区间 `find limit 20`（事务视图分页早停）",
+  "transaction-write-read": "事务内 `insert` 后立即 `find` 回读暂存写入，再 `abortTransaction`（合并视图）",
+  "find-and-modify": "按 `seq` 命中一篇后 `$set`，`new: true` 回读（先定位再写）",
+  "bulk-write-mixed": "一条 `bulkWrite` 混合 2 insert / 2 update / 2 delete（`admin` + `nsInfo`）",
+  "update-one-upsert": "`_id` 不存在时 `updateOne upsert`，断言每条都走 upsert 分支",
+  "getMore-pagination": "首包 `batchSize 25` 后续每页 `batchSize 100` 抽干（校验页数与游标存活）",
+  "delete-many-range": "10 条 `seq` 区间删除各 100 篇（`limit: 0`）",
   "find-projection-sort": "投影 `{seq, price}` 加 `price desc, seq asc` 排序取 20",
   "cursor-paginate": "`batchSize 100` 分页抽干 1000 篇（每页一条 `getMore`）",
   "error-command": "未知命令往返，断言 `code 59 CommandNotFound`",
@@ -911,9 +1143,21 @@ async function main() {
     "  其余路径不再把应答转成 Extended JSON 再序列化回去。`ping` 的独立收益约 5%（对 200 条命令的中位数），",
     "  写命令被整快照落盘淹没，差异在噪声内；本轮保留是为了与读路径统一字节语义，而不是把它记作提速项。",
     "- **空查询 `count` 不再解码整集合**：没有 filter、`skip`、`limit` 与 `hint` 时，计数就是事务视图或已提交数据的条数，",
-    `  不必把每篇文档解析成 \`BsonDocument\`。\`count-command\` 从整表解析降到 ${format(
+    `  不必把每篇文档解析成 \`BsonDocument\`。\`count-command\`（非空 query）从整表解析降到 ${format(
       rows.find((row) => row.workload.name === "count-command").ours.perOp,
-    )} ms/命令量级，AB 中位数约 5 倍提升。`,
+    )} ms/命令量级。`,
+    "- **非空 filter 的 `count` / `distinct` 只解码谓词与取值字段**：谓词引用的顶层字段之外按 BSON 长度跳过，",
+    "  `$where` / `$expr` 一类无法静态分析的算子自动退回整篇解码；`count` 同时复用 `skip + limit` 早停边界。",
+    "  AB 中位数：非空 `count` 约 2.0–2.6 ms → 0.8–0.9 ms，`distinct` 约 1.9–2.7 ms → 1.1–1.8 ms。",
+    "- **`findAndModify` 不再整表扫描两遍**：无排序时只读到第一篇命中，唯一键冲突改用已落盘索引项前缀探针，",
+    "  与 `update` 同一条路径；事务内或索引条目缺失时仍退回整表 map。AB 中位数约 12.2–14.5 ms → 7.5–9.1 ms。",
+    "- **`findAndModify` / `bulkWrite` 回复也走原生 `OP_MSG` 帧**：与 `insert` / `update` / `delete` 一致，",
+    "  宿主只读 `ok` 位，不再把应答转成 Extended JSON 再序列化回去。`bulkWrite` 每条操作仍各触发一次整快照落盘，",
+    "  所以这项收益被写地板淹没，AB 中位数在噪声内，保留是为了统一写路径的字节语义。",
+    "- **`getMore` 增量分页**：无排序、无 `skip` / `limit` 的普通集合扫描不再在 `find` 时物化整个结果集，",
+    "  首包只读一页，续扫位置（`after` + filter + projection）留在游标里，`getMore` 按需取下一页。",
+    "  抽干整个游标的总解码量不变，因此 `getMore-pagination` / `cursor-paginate` 的每文档中位数持平；",
+    "  收益在首包延迟与峰值内存：客户端只读首包时不再为未读文档付费。",
     "- **只读事务的分页扫描按已提交数据推进**：事务没有写过该命名空间时，`find` 的 `limit` 早停直接走分页扫描，",
     "  不再先合并整段事务视图；只有本命名空间存在暂存写入时才退回整段读。`transaction-range` 的 AB 中位数约 2.6 倍提升。",
     "- **读命令回复直接写原生 `OP_MSG` 帧**：`find` / `getMore` / `aggregate` 的回复由 Rust 一侧编码成 BSON 载荷，",
@@ -944,12 +1188,18 @@ async function main() {
     )} ms 量级，读路径没有再随规模增长的缺陷。`,
     "- 事务视图分页早停已落地：只读事务的 `limit` 查询不再先合并整段视图，AB 中位数从约 0.75 ms/命令降到约 0.29 ms/命令。",
     "- 空查询 `count` 已跳过整表解码：AB 中位数从约 2.06 ms/命令降到约 0.42 ms/命令。",
+    "- 非空 filter 的 `count` / `distinct` 已按谓词字段投影解码：AB 中位数 `count` 约 2.0–2.6 → 0.8–0.9 ms，`distinct` 约 1.9–2.7 → 1.1–1.8 ms。",
+    "- `findAndModify` 已改为单命中早停 + 索引项探针：AB 中位数约 12.2–14.5 → 7.5–9.1 ms，剩余成本仍是每次更新的整快照提交。",
+    "- `getMore` 已改为增量续扫：抽干游标的每文档成本持平，首包之外的文档不再在 `find` 时读入内存。",
+    "- `bulkWrite` 的原生帧未带来可测收益：一条混合 6 操作约 70–100 ms，主体是 6 次整快照提交，帧编码占比在噪声内。",
     "",
     "## 不计入比值的边界",
     "",
     "- 本机没有 `mongod`、也没有 Docker，真实服务端对比列为 CI-only；这里的数字只描述本仓服务端成本。",
     "- 本仓服务端是 TypeScript `net` 监听，每条命令的处理路径不含上游 `database.server::yyds::mongo::service` 的",
     "  监听循环，因此该循环的 `WouldBlock` 睡眠不在本基准的测量范围内。",
+    "- 本轮改动在共享开发机上做新旧交替 AB（legacy 与新路径各 3 轮取中位）；表格绝对值取自最后一次完整运行，",
+    "  若同时有其他仓的 benchmark 在跑会整体漂移，判断收益以 AB 成对中位为准。",
     "",
     "Regenerate: `pnpm --dir projects/mongo.ts/examples/vs-js-libraries benchmark:server`",
   ];
