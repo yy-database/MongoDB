@@ -7,18 +7,15 @@
 // leaves the connection that owns it.
 import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { binding } from './binding.ts'
-import {
-    builtinRoleExists,
-    BUILTIN_ROLE_NAMES,
-    expandRoles,
-    makeStoreResolver,
-    normalizePrivileges,
-    VALID_ACTIONS,
-    type Privilege,
-    type Resource,
-    type RoleResolver
-} from './authorization.ts'
 import { saslprep, SaslprepError } from './saslprep.ts'
+
+/** Built-in role names, resolved once from the native role table. */
+const BUILTIN_ROLE_NAMES = new Set<string>(binding.authorizationBuiltinRoleNames())
+
+/** `true` when `role@db` exists as a built-in role or as a stored custom role. */
+function roleExists(session: { store: any }, role: { role: string; db: string }): boolean {
+    return binding.authorizationRoleExists(session.store, role.role, role.db)
+}
 
 /** Mechanisms this server registers in user credentials. */
 export const SCRAM_MECHANISMS = ['SCRAM-SHA-256', 'SCRAM-SHA-1'] as const
@@ -204,7 +201,6 @@ export function createUserCommand(session: { store: any; cursors: any }, command
     // a string role names the current database. A name that is not a built-in
     // resolves against `<db>.system.roles`, exactly like the authorization
     // layer later does.
-    const resolve = makeStoreResolver(session)
     const roles: AuthRole[] = []
     for (const requested of command.roles) {
         let role: AuthRole
@@ -222,7 +218,7 @@ export function createUserCommand(session: { store: any; cursors: any }, command
         } else {
             return badValue('Role name must be either a document or string')
         }
-        if (!builtinRoleExists(role) && resolve(role) === null) {
+        if (!roleExists(session, role)) {
             return authError(31, 'RoleNotFound', `Could not find role: ${role.role}@${role.db}`)
         }
         roles.push(role)
@@ -355,7 +351,6 @@ export function createRoleCommand(session: { store: any; cursors: any }, command
         return authError(51002, 'Location51002', `Role "${name}@${db}" already exists`)
     }
 
-    const resolve = makeStoreResolver(session)
     const granted: AuthRole[] = []
     for (const requested of command.roles) {
         let role: AuthRole
@@ -379,7 +374,7 @@ export function createRoleCommand(session: { store: any; cursors: any }, command
         if (db !== 'admin' && role.db !== db) {
             return authError(49, 'InvalidRoleModification', `Roles on the '${db}' database cannot be granted roles from other databases`)
         }
-        if (!builtinRoleExists(role) && resolve(role) === null) {
+        if (!roleExists(session, role)) {
             return authError(
                 31,
                 'RoleNotFound',
@@ -390,7 +385,7 @@ export function createRoleCommand(session: { store: any; cursors: any }, command
         if (!granted.some((entry) => `${entry.db}.${entry.role}` === key)) granted.push(role)
     }
 
-    const privileges: Privilege[] = []
+    const privileges: { resource: any; actions: string[] }[] = []
     for (let index = 0; index < command.privileges.length; index += 1) {
         const entry = command.privileges[index]
         if (!isDocumentValue(entry)) {
@@ -414,11 +409,11 @@ export function createRoleCommand(session: { store: any; cursors: any }, command
             if (typeof action !== 'string') {
                 return typeMismatch(`createRole.privileges.actions.${position}`, typeName(action), 'string')
             }
-            if (!VALID_ACTIONS.has(action)) return badValue(`Unknown action type in privilege set: '${action}'`)
+            if (!binding.authorizationValidAction(action)) return badValue(`Unknown action type in privilege set: '${action}'`)
             actions.push(action)
         }
         if (actions.length === 0) return badValue("'actions' field of privilege resource must not be empty")
-        const resource: Resource = isDocumentValue(entry.resource) ? entry.resource : {}
+        const resource: any = isDocumentValue(entry.resource) ? entry.resource : {}
         privileges.push({ resource, actions })
     }
 
@@ -426,7 +421,7 @@ export function createRoleCommand(session: { store: any; cursors: any }, command
         _id: `${db}.${name}`,
         role: name,
         db,
-        privileges: normalizePrivileges(privileges),
+        privileges: JSON.parse(binding.authorizationNormalizePrivileges(JSON.stringify(privileges))),
         roles: granted
     }
     if (Object.hasOwn(command, 'authenticationRestrictions')) {
@@ -765,7 +760,7 @@ function sortedRoles(document: any): AuthRole[] {
 }
 
 /** One entry of `usersInfo.users`, in `mongod`'s field order. */
-function userReport(document: any, showCredentials: boolean, showPrivileges: boolean, resolve: RoleResolver): any {
+function userReport(document: any, showCredentials: boolean, showPrivileges: boolean, session: { store: any }): any {
     const report: any = {
         _id: document._id,
         userId: document.userId,
@@ -786,7 +781,7 @@ function userReport(document: any, showCredentials: boolean, showPrivileges: boo
     if (showPrivileges) {
         // The same expansion the dispatch layer enforces answers here, so a
         // reported privilege is always one that would be honoured.
-        const expanded = expandRoles(report.roles, resolve)
+        const expanded = JSON.parse(binding.authorizationExpandRoles(session.store, JSON.stringify(report.roles)))
         report.inheritedRoles = expanded.inheritedRoles
         report.inheritedPrivileges = expanded.privileges
         report.inheritedAuthenticationRestrictions = expanded.authenticationRestrictions
@@ -828,7 +823,7 @@ export function usersInfoCommand(session: { store: any; cursors: any }, command:
             }
         }
     }
-    return { users: documents.map((document) => userReport(document, showCredentials, showPrivileges, makeStoreResolver(session))), ok: OK }
+    return { users: documents.map((document) => userReport(document, showCredentials, showPrivileges, session)), ok: OK }
 }
 
 /** Commands `mongod 8.0.9` answers before authentication. */

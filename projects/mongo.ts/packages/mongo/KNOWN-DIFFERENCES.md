@@ -109,8 +109,8 @@ Remaining limits:
 
 `--auth` is now an authorization boundary, not just an identity check. Built-in
 roles and custom roles stored in `<db>.system.users` / `<db>.system.roles` are
-expanded into privileges by one path in `src/authorization.ts`, and the same
-expansion feeds `showPrivileges`, so the enforced and reported sets cannot
+expanded into privileges by one path in the facade's `authorization` module, so
+the same expansion feeds `showPrivileges`, and the enforced and reported sets cannot
 drift. The command-to-action mapping covers
 `find`, `count`, `distinct`, `aggregate`, `explain`, `insert`, `update`,
 `delete`, `findAndModify`, `bulkWrite`, `create`, `collMod`, `createIndexes`,

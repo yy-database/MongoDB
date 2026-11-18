@@ -1,10 +1,11 @@
 # Authorization matrix
 
 Every command this server answers passes through one authorization layer
-(`src/authorization.ts`) before the dispatcher in `src/server.ts` runs it. The
-N-API, PyO3 and WASM crates export storage primitives only and contain no
-authorization code; the TypeScript server is the single implementation used by
-the TypeScript, Python and browser paths. There is no second copy to drift.
+(the `authorization` module of the storage-backed `mongo` facade, reached
+through the native binding) before the dispatcher in `src/server.ts` runs it.
+The bindings only convert JSON and map errors and contain no authorization
+logic; the facade is the single implementation used by the TypeScript, Python
+and browser paths. There is no second copy to drift.
 
 Expected values in this document come from a real `mongod 8.0.9`. The command
 verdicts were read from an instance started with `--auth` on an otherwise empty
@@ -174,7 +175,7 @@ still ignores the field.
 ## 5.2 Built-in role expansions
 
 Captured from the real server with `usersInfo` + `showPrivileges` and
-transcribed into `src/authorization.ts` (fixture:
+transcribed into the facade's role table (fixture:
 `tests/oracle-showprivileges.json`). Privilege counts, in reply order:
 
 | Role | Privileges | Scope rule |
@@ -303,7 +304,7 @@ Observed, in the order used by the tables:
 - `validate`: `read` 13, `dbAdmin` executes, `clusterAdmin` 13.
 - Unknown command: 59 as `read` and as `root`.
 - `usersInfo` with `showPrivileges` for each of the seventeen built-in roles:
-  the expansions transcribed into `src/authorization.ts` and into
+  the expansions transcribed into the facade's role table and into
   `tests/oracle-showprivileges.json`, captured on the standalone instance
   (one user per role, granted on `admin`).
 - `createUser` with `readAnyDatabase@test`, `clusterMonitor@test`, `root@test`

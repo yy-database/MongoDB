@@ -10,11 +10,11 @@ import net from 'node:net'
 import os from 'node:os'
 import { join, resolve } from 'node:path'
 import {
+    createAuthState,
     allowedBeforeAuth,
     anyUserExists,
     authError,
     authenticationRequired,
-    createAuthState,
     createRoleCommand,
     createUserCommand,
     dropRoleCommand,
@@ -26,27 +26,6 @@ import {
     usersInfoCommand,
     type AuthState
 } from './auth.ts'
-import {
-    createReplicaState,
-    noteWrite,
-    numberValue,
-    replicaCommand,
-    replicaError,
-    repliesAreStamped,
-    restoreReplicaConfig,
-    stampReply,
-    topologyHandshake,
-    writeStamps,
-    type ReplicaState
-} from './replica.ts'
-import {
-    evaluateWriteConcern,
-    readPreferenceError,
-    WRITE_CONCERN_COMMANDS,
-    writeConcernReply,
-    type WriteConcernDecision
-} from './write-concern.ts'
-import { authorizeCommand, clusterGrants, databaseInScope, makeStoreResolver, privilegesForRoles } from './authorization.ts'
 import { binding } from './binding.ts'
 import { compress } from './compression.ts'
 import {
@@ -125,7 +104,8 @@ interface ServerView {
     openConnections: number
     totalConnections: number
     dataDir: string
-    replica: ReplicaState
+    /** Replica-set state owned by the native facade. */
+    replica: any
     /** Every live connection's cursor table, so a drop reaches all of them. */
     cursorTables: Set<any>
     /** Per-server counters, answered by `serverStatus`. */
@@ -192,10 +172,22 @@ function countCommand(counters: ServerCounters, name: string, command: any): voi
 
 /** Per-request write-concern result, filled by `dispatch` and read by `settleWrite`. */
 interface WriteSlot {
-    decision: WriteConcernDecision | null
+    /** Extended JSON of the native `writeConcern` decision, or `null`. */
+    decision: string | null
 }
 
 const OK = { $numberDouble: '1.0' }
+
+/** An extended-JSON number: `$numberInt` inside 32 bits, `$numberLong` outside. */
+function numberValue(value: number): any {
+    if (value >= -2_147_483_648 && value <= 2_147_483_647) return { $numberInt: String(value) }
+    return { $numberLong: String(value) }
+}
+
+/** A replica-set failure reply, in `mongod`'s field order. */
+function replicationError(code: number, codeName: string, message: string): any {
+    return { ok: { $numberDouble: '0.0' }, errmsg: message, code: numberValue(code), codeName }
+}
 
 /**
  * A reply the primitive already encoded as an `OP_MSG` payload (zero flags, one
@@ -228,16 +220,19 @@ function rawWrite(frame: { payload: Buffer; ok: boolean }): RawReply {
  * Adds the replica-set stamps to a reply. A raw payload is decoded only when
  * the member really stamps replies, which a standalone server never does.
  */
-function stampedReply(state: ReplicaState, command: any, body: any): any {
+function stampedReply(state: any, command: any, body: any): any {
     if (body instanceof RawReply) {
-        if (!repliesAreStamped(state)) return body
+        if (!state.stamping) return body
         return stampReply(state, command, unwrapRawReply(body))
     }
     return stampReply(state, command, body)
 }
 
-/** Commands that advance the replica-set `optime`, as `mongod`'s writes do. */
-const WRITE_COMMANDS = WRITE_CONCERN_COMMANDS
+/** Native stamping: the facade owns `$clusterTime` and `operationTime`. */
+function stampReply(state: any, command: any, body: any): any {
+    if (!state.stamping) return body
+    return document(state.stampReply(commandText(command), commandText(body)))
+}
 
 function replyOk(body: any): boolean {
     if (body instanceof RawReply) return body.ok
@@ -261,14 +256,8 @@ function moreToCome(inbound: InboundFrame): boolean {
  * discarded. A write that changed nothing stages nothing, and its `opTime` is
  * the unchanged last timestamp, which is what `mongod` reports.
  */
-function settleWrite(
-    store: any,
-    state: ReplicaState,
-    name: unknown,
-    body: any,
-    decision: WriteConcernDecision | null
-): any {
-    if (typeof name !== 'string' || !WRITE_CONCERN_COMMANDS.has(name)) return body
+function settleWrite(store: any, state: any, name: unknown, body: any, decision: string | null): any {
+    if (typeof name !== 'string' || !binding.writeConcernCommand(name)) return body
     const ok = replyOk(body)
     if (!ok) {
         binding.discardOplog(store)
@@ -276,65 +265,29 @@ function settleWrite(
     }
     const last = binding.commitOplog(store, Date.now())
     if (typeof last === 'string') {
-        const optime = JSON.parse(last)
-        noteWrite(state, { t: optime.t, i: optime.i })
+        state.noteWrite(last)
     }
     // The primitive already wrote `mongod`'s field order. Only a stamp, a
     // write-concern error, or an unacknowledged reply really has to be
     // rewritten, so the common path sends the native payload untouched.
-    const decorate = decision?.unacknowledged === true || decision?.writeConcernError != null || repliesAreStamped(state)
+    const parsed = decision === null ? null : JSON.parse(decision)
+    const decorate = parsed?.unacknowledged === true || parsed?.writeConcernError != null || state.stamping
     if (body instanceof RawReply && !decorate) return body
-    return writeConcernReply(name, body instanceof RawReply ? unwrapRawReply(body) : body, decision, writeStamps(state), ok)
+    return document(
+        binding.writeConcernReply(
+            name,
+            commandText(body instanceof RawReply ? unwrapRawReply(body) : body),
+            decision,
+            state.writeStamps(),
+            ok
+        )
+    )
 }
 
-/**
- * `commitTransaction` / `abortTransaction` validation, measured on
- * `mongod 8.0.9` (single-member replica set, raw `OP_MSG` probes):
- *
- * - `autocommit: true` answers `72 InvalidOptions` with
- *   "Specifying autocommit=true is not allowed.";
- * - `autocommit: false` without a `txnNumber` answers `72 InvalidOptions`
- *   with "'autocommit' field requires a transaction number to also be
- *   specified";
- * - a `txnNumber` without an `lsid` answers `72 InvalidOptions` with
- *   "Transaction number requires a session ID to also be specified";
- * - a `txnNumber` without `autocommit: false` answers
- *   `50768 NotARetryableWriteCommand` naming the command;
- * - neither `txnNumber` nor `autocommit` answers `125 CommandFailed`
- *   "<name> must be run within a transaction";
- * - a well-formed commit/abort only runs against `admin`: any other command
- *   database answers `13 Unauthorized` "<name> may only be run against the
- *   admin database." (the autocommit checks above win over this one, which
- *   is the measured order).
- */
+/** `commitTransaction` / `abortTransaction` validation, owned by the facade. */
 function transactionCommandError(name: string, command: any): any | null {
-    const autocommit = command.autocommit
-    const hasTxnNumber = command.txnNumber !== undefined
-    const hasLsid = command.lsid !== undefined
-    if (autocommit === true) {
-        return { ok: { $numberDouble: '0.0' }, errmsg: 'Specifying autocommit=true is not allowed.', code: numberValue(72), codeName: 'InvalidOptions' }
-    }
-    if (autocommit === false && !hasTxnNumber) {
-        return { ok: { $numberDouble: '0.0' }, errmsg: "'autocommit' field requires a transaction number to also be specified", code: numberValue(72), codeName: 'InvalidOptions' }
-    }
-    if (hasTxnNumber && !hasLsid) {
-        return { ok: { $numberDouble: '0.0' }, errmsg: 'Transaction number requires a session ID to also be specified', code: numberValue(72), codeName: 'InvalidOptions' }
-    }
-    if (hasTxnNumber && autocommit === undefined) {
-        return {
-            ok: { $numberDouble: '0.0' },
-            errmsg: `txnNumber may only be provided for multi-document transactions and retryable write commands. autocommit:false was not provided, and ${name} is not a retryable write command.`,
-            code: numberValue(50768),
-            codeName: 'NotARetryableWriteCommand'
-        }
-    }
-    if (!hasTxnNumber && autocommit === undefined) {
-        return { ok: { $numberDouble: '0.0' }, errmsg: `${name} must be run within a transaction`, code: numberValue(125), codeName: 'CommandFailed' }
-    }
-    if ((command.$db ?? 'admin') !== 'admin') {
-        return { ok: { $numberDouble: '0.0' }, errmsg: `${name} may only be run against the admin database.`, code: numberValue(13), codeName: 'Unauthorized' }
-    }
-    return null
+    const reply = binding.transactionCommandError(name, commandText(command))
+    return typeof reply === 'string' ? document(reply) : null
 }
 
 /**
@@ -453,6 +406,12 @@ function hasCurrentOpStage(stage: any): boolean {
     return typeof stage === 'object' && stage !== null && Object.hasOwn(stage, '$currentOp')
 }
 
+/** Native authorization verdict for the authenticated session. */
+function authorizeCommand(session: Session, command: any): any | null {
+    const reply = binding.authorizationAuthorize(session.store, JSON.stringify(session.auth.roles), commandText(command))
+    return typeof reply === 'string' ? document(reply) : null
+}
+
 /**
  * The retry-registry key of a command that may be answered from a stored
  * reply, or `null`. The auth gates `dispatch` applies are re-checked here, so
@@ -552,9 +511,15 @@ function listDatabasesCommand(session: Session, command: any, authRequired: bool
     const reply = document(binding.listDatabases(session.store))
     const databases = Array.isArray(reply.databases) ? reply.databases : null
     if (!authRequired || session.auth.users.length === 0 || databases === null) return reply
-    const privileges = privilegesForRoles(session.auth.roles, makeStoreResolver(session))
-    if (clusterGrants(privileges, 'listDatabases')) return reply
-    const scoped = databases.filter((entry: any) => typeof entry?.name === 'string' && databaseInScope(privileges, entry.name))
+    // `null` means the caller holds the cluster-wide `listDatabases` action.
+    const names: string[] | null = binding.authorizationDatabaseScope(
+        session.store,
+        JSON.stringify(session.auth.roles),
+        JSON.stringify(databases.map((entry: any) => entry?.name))
+    )
+    if (names === null) return reply
+    const allowed = new Set(names)
+    const scoped = databases.filter((entry: any) => typeof entry?.name === 'string' && allowed.has(entry.name))
     if (command.nameOnly === true) {
         return { databases: scoped.map((entry: any) => ({ name: entry.name })), ok: reply.ok }
     }
@@ -600,7 +565,7 @@ function helloReply(command: any, supported: string[], session: Session, view: S
     const base = document(binding.hello())
     const name = Object.keys(command)[0]
     const result: any = {}
-    for (const [key, value] of topologyHandshake(view.replica, name)) result[key] = value
+    for (const [key, value] of Object.entries(document(view.replica.handshake(name)))) result[key] = value
     for (const [key, value] of Object.entries(base)) {
         if (key === 'ok' || key === 'isWritablePrimary') continue
         if (key === 'minWireVersion') result.connectionId = numberValue(session.connectionId)
@@ -640,14 +605,15 @@ function dispatch(
 
     // `$readPreference` is parsed and rejected like `mongod`; routing stays the
     // client's job, so the value is then ignored.
-    const preference = readPreferenceError(command)
-    if (preference) return document(binding.errorReply(preference.code, preference.message))
+    const preference = binding.readPreferenceError(commandText(command))
+    if (typeof preference === 'string') return document(preference)
 
     // A rejected write concern must stop the write before it happens, exactly
     // as `mongod` refuses `w: 2` on a standalone server.
-    if (WRITE_CONCERN_COMMANDS.has(name)) {
-        const decision = evaluateWriteConcern(command, view.replica.name)
-        if (decision.error) return document(binding.errorReply(decision.error.code, decision.error.message))
+    if (binding.writeConcernCommand(name)) {
+        const decision = binding.writeConcernDecision(commandText(command), view.replica.name)
+        const parsed = JSON.parse(decision)
+        if (parsed.error !== null) return parsed.error
         write.decision = decision
     }
 
@@ -657,11 +623,11 @@ function dispatch(
     }
     if (name === 'replSetInitiate' || name === 'replSetGetConfig' || name === 'replSetGetStatus') {
         countCommand(view.counters, name, command)
-        const reply = replicaCommand(view.replica, name, command, me)
+        const reply = document(view.replica.command(name, commandText(command), me))
         // A successful initiation persists the set document, like `mongod`
         // writing `local.system.replset` before it answers.
-        if (name === 'replSetInitiate' && replyOk(reply) && !writeStoredReplicaConfig(session.store, view.replica.config)) {
-            return replicaError(96, 'OperationFailed', 'replica set configuration could not be persisted')
+        if (name === 'replSetInitiate' && replyOk(reply) && !writeStoredReplicaConfig(session.store, JSON.parse(view.replica.config()))) {
+            return replicationError(96, 'OperationFailed', 'replica set configuration could not be persisted')
         }
         return reply
     }
@@ -921,13 +887,13 @@ export function createServer(options: ServerOptions): MongoServer {
         binding.enableOplog(store, 'local.oplog.rs', megabytes * 1024 * 1024)
     }
     const authRequired = options.auth === true
-    const replica = createReplicaState(options.replSet ?? null)
+    const replica = new binding.MongoReplicaSet(options.replSet ?? null)
     // `mongod` reads `local.system.replset` at startup and rejoins the set
     // without a second `replSetInitiate`; the same restore happens here, so a
     // restarted member answers `hello` and `replSetGetStatus` as PRIMARY.
     if (options.replSet !== undefined) {
         const stored = readStoredReplicaConfig(store)
-        if (stored !== null) restoreReplicaConfig(replica, stored)
+        if (stored !== null) replica.restoreConfig(commandText(stored))
     }
     const retries = new RetryRegistry()
     const stats: ServerStats = { connections: 0, compressedRequests: 0, compressedReplies: 0, negotiated: [] }
@@ -949,7 +915,7 @@ export function createServer(options: ServerOptions): MongoServer {
             cursors,
             negotiated: [],
             auth: createAuthState(),
-            connectionId: (replica.connectionCounter += 1)
+            connectionId: replica.nextConnectionId()
         }
 
         let buffer = Buffer.alloc(0)
