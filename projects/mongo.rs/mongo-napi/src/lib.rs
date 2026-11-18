@@ -10,12 +10,15 @@ use database::harness::{
     summarize,
 };
 use mongo::{
-    bson::BsonDocument,
+    authorization,
+    bson::{BsonDocument, BsonValue},
     commands::{self, CommandError},
     cursor::CursorStore,
     json,
+    replica,
     store::Store,
     wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
+    write_concern,
 };
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
@@ -26,6 +29,22 @@ fn decode_command(text: &str) -> Result<BsonDocument> {
 
 fn reply(document: &BsonDocument) -> String {
     json::document_to_json(document)
+}
+
+/// 解析一个 Extended JSON 值（数组、标量或文档）。
+fn decode_value(text: &str) -> Result<BsonValue> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|error| Error::new(Status::InvalidArg, error.to_string()))?;
+    json::from_json(&value).map_err(|message| Error::new(Status::InvalidArg, message))
+}
+
+/// 把 BSON 值渲染成规范 Extended JSON。
+fn encode_value(value: &BsonValue) -> String {
+    json::to_json(value).to_string()
+}
+
+/// 把命令原语返回的 `Result` 映射成 napi 错误。
+fn policy_error(message: String) -> Error {
+    Error::new(Status::GenericFailure, message)
 }
 
 fn command_reply(result: std::result::Result<BsonDocument, CommandError>) -> String {
@@ -550,4 +569,272 @@ pub fn harness_bench_per_op(stats: BenchStats, ops: u32) -> Result<f64> {
         u64::from(ops),
     )
     .map_err(harness_error)
+}
+
+// ---------------------------------------------------------------------------
+// 授权判定、副本集状态与 writeConcern 语义
+//
+// 这些领域规则都在 `mongo` 库里，绑定只做 JSON 形态转换：入参是 Extended JSON
+// 文本，出参是可直接写回线的应答片段。
+// ---------------------------------------------------------------------------
+
+/// 从 JSON 文本读出角色列表。
+fn roles_of(text: &str) -> Result<Vec<authorization::RoleRef>> {
+    let value = decode_value(text)?;
+    Ok(authorization::roles_from_value(Some(&value)))
+}
+
+/// 从 JSON 文本读出权限列表。
+fn privileges_of(text: &str) -> Result<Vec<authorization::Privilege>> {
+    let value = decode_value(text)?;
+    Ok(authorization::privileges_from_value(Some(&value)))
+}
+
+/// 命令授权判定：允许时返回 `null`，否则返回 `Unauthorized` 应答。
+#[napi]
+pub fn authorization_authorize(store: &MongoStore, roles: String, command: String) -> Result<Option<String>> {
+    let roles = roles_of(&roles)?;
+    let command = decode_command(&command)?;
+    let resolver = authorization::StoreRoleResolver::new(store_of(store));
+    Ok(authorization::authorize_command(&roles, &command, &resolver).map(|document| reply(&document)))
+}
+
+/// 展开角色集合：`{ privileges, inheritedRoles, authenticationRestrictions }`。
+#[napi]
+pub fn authorization_expand_roles(store: &MongoStore, roles: String) -> Result<String> {
+    let roles = roles_of(&roles)?;
+    let resolver = authorization::StoreRoleResolver::new(store_of(store));
+    let expansion = authorization::expand_roles(&roles, &resolver);
+    let mut document = BsonDocument::new();
+    document.push("privileges".to_string(), authorization::privileges_to_value(&expansion.privileges));
+    document.push("inheritedRoles".to_string(), authorization::roles_to_value(&expansion.inherited_roles));
+    document.push("authenticationRestrictions".to_string(), BsonValue::Array(expansion.authentication_restrictions));
+    Ok(reply(&document))
+}
+
+/// 角色集合展开后的权限数组。
+#[napi]
+pub fn authorization_privileges_for_roles(store: &MongoStore, roles: String) -> Result<String> {
+    let roles = roles_of(&roles)?;
+    let resolver = authorization::StoreRoleResolver::new(store_of(store));
+    Ok(encode_value(&authorization::privileges_to_value(&authorization::privileges_for_roles(&roles, &resolver))))
+}
+
+/// 合并重复资源并按 `mongod` 规范顺序排列动作。
+#[napi]
+pub fn authorization_normalize_privileges(privileges: String) -> Result<String> {
+    let privileges = privileges_of(&privileges)?;
+    Ok(encode_value(&authorization::privileges_to_value(&authorization::normalize_privileges(&privileges))))
+}
+
+/// `role@db` 是否内置角色。
+#[napi]
+pub fn authorization_builtin_role_exists(role: String, db: String) -> bool {
+    authorization::builtin_role_exists(&role, &db)
+}
+
+/// 全部内置角色名。
+#[napi]
+pub fn authorization_builtin_role_names() -> Vec<String> {
+    authorization::builtin_role_names()
+}
+
+/// `action` 是否是 `mongod` 接受的 action 名。
+#[napi]
+pub fn authorization_valid_action(action: String) -> bool {
+    authorization::is_valid_action(&action)
+}
+
+/// `role@db` 是否存在（内置或 `<db>.system.roles` 里）。
+#[napi]
+pub fn authorization_role_exists(store: &MongoStore, role: String, db: String) -> bool {
+    if authorization::builtin_role_exists(&role, &db) {
+        return true;
+    }
+    let resolver = authorization::StoreRoleResolver::new(store_of(store));
+    authorization::RoleResolver::resolve(&resolver, &role, &db).is_some()
+}
+
+/// `listDatabases` 的可见范围：`null` 表示全部可见，否则是允许看到的库名。
+#[napi]
+pub fn authorization_database_scope(store: &MongoStore, roles: String, databases: String) -> Result<Option<Vec<String>>> {
+    let roles = roles_of(&roles)?;
+    let databases = match decode_value(&databases)? {
+        BsonValue::Array(entries) => entries
+            .iter()
+            .filter_map(|entry| match entry {
+                BsonValue::String(name) => Some(name.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let resolver = authorization::StoreRoleResolver::new(store_of(store));
+    Ok(authorization::database_scope(&roles, &databases, &resolver))
+}
+
+/// 该命令的应答是否经 `writeConcern` 确认。
+#[napi]
+pub fn write_concern_command(name: String) -> bool {
+    write_concern::is_write_concern_command(&name)
+}
+
+/// `writeConcern` 判定：`{ unacknowledged, error, writeConcernError }`。
+#[napi]
+pub fn write_concern_decision(command: String, replica_set_name: Option<String>) -> Result<String> {
+    let command = decode_command(&command)?;
+    let decision = write_concern::evaluate_write_concern(&command, replica_set_name.as_deref());
+    let mut document = BsonDocument::new();
+    document.push("unacknowledged".to_string(), BsonValue::Bool(decision.unacknowledged));
+    document.push(
+        "error".to_string(),
+        match &decision.error {
+            Some(error) => BsonValue::Document(commands::error_document(error)),
+            None => BsonValue::Null,
+        },
+    );
+    document.push("writeConcernError".to_string(), decision.write_concern_error.clone().unwrap_or(BsonValue::Null));
+    Ok(reply(&document))
+}
+
+/// `$readPreference` 校验：合法返回 `null`，否则返回错误应答。
+#[napi]
+pub fn read_preference_error(command: String) -> Result<Option<String>> {
+    let command = decode_command(&command)?;
+    Ok(write_concern::read_preference_error(&command).map(|error| reply(&commands::error_document(&error))))
+}
+
+/// 按 `mongod` 的字段顺序重写成功的写应答。
+#[napi]
+pub fn write_concern_reply(
+    name: String,
+    body: String,
+    decision: Option<String>,
+    stamps: Option<String>,
+    ok: bool,
+) -> Result<String> {
+    let body = decode_command(&body)?;
+    let stamps = match stamps {
+        Some(text) => Some(decode_command(&text)?),
+        None => None,
+    };
+    let decision = match decision {
+        Some(text) => {
+            let document = decode_command(&text)?;
+            let unacknowledged = matches!(document.get("unacknowledged"), Some(BsonValue::Bool(true)));
+            let write_concern_error = match document.get("writeConcernError") {
+                Some(BsonValue::Null) | None => None,
+                Some(value) => Some(value.clone()),
+            };
+            Some(write_concern::WriteConcernDecision { unacknowledged, error: None, write_concern_error })
+        }
+        None => None,
+    };
+    let reply_document = write_concern::write_concern_reply(&name, &body, decision.as_ref(), stamps.as_ref(), ok);
+    Ok(reply(&reply_document))
+}
+
+/// `commitTransaction` / `abortTransaction` 的参数校验。
+#[napi]
+pub fn transaction_command_error(name: String, command: String) -> Result<Option<String>> {
+    let command = decode_command(&command)?;
+    Ok(commands::transaction_command_error(&name, &command).map(|error| reply(&commands::error_document(&error))))
+}
+
+/// 单成员副本集状态。
+#[napi]
+pub struct MongoReplicaSet {
+    inner: replica::ReplicaSet,
+}
+
+#[napi]
+impl MongoReplicaSet {
+    /// 创建一个副本集状态；`name` 为空表示单机。
+    #[napi(constructor)]
+    pub fn new(name: Option<String>) -> Result<Self> {
+        let inner = replica::ReplicaSet::new(name).map_err(policy_error)?;
+        Ok(Self { inner })
+    }
+
+    /// `--replSet` 名字。
+    #[napi(getter)]
+    pub fn name(&self) -> Option<String> {
+        self.inner.name().map(str::to_string)
+    }
+
+    /// 应答是否携带 `$clusterTime`。
+    #[napi(getter)]
+    pub fn stamping(&self) -> bool {
+        self.inner.replies_are_stamped()
+    }
+
+    /// 按接受顺序分配连接标识。
+    #[napi]
+    pub fn next_connection_id(&mut self) -> u32 {
+        self.inner.next_connection_id()
+    }
+
+    /// 记录一次写入；`optime` 是 `{"t":…,"i":…}` 或 `null`。
+    #[napi]
+    pub fn note_write(&mut self, optime: Option<String>) -> Result<()> {
+        let optime = match optime {
+            Some(text) => {
+                let document = decode_command(&text)?;
+                let t = document.get("t").map(|value| match value {
+                    BsonValue::Int32(number) => *number as u32,
+                    BsonValue::Int64(number) => *number as u32,
+                    _ => 0,
+                });
+                let i = document.get("i").map(|value| match value {
+                    BsonValue::Int32(number) => *number as u32,
+                    BsonValue::Int64(number) => *number as u32,
+                    _ => 0,
+                });
+                Some((t.unwrap_or(0), i.unwrap_or(0)))
+            }
+            None => None,
+        };
+        self.inner.note_write(optime);
+        Ok(())
+    }
+
+    /// 追加 `$clusterTime` 与 `operationTime`。
+    #[napi]
+    pub fn stamp_reply(&mut self, command: String, body: String) -> Result<String> {
+        let command = decode_command(&command)?;
+        let body = decode_command(&body)?;
+        Ok(reply(&self.inner.stamp_reply(&command, &body)))
+    }
+
+    /// 写应答的 `electionId` 与 `opTime`；未初始化返回 `null`。
+    #[napi]
+    pub fn write_stamps(&self) -> Option<String> {
+        self.inner.write_stamps().map(|document| reply(&document))
+    }
+
+    /// `hello` / `isMaster` 的拓扑字段。
+    #[napi]
+    pub fn handshake(&self, command: String) -> String {
+        reply(&self.inner.topology_handshake(&command))
+    }
+
+    /// `replSetInitiate` / `replSetGetConfig` / `replSetGetStatus`。
+    #[napi]
+    pub fn command(&mut self, name: String, command: String, me: String) -> Result<String> {
+        let command = decode_command(&command)?;
+        self.inner.command(&name, &command, &me).map(|document| reply(&document)).map_err(policy_error)
+    }
+
+    /// 当前集合配置。
+    #[napi]
+    pub fn config(&self) -> Option<String> {
+        self.inner.config().map(reply)
+    }
+
+    /// 从 `local.system.replset` 恢复集合配置。
+    #[napi]
+    pub fn restore_config(&mut self, stored: String) -> Result<bool> {
+        let stored = decode_command(&stored)?;
+        self.inner.restore_config(&stored).map_err(policy_error)
+    }
 }
