@@ -333,6 +333,51 @@ fn discard_oplog(store: PyRef<'_, MongoStore>) {
     store.inner.discard_staged_oplog();
 }
 
+/// 一条重试写命令的登记键；不可重试或没有 `txnNumber` 时返回 `None`。
+#[pyfunction]
+fn retry_key<'py>(py: Python<'py>, name: &str, command: &str) -> PyResult<Option<Bound<'py, PyDict>>> {
+    let command = decode_command(command)?;
+    let Some(key) = mongo::retry::retry_key(name, &command) else {
+        return Ok(None);
+    };
+    let entry = PyDict::new(py);
+    entry.set_item("key", key.text())?;
+    entry.set_item("stmt_id", key.stmt_id())?;
+    Ok(Some(entry))
+}
+
+/// 已落定写应答的登记表；宿主自己持有实例。
+#[pyclass]
+pub struct MongoRetryRegistry {
+    inner: mongo::retry::RetryRegistry,
+}
+
+#[pymethods]
+impl MongoRetryRegistry {
+    #[new]
+    fn new() -> Self {
+        Self { inner: mongo::retry::RetryRegistry::new() }
+    }
+
+    /// 取一条未过期的已落定应答，返回带 `retriedStmtIds` 的 Extended JSON。
+    fn get(&mut self, key: &str, stmt_id: i64, now_ms: i64) -> Option<String> {
+        self.inner.get(key, now_ms).map(|stored| reply(&mongo::retry::replayed_reply(&stored, stmt_id)))
+    }
+
+    /// 记下一次成功的写应答。
+    fn store(&mut self, key: &str, reply: &str, now_ms: i64) -> PyResult<()> {
+        let stored = decode_command(reply)?;
+        self.inner.store(key, &stored, now_ms);
+        Ok(())
+    }
+
+    /// 当前条目数。
+    #[getter]
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
 /// Imports a `mongodump` `.bson` document stream into one namespace.
 #[pyfunction]
 fn import_bson(store: PyRef<'_, MongoStore>, namespace: &str, bytes: &[u8]) -> PyResult<usize> {
@@ -415,6 +460,7 @@ fn harness_bench_per_op(stats: &Bound<'_, PyDict>, ops: u32) -> PyResult<f64> {
 fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<MongoStore>()?;
     module.add_class::<MongoCursors>()?;
+    module.add_class::<MongoRetryRegistry>()?;
     module.add_function(wrap_pyfunction!(decode_op_msg, module)?)?;
     module.add_function(wrap_pyfunction!(encode_op_msg, module)?)?;
     module.add_function(wrap_pyfunction!(encode_document, module)?)?;
@@ -441,6 +487,7 @@ fn mongo_pyo3(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(enable_oplog, module)?)?;
     module.add_function(wrap_pyfunction!(commit_oplog, module)?)?;
     module.add_function(wrap_pyfunction!(discard_oplog, module)?)?;
+    module.add_function(wrap_pyfunction!(retry_key, module)?)?;
     module.add_function(wrap_pyfunction!(coll_mod, module)?)?;
     module.add_function(wrap_pyfunction!(list_collections, module)?)?;
     module.add_function(wrap_pyfunction!(commit_transaction, module)?)?;

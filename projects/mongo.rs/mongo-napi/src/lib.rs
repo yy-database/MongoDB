@@ -838,3 +838,76 @@ impl MongoReplicaSet {
         self.inner.restore_config(&stored).map_err(policy_error)
     }
 }
+
+/// 一条重试写命令的登记身份：登记键文本与实际语句号。
+#[napi(object)]
+pub struct RetryKey {
+    /// 登记表使用的键文本。
+    pub key: String,
+    /// 缺失 `stmtId` 时为 `0`。
+    pub stmt_id: i64,
+}
+
+/// 一条重试写命令的登记键；不可重试或没有 `txnNumber` 时返回 `null`。
+#[napi]
+pub fn retry_key(name: String, command: String) -> Result<Option<RetryKey>> {
+    let command = decode_command(&command)?;
+    Ok(mongo::retry::retry_key(&name, &command).map(|key| RetryKey { key: key.text().to_string(), stmt_id: key.stmt_id() }))
+}
+
+/// 已落定写应答的登记表；宿主自己持有实例。
+#[napi]
+pub struct MongoRetryRegistry {
+    inner: mongo::retry::RetryRegistry,
+}
+
+#[napi]
+impl MongoRetryRegistry {
+    /// 空登记表。
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self { inner: mongo::retry::RetryRegistry::new() }
+    }
+
+    /// 取一条未过期的已落定应答，返回带 `retriedStmtIds` 的 Extended JSON。
+    #[napi]
+    pub fn get(&mut self, key: String, stmt_id: i64, now_ms: i64) -> Option<String> {
+        self.inner.get(&key, now_ms).map(|stored| reply(&mongo::retry::replayed_reply(&stored, stmt_id)))
+    }
+
+    /// 记下一次成功的写应答。
+    #[napi]
+    pub fn store(&mut self, key: String, reply: String, now_ms: i64) -> Result<()> {
+        let stored = decode_command(&reply)?;
+        self.inner.store(&key, &stored, now_ms);
+        Ok(())
+    }
+
+    /// 当前条目数。
+    #[napi(getter)]
+    pub fn len(&self) -> u32 {
+        self.inner.len() as u32
+    }
+}
+
+/// 一次写命令落定后的 oplog 提交或丢弃，并推进副本集 optime。
+///
+/// 返回最后一条 oplog 条目的 `{t,i}`，没有提交任何条目时为 `null`。
+#[napi]
+pub fn settle_write(store: &MongoStore, replica: &mut MongoReplicaSet, name: String, ok: bool, wall_millis: i64) -> Result<Option<String>> {
+    let last = mongo::replica::settle_write(store_of(store), &mut replica.inner, &name, ok, wall_millis)
+        .map_err(|error| policy_error(error.to_string()))?;
+    Ok(last.map(|(t, i)| format!("{{\"t\":{t},\"i\":{i}}}")))
+}
+
+/// 从 `local.system.replset` 读回集合配置并恢复到 `replica`。
+#[napi]
+pub fn restore_replica_config(store: &MongoStore, replica: &mut MongoReplicaSet) -> Result<bool> {
+    mongo::replica::restore_stored_config(store_of(store), &mut replica.inner).map_err(|error| policy_error(error.to_string()))
+}
+
+/// 把当前集合配置写进 `local.system.replset`。
+#[napi]
+pub fn persist_replica_config(store: &MongoStore, replica: &MongoReplicaSet) -> Result<bool> {
+    mongo::replica::persist_config(store_of(store), &replica.inner).map_err(|error| policy_error(error.to_string()))
+}
