@@ -48,3 +48,6 @@ dist/python/
 data/
 *.yykv
 .tmp/
+
+# npm secrets (nifty)
+.secrets/
