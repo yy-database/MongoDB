@@ -183,7 +183,7 @@ function localCommand(store, cursors, command) {
         case 'dropIndexes':
             return JSON.parse(binding.dropIndexes(store, text))
         case 'getMore':
-            return JSON.parse(binding.getMore(cursors, text))
+            return JSON.parse(binding.getMore(store, cursors, text))
         case 'killCursors':
             return JSON.parse(binding.killCursors(cursors, text))
         case 'findAndModify':
