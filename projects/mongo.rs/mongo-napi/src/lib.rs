@@ -10,6 +10,7 @@ use database::harness::{
     summarize,
 };
 use mongo::{
+    auth,
     authorization,
     bson::{BsonDocument, BsonValue},
     commands::{self, CommandError},
@@ -17,10 +18,13 @@ use mongo::{
     json,
     replica,
     store::Store,
-    wire::{decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
+    wire::{self, decode_op_msg_command, decode_op_query_command, encode_op_msg_body},
     write_concern,
 };
-use napi::{Error, Result, Status, bindgen_prelude::Buffer};
+use napi::{
+    Error, Result, Status,
+    bindgen_prelude::{Buffer, Function},
+};
 use napi_derive::napi;
 
 fn decode_command(text: &str) -> Result<BsonDocument> {
@@ -910,4 +914,350 @@ pub fn restore_replica_config(store: &MongoStore, replica: &mut MongoReplicaSet)
 #[napi]
 pub fn persist_replica_config(store: &MongoStore, replica: &MongoReplicaSet) -> Result<bool> {
     mongo::replica::persist_config(store_of(store), &replica.inner).map_err(|error| policy_error(error.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// 帧原语：组帧、封套展开与压缩器分派唯一归 `protocol.mongo`
+// ---------------------------------------------------------------------------
+
+/// 16 字节帧头的字段。
+#[napi(object)]
+pub struct WireFrameHeader {
+    /// 整帧长度，含 4 字节长度前缀自身。
+    pub total_length: u32,
+    /// 请求标识。
+    pub request_id: i32,
+    /// 应答对象标识。
+    pub response_to: i32,
+    /// 线协议操作码。
+    pub opcode: i32,
+}
+
+/// 一条完成展开的入站帧；`OP_COMPRESSED` 已解封套并按 id 分派解压。
+#[napi(object)]
+pub struct InboundWireFrame {
+    /// 服务端需要应答的操作码；压缩帧展开后为 OP_MSG。
+    pub opcode: i32,
+    /// 帧头里的请求标识。
+    pub request_id: i32,
+    /// 帧头里的应答对象标识。
+    pub response_to: i32,
+    /// 解压后的载荷；OP_MSG 时为 flags 加 sections。
+    pub payload: Buffer,
+    /// 压缩帧的压缩器 id；未压缩帧为 `null`。
+    pub compressor_id: Option<u32>,
+    /// 压缩帧封套声明的被包裹操作码。
+    pub original_opcode: Option<i32>,
+    /// 压缩帧封套声明的解压后字节数。
+    pub uncompressed_size: Option<i32>,
+}
+
+fn frame_error(error: wire::FrameError) -> Error {
+    Error::new(Status::InvalidArg, format!("mongo frame rejected: {error:?}"))
+}
+
+/// 只读帧头；不足 16 字节返回 `null`。
+#[napi]
+pub fn wire_peek_header(frame: Buffer) -> Option<WireFrameHeader> {
+    wire::peek_header(&frame).map(|header| WireFrameHeader {
+        total_length: header.total_length,
+        request_id: header.request_id,
+        response_to: header.response_to,
+        opcode: header.opcode,
+    })
+}
+
+/// 展开一条完整帧。Snappy 与 Zstd 走 `boost.data.compression`；
+/// Zlib 由宿主回调提供（如 `node:zlib`）。
+#[napi]
+pub fn wire_decode_frame(
+    frame: Buffer,
+    max_frame_size: Option<u32>,
+    mut zlib_decompress: Option<Function<(Buffer, u32), Buffer>>,
+) -> Result<InboundWireFrame> {
+    let limits = wire::FrameLimits { max_frame_size: max_frame_size.unwrap_or(48 * 1024 * 1024) };
+    let mut decompress = |compressed: &[u8], announced: usize| -> std::result::Result<Vec<u8>, String> {
+        let Some(callback) = &mut zlib_decompress else {
+            return Err("host provides no zlib decompressor".to_string());
+        };
+        match callback.call((Buffer::from(compressed), announced as u32)) {
+            Ok(output) => Ok(output.to_vec()),
+            Err(error) => Err(error.reason),
+        }
+    };
+    let inbound = wire::decode_frame(&frame, limits, &mut decompress).map_err(frame_error)?;
+    Ok(InboundWireFrame {
+        opcode: inbound.opcode,
+        request_id: inbound.header.request_id,
+        response_to: inbound.header.response_to,
+        payload: Buffer::from(inbound.payload),
+        compressor_id: inbound.envelope.map(|envelope| u32::from(envelope.compressor_id)),
+        original_opcode: inbound.envelope.map(|envelope| envelope.original_opcode),
+        uncompressed_size: inbound.envelope.map(|envelope| envelope.uncompressed_size),
+    })
+}
+
+/// 组一条 OP_MSG 帧：16 字节头加原始 body。
+#[napi]
+pub fn wire_encode_msg_frame(request_id: i32, response_to: i32, body: Buffer) -> Buffer {
+    Buffer::from(wire::encode_msg_frame(request_id, response_to, &body))
+}
+
+/// 组一条 `OP_COMPRESSED` 帧。
+#[napi]
+pub fn wire_encode_compressed_frame(
+    request_id: i32,
+    response_to: i32,
+    compressor_id: u32,
+    uncompressed_size: i32,
+    compressed: Buffer,
+) -> Buffer {
+    Buffer::from(wire::encode_compressed_frame(request_id, response_to, compressor_id as u8, uncompressed_size, &compressed))
+}
+
+/// 组一条遗留 OP_REPLY 帧。
+#[napi]
+pub fn wire_encode_reply_frame(request_id: i32, response_to: i32, document: Buffer) -> Buffer {
+    Buffer::from(wire::encode_reply_frame(request_id, response_to, &document))
+}
+
+// ---------------------------------------------------------------------------
+// Snappy：`OP_COMPRESSED` 的 block 编解码唯一归 `boost.data.compression`
+// ---------------------------------------------------------------------------
+
+fn compression_error(error: impl std::fmt::Debug) -> Error {
+    Error::new(Status::InvalidArg, format!("snappy codec rejected the input: {error:?}"))
+}
+
+/// 压缩为 snappy block 格式。
+#[napi]
+pub fn snappy_compress(input: Buffer) -> Buffer {
+    Buffer::from(data_compression::snappy::encode(&input))
+}
+
+/// 解压 snappy block 格式；`expected_size` 来自帧封套，产出必须精确一致。
+#[napi]
+pub fn snappy_decompress(input: Buffer, expected_size: u32) -> Result<Buffer> {
+    data_compression::snappy::decode(&input, usize::try_from(expected_size).unwrap_or(usize::MAX))
+        .map(Buffer::from)
+        .map_err(compression_error)
+}
+
+// ---------------------------------------------------------------------------
+// 认证：SCRAM 状态机与用户、角色命令唯一归 `execution::mongo::auth`
+// ---------------------------------------------------------------------------
+
+/// 单连接的认证状态：已认证用户、角色与进行中的 SASL 会话。
+#[napi]
+pub struct MongoAuthState {
+    pub(crate) inner: auth::AuthState,
+}
+
+#[napi]
+impl MongoAuthState {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self { inner: auth::AuthState::new() }
+    }
+
+    /// 是否已有认证用户（`mongod --auth` 门禁判断）。
+    #[napi]
+    pub fn has_users(&self) -> bool {
+        !self.inner.users.is_empty()
+    }
+
+    /// 已认证用户，Extended JSON 数组 `[{user, db}]`（`connectionStatus` 用）。
+    #[napi]
+    pub fn users_json(&self) -> String {
+        serde_json::to_string(
+            &self
+                .inner
+                .users
+                .iter()
+                .map(|identity| serde_json::json!({ "user": &identity.user, "db": &identity.db }))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|_| "[]".to_string())
+    }
+
+    /// 生效角色，Extended JSON 数组 `[{role, db}]`（授权判定与 `connectionStatus` 用）。
+    #[napi]
+    pub fn roles_json(&self) -> String {
+        serde_json::to_string(
+            &self
+                .inner
+                .roles
+                .iter()
+                .map(|role| serde_json::json!({ "role": &role.role, "db": &role.db }))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|_| "[]".to_string())
+    }
+}
+
+impl Default for MongoAuthState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn auth_session<'a>(
+    store: &'a MongoStore,
+    cursors: &'a mut MongoCursors,
+    state: &'a mut MongoAuthState,
+    entropy: &'a mut auth::SystemEntropy,
+) -> auth::AuthSession<'a> {
+    auth::AuthSession::new(store_of(store), &mut cursors.inner, &mut state.inner, entropy)
+}
+
+/// 逐个包装认证命令原语：入参与应答都是 Extended JSON。
+macro_rules! auth_command {
+    ($name:ident, $function:ident) => {
+        #[napi]
+        pub fn $name(
+            store: &MongoStore,
+            cursors: &mut MongoCursors,
+            auth_state: &mut MongoAuthState,
+            command: String,
+        ) -> Result<String> {
+            let command = decode_command(&command)?;
+            let mut entropy = auth::SystemEntropy::new();
+            let mut session = auth_session(store, cursors, auth_state, &mut entropy);
+            Ok(reply(&auth::$function(&mut session, &command)))
+        }
+    };
+}
+
+auth_command!(auth_create_user, create_user);
+auth_command!(auth_drop_user, drop_user);
+auth_command!(auth_create_role, create_role);
+auth_command!(auth_drop_role, drop_role);
+auth_command!(auth_users_info, users_info);
+auth_command!(auth_sasl_start, sasl_start);
+auth_command!(auth_sasl_continue, sasl_continue);
+
+/// `logout` 清空本连接的认证状态。
+#[napi]
+pub fn auth_logout(store: &MongoStore, cursors: &mut MongoCursors, auth_state: &mut MongoAuthState) -> String {
+    let mut entropy = auth::SystemEntropy::new();
+    let mut session = auth_session(store, cursors, auth_state, &mut entropy);
+    reply(&auth::logout(&mut session))
+}
+
+/// `saslSupportedMechs` 的应答面：`null`、`{mechanisms}` 或 `{error}`。
+#[napi]
+pub fn auth_sasl_supported_mechs(
+    store: &MongoStore,
+    cursors: &mut MongoCursors,
+    auth_state: &mut MongoAuthState,
+    spec: String,
+) -> Result<String> {
+    let value = decode_value(&spec)?;
+    let mut entropy = auth::SystemEntropy::new();
+    let mut session = auth_session(store, cursors, auth_state, &mut entropy);
+    Ok(match auth::sasl_supported_mechs(&mut session, &value) {
+        auth::SupportedMechs::None => "null".to_string(),
+        auth::SupportedMechs::Mechanisms(mechanisms) => serde_json::json!({ "mechanisms": mechanisms }).to_string(),
+        auth::SupportedMechs::Error(error) => reply(&error),
+    })
+}
+
+/// 库中是否已有任何用户（localhost exception 判定）。
+#[napi]
+pub fn auth_any_user_exists(store: &MongoStore) -> bool {
+    auth::any_user_exists(store_of(store))
+}
+
+/// 认证前放行的命令名。
+#[napi]
+pub fn auth_allowed_before_auth(name: String) -> bool {
+    auth::allowed_before_auth(&name)
+}
+
+/// 未认证执行命令时的 `13 Unauthorized` 应答，Extended JSON。
+#[napi]
+pub fn auth_authentication_required(name: String) -> String {
+    reply(&auth::authentication_required(&name))
+}
+
+// ---------------------------------------------------------------------------
+// 远程会话帧队列：拼帧、请求标识与 pending 配对唯一归 `database.client`
+// ---------------------------------------------------------------------------
+
+use database_client::mongo::session::{MongoWireSession as ClientWireSession, SessionError, WireEvent};
+
+fn session_error(error: SessionError) -> Error {
+    Error::new(Status::InvalidArg, error.to_string())
+}
+
+/// 一次会话事件的传输形态。
+#[napi(object)]
+pub struct WireEventDto {
+    /// `response` 或 `abandoned`。
+    pub kind: String,
+    /// `response` 事件：原请求的 `requestId`。
+    pub request_id: Option<i32>,
+    /// `response` 事件：完整应答帧字节。
+    pub frame: Option<Buffer>,
+    /// `abandoned` 事件：被清算的请求 `requestId` 列表。
+    pub request_ids: Option<Vec<i32>>,
+    /// `abandoned` 事件：中断原因。
+    pub reason: Option<String>,
+}
+
+fn event_dto(event: WireEvent) -> WireEventDto {
+    match event {
+        WireEvent::Response { request_id, frame } => {
+            WireEventDto { kind: "response".to_string(), request_id: Some(request_id), frame: Some(Buffer::from(frame)), request_ids: None, reason: None }
+        }
+        WireEvent::Abandoned { request_ids, reason } => {
+            WireEventDto { kind: "abandoned".to_string(), request_id: None, frame: None, request_ids: Some(request_ids), reason: Some(reason) }
+        }
+    }
+}
+
+/// 单连接的客户端帧会话：宿主喂字节、写回帧，本类型拥有配对规则。
+#[napi(js_name = "MongoWireSession")]
+pub struct NapiWireSession {
+    inner: ClientWireSession,
+}
+
+#[napi]
+impl NapiWireSession {
+    #[napi(constructor)]
+    pub fn new(max_frame_size: Option<i64>) -> Self {
+        Self {
+            inner: max_frame_size.map_or_else(ClientWireSession::new, ClientWireSession::with_max_frame_size),
+        }
+    }
+
+    /// 登记一条请求并返回写往 socket 的完整帧字节。
+    #[napi]
+    pub fn begin_request(&mut self, body: Buffer, more_to_come: Option<bool>) -> Result<Buffer> {
+        self.inner.begin_request(&body, more_to_come.unwrap_or(false)).map(Buffer::from).map_err(session_error)
+    }
+
+    /// 喂入收到的字节，返回本次凑齐的应答帧与中断事件。
+    #[napi]
+    pub fn push_bytes(&mut self, chunk: Buffer) -> Vec<WireEventDto> {
+        self.inner.push_bytes(&chunk).into_iter().map(event_dto).collect()
+    }
+
+    /// socket 错误 / 关闭：清算 pending 并中断会话。
+    #[napi]
+    pub fn fail_all(&mut self, reason: String) -> Option<WireEventDto> {
+        self.inner.fail_all(&reason).map(event_dto)
+    }
+
+    /// `hello` 握手是否已完成。
+    #[napi]
+    pub fn is_handshaked(&self) -> bool {
+        self.inner.is_handshaked()
+    }
+
+    /// 会话是否仍可发请求。
+    #[napi]
+    pub fn is_live(&self) -> bool {
+        self.inner.is_live()
+    }
 }
