@@ -8,7 +8,6 @@ import { type Document } from './bson.ts'
 import { asyncDisposeSymbol, type CommandRunner } from './cursor.ts'
 import { MongoError } from './errors.ts'
 import { encodeCommandText, MongoDb, parseReplyText } from './mongo.ts'
-import { encodeMsgFrame } from './wire.ts'
 
 export interface TcpEndpoint {
     host: string
@@ -24,8 +23,6 @@ export interface MongoDBClientOptions {
 
 const DEFAULT_PORT = 27017
 const MAX_FRAME_SIZE = 48_000_000
-/** The `OP_MSG` flag bit that says "do not wait for a reply" (`w: 0` writes). */
-const MORE_TO_COME = 2
 
 interface Pending {
     resolve: (frame: Buffer) => void
@@ -34,13 +31,12 @@ interface Pending {
 
 class WireRunner implements CommandRunner {
     #socket: net.Socket | null = null
-    #buffer: Buffer = Buffer.alloc(0)
-    #pending: Pending[] = []
-    #requestId = 0
-    #live = false
+    /** Frame queue rules — ids, pairing, handshake gate — live in `database.client`. */
+    #session = new binding.MongoWireSession(MAX_FRAME_SIZE)
+    #waiters = new Map<number, Pending>()
 
     get live(): boolean {
-        return this.#live
+        return this.#session.isLive()
     }
 
     async attach(endpoint: TcpEndpoint): Promise<void> {
@@ -53,31 +49,32 @@ class WireRunner implements CommandRunner {
         socket.on('error', (error) => this.#fail(error))
         socket.on('close', () => this.#fail(new Error('connection closed')))
         this.#socket = socket
-        this.#live = true
     }
 
     #onData(chunk: Buffer): void {
-        this.#buffer = Buffer.concat([this.#buffer, chunk])
-        for (;;) {
-            if (this.#buffer.length < 4) return
-            const total = this.#buffer.readInt32LE(0)
-            if (total < 16 || total > MAX_FRAME_SIZE) {
-                this.#fail(new Error(`frame announces an invalid length ${total}`))
-                this.#socket?.destroy()
-                return
+        for (const event of this.#session.pushBytes(chunk)) {
+            if (event.kind === 'response') {
+                const requestId = event.requestId as number
+                const waiter = this.#waiters.get(requestId)
+                this.#waiters.delete(requestId)
+                waiter?.resolve(event.frame as Buffer)
+                continue
             }
-            if (this.#buffer.length < total) return
-            const frame = Buffer.from(this.#buffer.subarray(0, total))
-            this.#buffer = this.#buffer.subarray(total)
-            const waiter = this.#pending.shift()
-            if (waiter !== undefined) waiter.resolve(frame)
+            // The core liquidated the queue (invalid length or unsolicited
+            // reply); settle the rest and drop the socket.
+            this.#fail(new Error(event.reason ?? 'connection lost'))
+            this.#socket?.destroy()
+            return
         }
     }
 
     #fail(error: Error): void {
-        this.#live = false
-        const pending = this.#pending.splice(0)
-        for (const waiter of pending) {
+        const event = this.#session.failAll(error.message)
+        const requestIds = event?.requestIds ?? [...this.#waiters.keys()]
+        for (const requestId of requestIds) {
+            const waiter = this.#waiters.get(requestId)
+            this.#waiters.delete(requestId)
+            if (waiter === undefined) continue
             // The request left the socket, so its outcome is genuinely unknown;
             // the caller decides whether repeating it is safe.
             waiter.reject(
@@ -93,7 +90,7 @@ class WireRunner implements CommandRunner {
     }
 
     async command(command: Document, unacknowledged = false): Promise<Document | null> {
-        if (!this.#live || this.#socket === null) {
+        if (!this.#session.isLive() || this.#socket === null) {
             throw new MongoError('client is not connected', { code: 'NotConnected', phase: 'execute', execution: 'not-sent', retry: 'never' })
         }
         const text = encodeCommandText(command)
@@ -109,23 +106,37 @@ class WireRunner implements CommandRunner {
                 cause: error
             })
         }
+        let frame: Buffer
+        try {
+            frame = this.#session.beginRequest(body, unacknowledged)
+        } catch (error) {
+            // The core refuses before the byte leaves: dead session, or a
+            // command that outran the `hello` handshake.
+            throw new MongoError((error as Error).message ?? String(error), {
+                code: 'NotConnected',
+                phase: 'execute',
+                execution: 'not-sent',
+                retry: 'never',
+                cause: error
+            })
+        }
         if (unacknowledged) {
-            body.writeInt32LE(MORE_TO_COME, 0)
-            this.#socket.write(encodeMsgFrame((this.#requestId += 1), 0, body))
+            this.#socket.write(frame)
             return null
         }
+        const requestId = binding.wirePeekHeader(frame).requestId
         return new Promise<Document>((resolvePromise, rejectPromise) => {
-            this.#pending.push({
-                resolve: (frame) => {
+            this.#waiters.set(requestId, {
+                resolve: (reply) => {
                     try {
-                        resolvePromise(parseReplyText(binding.decodeOpMsg(frame.subarray(16))))
+                        resolvePromise(parseReplyText(binding.decodeOpMsg(reply.subarray(16))))
                     } catch (error) {
                         rejectPromise(error)
                     }
                 },
                 reject: rejectPromise
             })
-            this.#socket?.write(encodeMsgFrame((this.#requestId += 1), 0, body))
+            this.#socket?.write(frame)
         })
     }
 

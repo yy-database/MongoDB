@@ -11,7 +11,6 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import zlib from 'node:zlib'
-import { decompress, snappyCompress, snappyDecompress } from '../src/compression.ts'
 import { createServer, negotiatedCompressors } from '../src/server.ts'
 import { decodeFrame, encodeCompressedFrame, encodeMsgFrame, OP_MSG, OP_QUERY } from '../src/wire.ts'
 import { binding } from '../src/binding.ts'
@@ -33,8 +32,8 @@ const MONGO_SNAPPY_REPLY =
     '16000001014011000000016f6b00000000000000f03f00'
 const MONGO_SNAPPY_BODY = '000000000011000000016f6b00000000000000f03f00'
 
-equal(snappyDecompress(Buffer.from(MONGO_SNAPPY_REPLY, 'hex'), 22).toString('hex'), MONGO_SNAPPY_BODY, 'snappy decodes a real mongod reply')
-assert.throws(() => snappyDecompress(Buffer.from(MONGO_SNAPPY_REPLY, 'hex'), 21), /announces/, 'snappy rejects a size mismatch')
+equal(binding.snappyDecompress(Buffer.from(MONGO_SNAPPY_REPLY, 'hex'), 22).toString('hex'), MONGO_SNAPPY_BODY, 'snappy decodes a real mongod reply')
+assert.throws(() => binding.snappyDecompress(Buffer.from(MONGO_SNAPPY_REPLY, 'hex'), 21), /LengthMismatch/, 'snappy rejects a size mismatch')
 assertions += 1
 
 for (const [label, payload] of [
@@ -45,22 +44,23 @@ for (const [label, payload] of [
     ['two hundred', Buffer.alloc(200, 3)],
     ['over one literal chunk', Buffer.alloc(0x1000000 + 9, 5)]
 ]) {
-    const compressed = snappyCompress(payload)
-    equal(snappyDecompress(compressed, payload.length).equals(payload), true, `snappy round-trips ${label}`)
+    const compressed = binding.snappyCompress(payload)
+    equal(binding.snappyDecompress(compressed, payload.length).equals(payload), true, `snappy round-trips ${label}`)
 }
 
 const sample = Buffer.from('the quick brown fox jumps over the lazy dog', 'utf8')
-equal(decompress(2, zlib.deflateSync(sample), sample.length).equals(sample), true, 'zlib round-trips')
-equal(decompress(3, zlib.zstdCompressSync(sample), sample.length).equals(sample), true, 'zstd round-trips')
-assert.throws(() => decompress(2, zlib.deflateSync(sample), sample.length + 1), /announced/, 'zlib rejects a size mismatch')
+equal(decodeFrame(encodeCompressedFrame(7, 0, 2, sample.length, zlib.deflateSync(sample))).payload.equals(sample), true, 'zlib round-trips')
+equal(decodeFrame(encodeCompressedFrame(7, 0, 3, sample.length, zlib.zstdCompressSync(sample))).payload.equals(sample), true, 'zstd round-trips')
+assert.throws(() => decodeFrame(encodeCompressedFrame(7, 0, 2, sample.length + 1, zlib.deflateSync(sample))), /announced/, 'zlib rejects a size mismatch')
+assert.throws(() => decodeFrame(encodeCompressedFrame(7, 0, 3, sample.length + 1, zlib.zstdCompressSync(sample))), /announced/, 'zstd rejects a size mismatch')
 assertions += 1
 
 // A frame may announce a tiny size while carrying a stream that inflates to
 // megabytes. The decoder has to stop at the announced size instead of
 // materialising the whole stream first.
 const bomb = Buffer.alloc(4 * 1024 * 1024)
-assert.throws(() => decompress(2, zlib.deflateSync(bomb), 32), /past the announced 32 bytes/, 'zlib stops at the announced size')
-assert.throws(() => decompress(3, zlib.zstdCompressSync(bomb), 32), /past the announced 32 bytes/, 'zstd stops at the announced size')
+assert.throws(() => decodeFrame(encodeCompressedFrame(7, 0, 2, 32, zlib.deflateSync(bomb))), /larger than 32 bytes/, 'zlib stops at the announced size')
+assert.throws(() => decodeFrame(encodeCompressedFrame(7, 0, 3, 32, zlib.zstdCompressSync(bomb))), /frame announced 32/, 'zstd stops at the announced size')
 assertions += 1
 
 // --- wire envelope ---------------------------------------------------------
@@ -78,12 +78,12 @@ assertions += 1
 
 const wrongOpcode = Buffer.from(encodeCompressedFrame(7, 0, 2, pingBody.length, zlib.deflateSync(pingBody)))
 wrongOpcode.writeInt32LE(OP_QUERY, 16)
-assert.throws(() => decodeFrame(wrongOpcode), /must wrap OP_MSG/, 'OP_COMPRESSED must wrap OP_MSG only')
+assert.throws(() => decodeFrame(wrongOpcode), /CompressedOpcodeNotAllowed/, 'OP_COMPRESSED must wrap OP_MSG only')
 assertions += 1
 
 const unknownId = Buffer.from(encodeCompressedFrame(7, 0, 2, pingBody.length, zlib.deflateSync(pingBody)))
 unknownId.writeUInt8(9, 24)
-assert.throws(() => decodeFrame(unknownId), /unknown compressor id 9/, 'unknown compressor ids are rejected')
+assert.throws(() => decodeFrame(unknownId), /compressor_id: 9/, 'unknown compressor ids are rejected')
 assertions += 1
 
 // --- negotiation -----------------------------------------------------------
@@ -211,7 +211,7 @@ for (const [label, total] of [
 
 // Each codec: echoed in hello, accepted inbound, mirrored outbound.
 for (const [name, id, compressor] of [
-    ['snappy', 1, snappyCompress],
+    ['snappy', 1, (buffer) => binding.snappyCompress(buffer)],
     ['zlib', 2, (buffer) => zlib.deflateSync(buffer)],
     ['zstd', 3, (buffer) => zlib.zstdCompressSync(buffer)]
 ]) {
@@ -227,7 +227,8 @@ for (const [name, id, compressor] of [
     equal(answer.readInt32LE(12), 2012, `${name} reply is OP_COMPRESSED`)
     equal(answer.readUInt8(24), id, `${name} reply mirrors the request compressor`)
     const announced = answer.readInt32LE(20)
-    const decoded = decompress(id, answer.subarray(25), announced)
+    const decoded = decodeFrame(answer).payload
+    equal(decoded.length, announced, `${name} reply inflates to the announced size`)
     equal(JSON.stringify(JSON.parse(binding.decodeOpMsg(decoded))), JSON.stringify({ ok: { $numberDouble: '1.0' } }), `${name} ping replied ok`)
     socket.destroy()
 }
@@ -267,7 +268,7 @@ for (const [name, id, compressor] of [
     const answer = await next()
     const reply = JSON.parse(binding.decodeOpMsg(answer.subarray(16)))
     equal(reply.ok, { $numberDouble: '0.0' }, 'a decompression bomb gets an error reply')
-    ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('past the announced 32 bytes'), 'the error names the announced size')
+    ok(typeof reply.errmsg === 'string' && reply.errmsg.includes('larger than 32 bytes'), 'the error names the announced size')
     socket.destroy()
 }
 

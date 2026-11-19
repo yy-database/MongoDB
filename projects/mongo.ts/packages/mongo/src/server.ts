@@ -9,25 +9,8 @@ import { mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node
 import net from 'node:net'
 import os from 'node:os'
 import { join, resolve } from 'node:path'
-import {
-    createAuthState,
-    allowedBeforeAuth,
-    anyUserExists,
-    authError,
-    authenticationRequired,
-    createRoleCommand,
-    createUserCommand,
-    dropRoleCommand,
-    dropUserCommand,
-    logoutCommand,
-    saslContinueCommand,
-    saslStartCommand,
-    saslSupportedMechsFor,
-    usersInfoCommand,
-    type AuthState
-} from './auth.ts'
+import zlib from 'node:zlib'
 import { binding } from './binding.ts'
-import { compress } from './compression.ts'
 import {
     DEFAULT_MAX_FRAME_SIZE,
     decodeFrame,
@@ -93,8 +76,8 @@ interface Session {
     store: any
     cursors: any
     negotiated: string[]
-    /** Authentication state owned by this connection. */
-    auth: AuthState
+    /** Authentication state owned by this connection, held by the Rust core. */
+    auth: any
     /** `connectionId` reported by the handshake, in accept order. */
     connectionId: number
 }
@@ -325,9 +308,41 @@ function hasCurrentOpStage(stage: any): boolean {
     return typeof stage === 'object' && stage !== null && Object.hasOwn(stage, '$currentOp')
 }
 
+/**
+ * One authentication command, executed by the Rust `execution::mongo::auth`
+ * state machine: the extended-JSON request goes in, the reply document comes
+ * back. Nothing here computes hashes, proofs or signatures.
+ */
+function authCommand(call: (store: any, cursors: any, auth: any, command: string) => string, session: Session, command: any): any {
+    return document(call(session.store, session.cursors, session.auth, commandText(command)))
+}
+
+/** Error document with the field order `mongod` emits for auth failures. */
+function authError(code: number, codeName: string, message: string): any {
+    return { ok: 0, errmsg: message, code: numberValue(code), codeName }
+}
+
+/**
+ * `saslSupportedMechs` replies through the core: `null` when absent,
+ * `{ mechanisms }` on success, `{ error }` when the spec is malformed or the
+ * user does not exist.
+ */
+function saslSupportedMechs(session: Session, spec: unknown): { error?: any; mechanisms?: string[] } {
+    const reply = document(binding.authSaslSupportedMechs(session.store, session.cursors, session.auth, JSON.stringify(spec ?? null)))
+    return reply ?? {}
+}
+
+/** Transport compression for a reply, dispatched by the negotiated id. */
+function compressPayload(compressorId: number, payload: Uint8Array): Buffer {
+    if (compressorId === 1) return binding.snappyCompress(Buffer.from(payload))
+    if (compressorId === 2) return zlib.deflateSync(payload)
+    if (compressorId === 3) return (zlib as any).zstdCompressSync(payload)
+    throw new WireError(`reply uses unknown compressor id ${compressorId}`)
+}
+
 /** Native authorization verdict for the authenticated session. */
 function authorizeCommand(session: Session, command: any): any | null {
-    const reply = binding.authorizationAuthorize(session.store, JSON.stringify(session.auth.roles), commandText(command))
+    const reply = binding.authorizationAuthorize(session.store, session.auth.rolesJson(), commandText(command))
     return typeof reply === 'string' ? document(reply) : null
 }
 
@@ -338,8 +353,8 @@ function authorizeCommand(session: Session, command: any): any | null {
  */
 function replayKey(name: unknown, command: any, session: Session, authRequired: boolean): RetryIdentity | null {
     if (typeof name !== 'string') return null
-    if (authRequired && session.auth.users.length === 0 && !allowedBeforeAuth(name)) return null
-    if (authRequired && session.auth.users.length > 0 && authorizeCommand(session, command) !== null) return null
+    if (authRequired && !session.auth.hasUsers() && !binding.authAllowedBeforeAuth(name)) return null
+    if (authRequired && session.auth.hasUsers() && authorizeCommand(session, command) !== null) return null
     return retryKey(name, command)
 }
 
@@ -429,11 +444,11 @@ function scalarNumber(value: unknown): number {
 function listDatabasesCommand(session: Session, command: any, authRequired: boolean): any {
     const reply = document(binding.listDatabases(session.store))
     const databases = Array.isArray(reply.databases) ? reply.databases : null
-    if (!authRequired || session.auth.users.length === 0 || databases === null) return reply
+    if (!authRequired || !session.auth.hasUsers() || databases === null) return reply
     // `null` means the caller holds the cluster-wide `listDatabases` action.
     const names: string[] | null = binding.authorizationDatabaseScope(
         session.store,
-        JSON.stringify(session.auth.roles),
+        session.auth.rolesJson(),
         JSON.stringify(databases.map((entry: any) => entry?.name))
     )
     if (names === null) return reply
@@ -463,14 +478,14 @@ function helloReply(command: any, supported: string[], session: Session, view: S
     session.negotiated = negotiated
     const extras: [string, any][] = []
     if (negotiated.length > 0) extras.push(['compression', negotiated])
-    const mechanisms = saslSupportedMechsFor(session, command.saslSupportedMechs)
+    const mechanisms = saslSupportedMechs(session, command.saslSupportedMechs)
     if (mechanisms.error) return mechanisms.error
     if (mechanisms.mechanisms) extras.push(['saslSupportedMechs', mechanisms.mechanisms])
     // Drivers fold the first SCRAM message into the handshake. Answering it here
     // saves a round trip; a failed speculation is omitted, as `mongod` does.
     const speculation = command.speculativeAuthenticate
     if (speculation !== null && typeof speculation === 'object') {
-        const started = saslStartCommand(session, speculation)
+        const started = authCommand(binding.authSaslStart, session, speculation)
         const accepted = started.ok === 1 || started.ok?.$numberDouble === '1.0'
         if (accepted) {
             const { conversationId, done, payload } = started
@@ -507,17 +522,17 @@ function dispatch(
     const name = Object.keys(command)[0]
     if (typeof name !== 'string') throw new WireError('command document is empty')
 
-    if (authRequired && session.auth.users.length === 0 && !allowedBeforeAuth(name)) {
+    if (authRequired && !session.auth.hasUsers() && !binding.authAllowedBeforeAuth(name)) {
         // The localhost exception: the very first user may be created without
         // credentials, exactly while no user document exists anywhere.
-        const localhostException = name === 'createUser' && !anyUserExists(session.store)
-        if (!localhostException) return authenticationRequired(name)
+        const localhostException = name === 'createUser' && !binding.authAnyUserExists(session.store)
+        if (!localhostException) return document(binding.authAuthenticationRequired(name))
     }
 
     // Once authenticated, every command passes the role check `mongod` applies.
     // The localhost exception above runs before any role exists, so it is not
     // subject to it.
-    if (authRequired && session.auth.users.length > 0) {
+    if (authRequired && session.auth.hasUsers()) {
         const denied = authorizeCommand(session, command)
         if (denied) return denied
     }
@@ -570,25 +585,25 @@ function dispatch(
         case 'ping':
             return new RawReply(binding.pingOpMsg())
         case 'saslStart':
-            return saslStartCommand(session, command)
+            return authCommand(binding.authSaslStart, session, command)
         case 'saslContinue':
-            return saslContinueCommand(session, command)
+            return authCommand(binding.authSaslContinue, session, command)
         case 'authenticate':
             // The legacy command is in the pre-auth surface, and `mongod 8.0.9`
             // ends it with the same authentication failure.
             return authError(18, 'AuthenticationFailed', 'Authentication failed.')
         case 'createUser':
-            return createUserCommand(session, command)
+            return authCommand(binding.authCreateUser, session, command)
         case 'dropUser':
-            return dropUserCommand(session, command)
+            return authCommand(binding.authDropUser, session, command)
         case 'createRole':
-            return createRoleCommand(session, command)
+            return authCommand(binding.authCreateRole, session, command)
         case 'dropRole':
-            return dropRoleCommand(session, command)
+            return authCommand(binding.authDropRole, session, command)
         case 'logout':
-            return logoutCommand(session)
+            return document(binding.authLogout(session.store, session.cursors, session.auth))
         case 'usersInfo':
-            return usersInfoCommand(session, command)
+            return authCommand(binding.authUsersInfo, session, command)
         case 'insert':
             return rawWrite(binding.insertOpMsg(session.store, text))
         case 'find':
@@ -659,7 +674,7 @@ function dispatch(
             }
         case 'connectionStatus':
             return {
-                authInfo: { authenticatedUsers: session.auth.users, authenticatedUserRoles: session.auth.roles },
+                authInfo: { authenticatedUsers: JSON.parse(session.auth.usersJson()), authenticatedUserRoles: JSON.parse(session.auth.rolesJson()) },
                 ok: OK
             }
         case 'killOp':
@@ -832,7 +847,7 @@ export function createServer(options: ServerOptions): MongoServer {
             store,
             cursors,
             negotiated: [],
-            auth: createAuthState(),
+            auth: new binding.MongoAuthState(),
             connectionId: replica.nextConnectionId()
         }
 
@@ -875,7 +890,7 @@ export function createServer(options: ServerOptions): MongoServer {
                 socket.write(frame)
                 return
             }
-            const compressed = compress(inbound.envelope.compressorId, payload)
+            const compressed = compressPayload(inbound.envelope.compressorId, payload)
             stats.compressedReplies += 1
             const frame = encodeCompressedFrame(
                 replyId++,
