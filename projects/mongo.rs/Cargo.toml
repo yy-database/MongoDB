@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "mongo-conformance",
     "mongo-napi",
     "mongo-pyo3",
     "mongo-wasm",
