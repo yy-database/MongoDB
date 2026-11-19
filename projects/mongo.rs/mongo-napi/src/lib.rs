@@ -23,7 +23,7 @@ use mongo::{
 };
 use napi::{
     Error, Result, Status,
-    bindgen_prelude::{Buffer, Function},
+    bindgen_prelude::{Buffer, FnArgs, Function},
 };
 use napi_derive::napi;
 
@@ -936,6 +936,8 @@ pub struct WireFrameHeader {
 /// 一条完成展开的入站帧；`OP_COMPRESSED` 已解封套并按 id 分派解压。
 #[napi(object)]
 pub struct InboundWireFrame {
+    /// 帧头声明的整帧长度，已验证与实际字节数一致。
+    pub total_length: u32,
     /// 服务端需要应答的操作码；压缩帧展开后为 OP_MSG。
     pub opcode: i32,
     /// 帧头里的请求标识。
@@ -973,20 +975,21 @@ pub fn wire_peek_header(frame: Buffer) -> Option<WireFrameHeader> {
 pub fn wire_decode_frame(
     frame: Buffer,
     max_frame_size: Option<u32>,
-    mut zlib_decompress: Option<Function<(Buffer, u32), Buffer>>,
+    mut zlib_decompress: Option<Function<FnArgs<(Buffer, u32)>, Buffer>>,
 ) -> Result<InboundWireFrame> {
     let limits = wire::FrameLimits { max_frame_size: max_frame_size.unwrap_or(48 * 1024 * 1024) };
     let mut decompress = |compressed: &[u8], announced: usize| -> std::result::Result<Vec<u8>, String> {
         let Some(callback) = &mut zlib_decompress else {
             return Err("host provides no zlib decompressor".to_string());
         };
-        match callback.call((Buffer::from(compressed), announced as u32)) {
+        match callback.call(FnArgs { data: (Buffer::from(compressed), announced as u32) }) {
             Ok(output) => Ok(output.to_vec()),
             Err(error) => Err(error.reason),
         }
     };
     let inbound = wire::decode_frame(&frame, limits, &mut decompress).map_err(frame_error)?;
     Ok(InboundWireFrame {
+        total_length: inbound.header.total_length,
         opcode: inbound.opcode,
         request_id: inbound.header.request_id,
         response_to: inbound.header.response_to,
@@ -1158,7 +1161,10 @@ pub fn auth_sasl_supported_mechs(
     Ok(match auth::sasl_supported_mechs(&mut session, &value) {
         auth::SupportedMechs::None => "null".to_string(),
         auth::SupportedMechs::Mechanisms(mechanisms) => serde_json::json!({ "mechanisms": mechanisms }).to_string(),
-        auth::SupportedMechs::Error(error) => reply(&error),
+        auth::SupportedMechs::Error(error) => {
+            let document: serde_json::Value = serde_json::from_str(&reply(&error)).unwrap_or(serde_json::Value::Null);
+            serde_json::json!({ "error": document }).to_string()
+        }
     })
 }
 
