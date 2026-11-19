@@ -263,100 +263,16 @@ function numericId(value) {
     return value.$numberInt !== undefined || value.$numberLong !== undefined || value.$numberDouble !== undefined
 }
 
-// Masks server-assigned identifiers (cursor ids, build UUIDs, generated ObjectIds)
-// so the reply template is compared instead of the values. Any mask means the
-// entry cannot become a gate case whose expectation is a literal reply.
-const CURSOR_FIELDS = new Set(['cursorsKilled', 'cursorsNotFound', 'cursorsAlive', 'cursorsUnknown'])
-
-// Planner hashes are minted by `mongod` from internal plan state, so the gateway
-// derives its own deterministic stand-ins and the corpus compares structure only.
-const EXPLAIN_HASH_FIELDS = new Set(['queryHash', 'planCacheShapeHash', 'planCacheKey', 'queryShapeHash'])
-
-// Wall-clock measurements move between runs even on the same oracle, so they
-// are compared structurally and never used as gate material.
-const EXPLAIN_TIMING_FIELDS = new Set(['executionTimeMillis', 'executionTimeMillisEstimate', 'optimizationTimeMillis'])
-
+// Reply templating and comparison live in `database.harness`: the binding masks
+// server-assigned ids (cursor, ObjectId, collection uuid, plan hash, wall-clock
+// timing, `serverInfo` host/port), then compares the templates. Any mask means
+// the entry cannot become a gate case whose expectation is a literal reply.
 function normalizeReply(reply) {
-    const flags = { cursor: false, uuid: false, oid: false, hash: false, serverInfo: false, timing: false }
-    function walk(node, parentKey) {
-        if (CURSOR_FIELDS.has(parentKey) && numericId(node)) {
-            flags.cursor = true
-            return '<cursor>'
-        }
-        if (Array.isArray(node)) return node.map((item) => walk(item, parentKey))
-        if (node && typeof node === 'object') {
-            const out = {}
-            for (const [key, value] of Object.entries(node)) {
-                if (parentKey === 'cursor' && key === 'id' && !zeroId(value) && numericId(value)) {
-                    flags.cursor = true
-                    out[key] = '<cursor>'
-                    continue
-                }
-                if (key === '$oid') {
-                    flags.oid = true
-                    out[key] = '<oid>'
-                    continue
-                }
-                // `listCollections` reports a server-assigned collection UUID.
-                if (key === 'uuid' && value && typeof value === 'object' && value.$binary) {
-                    flags.uuid = true
-                    out[key] = '<uuid>'
-                    continue
-                }
-                if (EXPLAIN_HASH_FIELDS.has(key) && typeof value === 'string') {
-                    flags.hash = true
-                    out[key] = '<hash>'
-                    continue
-                }
-                if (EXPLAIN_TIMING_FIELDS.has(key) && typeof value === 'object' && value !== null && '$numberInt' in value) {
-                    flags.timing = true
-                    out[key] = '<millis>'
-                    continue
-                }
-                // `serverInfo` describes where the oracle happens to listen.
-                if (parentKey === 'serverInfo' && (key === 'host' || key === 'port')) {
-                    flags.serverInfo = true
-                    out[key] = key === 'host' ? '<host>' : '<port>'
-                    continue
-                }
-                out[key] = walk(value, key)
-            }
-            return out
-        }
-        if (CURSOR_FIELDS.has(parentKey) && numericId(node)) {
-            flags.cursor = true
-            return '<cursor>'
-        }
-        if (typeof node === 'string') {
-            let replaced = node.replace(UUID_PATTERN, '<uuid>')
-            if (replaced !== node) flags.uuid = true
-            const withCursor = replaced.replace(/cursor id \d+ not found/, 'cursor id <cursor> not found')
-            if (withCursor !== replaced) flags.cursor = true
-            return withCursor
-        }
-        return node
-    }
-    return { value: walk(reply, null), flags }
+    return JSON.parse(binding.harnessNormalizeReply(JSON.stringify(reply)))
 }
 
-function numeric(value) {
-    if (!value || typeof value !== 'object') return value
-    if (value.$numberInt !== undefined) return Number(value.$numberInt)
-    if (value.$numberLong !== undefined) return Number(value.$numberLong)
-    if (value.$numberDouble !== undefined) return Number(value.$numberDouble)
-    return value
-}
-
-function semantic(value) {
-    if (Array.isArray(value)) return value.map(semantic)
-    if (value && typeof value === 'object') {
-        const out = {}
-        for (const [key, item] of Object.entries(value)) {
-            out[key] = key === 'ok' ? numeric(item) : semantic(item)
-        }
-        return out
-    }
-    return value
+function repliesMatch(oracle, local) {
+    return JSON.parse(binding.harnessRepliesMatch(JSON.stringify(oracle), JSON.stringify(local)))
 }
 
 function okEncoding(reply) {
@@ -366,25 +282,6 @@ function okEncoding(reply) {
     if (ok.$numberLong !== undefined) return 'int64'
     if (ok.$numberDouble !== undefined) return 'double'
     return 'other'
-}
-
-function repliesMatch(oracle, local) {
-    const normalizedOracle = normalizeReply(oracle)
-    const normalizedLocal = normalizeReply(local)
-    return {
-        match: stable(semantic(normalizedOracle.value)) === stable(semantic(normalizedLocal.value)),
-        sameOrder: JSON.stringify(normalizedOracle.value) === JSON.stringify(normalizedLocal.value),
-        flags: {
-            cursor: normalizedOracle.flags.cursor || normalizedLocal.flags.cursor,
-            uuid: normalizedOracle.flags.uuid || normalizedLocal.flags.uuid,
-            oid: normalizedOracle.flags.oid || normalizedLocal.flags.oid,
-            hash: normalizedOracle.flags.hash || normalizedLocal.flags.hash,
-            serverInfo: normalizedOracle.flags.serverInfo || normalizedLocal.flags.serverInfo,
-            timing: normalizedOracle.flags.timing || normalizedLocal.flags.timing
-        },
-        oracle: normalizedOracle.value,
-        local: normalizedLocal.value
-    }
 }
 
 // --- corpus generator -------------------------------------------------------
@@ -2740,39 +2637,18 @@ function runOnLocal(entry) {
 }
 
 async function classify(entry, oracleReplies, localReplies) {
-    const steps = []
-    let matched = true
-    let gateable = !entry.unordered
-    if (entry.steps.some((step) => step.op === 'killCursors' || (step.op === 'getMore' && step.cursorFrom !== undefined))) {
-        gateable = false
+    const steps = entry.steps.map((step) => ({ op: step.op, cursorFrom: step.cursorFrom !== undefined }))
+    const result = JSON.parse(binding.harnessClassifySteps(
+        JSON.stringify(steps),
+        JSON.stringify(oracleReplies),
+        JSON.stringify(localReplies),
+        !entry.unordered
+    ))
+    for (const step of result.steps) {
+        step.op = entry.steps[step.index].op
+        step.command = commandOf(entry.steps[step.index], oracleReplies)
     }
-    for (let index = 0; index < entry.steps.length; index += 1) {
-        const result = repliesMatch(oracleReplies[index], localReplies[index])
-        const okSame = okEncoding(oracleReplies[index]) === okEncoding(localReplies[index])
-        if (!result.match) matched = false
-        if (
-            result.flags.cursor ||
-            result.flags.uuid ||
-            result.flags.oid ||
-            result.flags.hash ||
-            result.flags.serverInfo ||
-            result.flags.timing
-        ) {
-            gateable = false
-        }
-        steps.push({
-            index,
-            op: entry.steps[index].op,
-            command: commandOf(entry.steps[index], oracleReplies),
-            match: result.match,
-            sameOrder: result.sameOrder,
-            oracle: result.oracle,
-            local: result.local,
-            okSame,
-            flags: result.flags
-        })
-    }
-    return { matched, gateable: matched && gateable, steps }
+    return result
 }
 
 async function rerunOracle(entry) {

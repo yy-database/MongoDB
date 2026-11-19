@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use database::harness::{
-    Baseline, BaselineIdentity, DifferenceObservation, Digest, ReportEnvelope, Stats, check_baseline, per_op_ms, render_json,
-    summarize,
+    Baseline, BaselineIdentity, CompareMode, DifferenceObservation, Digest, Observed, ObservedBody, ReportEnvelope, Stats,
+    TruthProvenance, check_baseline, compare, per_op_ms, render_json, summarize,
 };
 use mongo::{
     auth,
@@ -522,6 +522,382 @@ pub fn harness_check_baseline(baseline_json: String, current_json: String, obser
     let observed: Vec<DifferenceObservation> = serde_json::from_str(&observed_json).map_err(harness_error)?;
     let verdict = check_baseline(&baseline, &current, &observed);
     serde_json::to_string(&verdict).map_err(harness_error)
+}
+
+/// 一侧已屏蔽服务端生成值的回复与它触发的屏蔽标记。
+#[derive(Default)]
+struct NormalizedReply {
+    value: serde_json::Value,
+    cursor: bool,
+    uuid: bool,
+    oid: bool,
+    hash: bool,
+    server_info: bool,
+    timing: bool,
+}
+
+/// `cursorsKilled` 等字段承载服务端分配的光标 id。
+const CURSOR_FIELDS: &[&str] = &["cursorsKilled", "cursorsNotFound", "cursorsAlive", "cursorsUnknown"];
+/// `mongod` 自产的计划缓存标识，只比较结构。
+const EXPLAIN_HASH_FIELDS: &[&str] = &["queryHash", "planCacheShapeHash", "planCacheKey", "queryShapeHash"];
+/// 墙钟耗时在两次运行间变化，只比较结构。
+const EXPLAIN_TIMING_FIELDS: &[&str] = &["executionTimeMillis", "executionTimeMillisEstimate", "optimizationTimeMillis"];
+
+fn is_numeric_id(value: &serde_json::Value) -> bool {
+    value.as_object().is_some_and(|object| {
+        object.contains_key("$numberInt") || object.contains_key("$numberLong") || object.contains_key("$numberDouble")
+    })
+}
+
+fn is_zero_id(value: &serde_json::Value) -> bool {
+    if value.as_f64() == Some(0.0) {
+        return true;
+    }
+    value.as_object().is_some_and(|object| {
+        ["$numberInt", "$numberLong", "$numberDouble"].iter().any(|key| {
+            object.get(*key).and_then(|inner| inner.as_str()).is_some_and(|text| text == "0" || text == "0.0")
+        })
+    })
+}
+
+fn is_hex(byte: u8) -> bool {
+    byte.is_ascii_hexdigit()
+}
+
+/// 把字符串里的 UUID 与 `cursor id N not found` 换成模板占位。
+fn mask_string(text: &str) -> (String, bool, bool) {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    let mut uuid = false;
+    while index < bytes.len() {
+        let remaining = &bytes[index..];
+        let is_uuid = remaining.len() >= 36
+            && (0..36).all(|offset| match offset {
+                8 | 13 | 18 | 23 => remaining[offset] == b'-',
+                _ => is_hex(remaining[offset]),
+            });
+        if is_uuid {
+            out.extend_from_slice(b"<uuid>");
+            uuid = true;
+            index += 36;
+            continue;
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    let out = String::from_utf8(out).unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned());
+    let mut cursor = false;
+    let mut masked = String::with_capacity(out.len());
+    let mut rest = out.as_str();
+    while let Some(start) = rest.find("cursor id ") {
+        let after = &rest[start + "cursor id ".len()..];
+        let digits = after.bytes().take_while(u8::is_ascii_digit).count();
+        if digits > 0 && after[digits..].starts_with(" not found") {
+            masked.push_str(&rest[..start]);
+            masked.push_str("cursor id <cursor> not found");
+            cursor = true;
+            rest = &after[digits + " not found".len()..];
+            continue;
+        }
+        masked.push_str(&rest[..start + "cursor id ".len()]);
+        rest = after;
+    }
+    masked.push_str(rest);
+    (masked, uuid, cursor)
+}
+
+fn normalize_reply(reply: &serde_json::Value) -> NormalizedReply {
+    let mut normalized = NormalizedReply { value: serde_json::Value::Null, ..NormalizedReply::default() };
+    normalized.value = walk_reply(reply, None, &mut normalized);
+    normalized
+}
+
+fn walk_reply(node: &serde_json::Value, parent: Option<&str>, flags: &mut NormalizedReply) -> serde_json::Value {
+    if parent.is_some_and(|key| CURSOR_FIELDS.contains(&key)) && is_numeric_id(node) {
+        flags.cursor = true;
+        return serde_json::Value::String("<cursor>".into());
+    }
+    if let Some(items) = node.as_array() {
+        return serde_json::Value::Array(items.iter().map(|item| walk_reply(item, parent, flags)).collect());
+    }
+    if let Some(object) = node.as_object() {
+        let mut out = serde_json::Map::new();
+        for (key, value) in object {
+            if parent == Some("cursor") && key == "id" && !is_zero_id(value) && is_numeric_id(value) {
+                flags.cursor = true;
+                out.insert(key.clone(), serde_json::Value::String("<cursor>".into()));
+                continue;
+            }
+            if key == "$oid" {
+                flags.oid = true;
+                out.insert(key.clone(), serde_json::Value::String("<oid>".into()));
+                continue;
+            }
+            if key == "uuid" && value.as_object().is_some_and(|inner| inner.contains_key("$binary")) {
+                flags.uuid = true;
+                out.insert(key.clone(), serde_json::Value::String("<uuid>".into()));
+                continue;
+            }
+            if EXPLAIN_HASH_FIELDS.contains(&key.as_str()) && value.is_string() {
+                flags.hash = true;
+                out.insert(key.clone(), serde_json::Value::String("<hash>".into()));
+                continue;
+            }
+            if EXPLAIN_TIMING_FIELDS.contains(&key.as_str())
+                && value.as_object().is_some_and(|inner| inner.contains_key("$numberInt"))
+            {
+                flags.timing = true;
+                out.insert(key.clone(), serde_json::Value::String("<millis>".into()));
+                continue;
+            }
+            if parent == Some("serverInfo") && (key == "host" || key == "port") {
+                flags.server_info = true;
+                out.insert(key.clone(), serde_json::Value::String(if key == "host" { "<host>" } else { "<port>" }.into()));
+                continue;
+            }
+            out.insert(key.clone(), walk_reply(value, Some(key), flags));
+        }
+        return serde_json::Value::Object(out);
+    }
+    if let Some(text) = node.as_str() {
+        let (masked, uuid, cursor) = mask_string(text);
+        flags.uuid |= uuid;
+        flags.cursor |= cursor;
+        return serde_json::Value::String(masked);
+    }
+    node.clone()
+}
+
+/// `ok` 的和式数字在语义比较里按数值处理，其余字段递归。
+fn semantic(value: &serde_json::Value) -> serde_json::Value {
+    if let Some(items) = value.as_array() {
+        return serde_json::Value::Array(items.iter().map(semantic).collect());
+    }
+    if let Some(object) = value.as_object() {
+        let mut out = serde_json::Map::new();
+        for (key, item) in object {
+            out.insert(key.clone(), if key == "ok" { numeric_value(item) } else { semantic(item) });
+        }
+        return serde_json::Value::Object(out);
+    }
+    value.clone()
+}
+
+fn numeric_value(value: &serde_json::Value) -> serde_json::Value {
+    let Some(object) = value.as_object()
+    else {
+        return value.clone();
+    };
+    for (key, parsed) in [("$numberInt", 0), ("$numberLong", 1), ("$numberDouble", 2)] {
+        if let Some(text) = object.get(key).and_then(|inner| inner.as_str()) {
+            let number = match parsed {
+                0 | 1 => text.parse::<i64>().ok().map(|number| number as f64).or_else(|| text.parse::<f64>().ok()),
+                _ => text.parse::<f64>().ok(),
+            };
+            if let Some(number) = number {
+                return serde_json::Number::from_f64(number).map(serde_json::Value::Number).unwrap_or(serde_json::Value::Null);
+            }
+        }
+    }
+    value.clone()
+}
+
+fn js_number(number: &serde_json::Number) -> String {
+    if let Some(integer) = number.as_i64() {
+        return integer.to_string();
+    }
+    if let Some(integer) = number.as_u64() {
+        return integer.to_string();
+    }
+    let float = number.as_f64().unwrap_or_default();
+    if float == 0.0 {
+        return "0".to_owned();
+    }
+    if float.fract() == 0.0 && float.abs() < 1e21 {
+        return format!("{float:.0}");
+    }
+    number.to_string()
+}
+
+/// JavaScript `stable`：对象键排序、数组保序、数字按 JS 文本。
+fn stable(value: &serde_json::Value, out: &mut String) {
+    match value {
+        serde_json::Value::Null => out.push_str("null"),
+        serde_json::Value::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
+        serde_json::Value::Number(number) => out.push_str(&js_number(number)),
+        serde_json::Value::String(text) => out.push_str(&serde_json::to_string(text).unwrap_or_else(|_| "\"\"".into())),
+        serde_json::Value::Array(items) => {
+            out.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                stable(item, out);
+            }
+            out.push(']');
+        }
+        serde_json::Value::Object(object) => {
+            let mut keys = object.keys().collect::<Vec<&String>>();
+            keys.sort();
+            out.push('{');
+            for (index, key) in keys.into_iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                out.push_str(&serde_json::to_string(key).unwrap_or_else(|_| "\"\"".into()));
+                out.push(':');
+                stable(&object[key], out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+fn stable_text(value: &serde_json::Value) -> String {
+    let mut out = String::new();
+    stable(value, &mut out);
+    out
+}
+
+fn observed(bytes: &[u8], provenance: Option<TruthProvenance>) -> Observed {
+    Observed { provenance, body: ObservedBody::Wire { bytes: bytes.to_vec() } }
+}
+
+fn replies_match(oracle: &serde_json::Value, local: &serde_json::Value) -> serde_json::Value {
+    let oracle = normalize_reply(oracle);
+    let local = normalize_reply(local);
+    let oracle_bytes = stable_text(&semantic(&oracle.value)).into_bytes();
+    let local_bytes = stable_text(&semantic(&local.value)).into_bytes();
+    let verdict = compare(
+        &observed(&oracle_bytes, Some(TruthProvenance::ExternalEngine { id: "mongod".into(), version: "oracle".into() })),
+        &observed(&local_bytes, None),
+        &CompareMode::WireHex,
+    );
+    serde_json::json!({
+        "match": verdict.matched,
+        "sameOrder": serde_json::to_string(&oracle.value).ok() == serde_json::to_string(&local.value).ok(),
+        "flags": {
+            "cursor": oracle.cursor || local.cursor,
+            "uuid": oracle.uuid || local.uuid,
+            "oid": oracle.oid || local.oid,
+            "hash": oracle.hash || local.hash,
+            "serverInfo": oracle.server_info || local.server_info,
+            "timing": oracle.timing || local.timing,
+        },
+        "oracle": oracle.value,
+        "local": local.value,
+    })
+}
+
+/// 把一侧回复的 `ok` 编码形态归类，供步骤证据使用。
+fn ok_encoding(reply: &serde_json::Value) -> &'static str {
+    match reply.as_object().and_then(|object| object.get("ok")) {
+        None => "none",
+        Some(serde_json::Value::Object(object)) => {
+            if object.contains_key("$numberInt") {
+                "int32"
+            }
+            else if object.contains_key("$numberLong") {
+                "int64"
+            }
+            else if object.contains_key("$numberDouble") {
+                "double"
+            }
+            else {
+                "other"
+            }
+        }
+        Some(serde_json::Value::Bool(_)) => "boolean",
+        Some(serde_json::Value::Number(_)) => "number",
+        Some(serde_json::Value::String(_)) => "string",
+        Some(_) => "other",
+    }
+}
+
+/// 屏蔽一侧回复里的服务端生成值并返回模板与命中标记。
+#[napi]
+pub fn harness_normalize_reply(reply_json: String) -> Result<String> {
+    let reply: serde_json::Value = serde_json::from_str(&reply_json).map_err(harness_error)?;
+    let normalized = normalize_reply(&reply);
+    serde_json::to_string(&serde_json::json!({
+        "value": normalized.value,
+        "flags": {
+            "cursor": normalized.cursor,
+            "uuid": normalized.uuid,
+            "oid": normalized.oid,
+            "hash": normalized.hash,
+            "serverInfo": normalized.server_info,
+            "timing": normalized.timing,
+        },
+    }))
+    .map_err(harness_error)
+}
+
+/// 比较一轮 oracle 与本地回复，比较判定交给 `database.harness`。
+#[napi]
+pub fn harness_replies_match(oracle_json: String, local_json: String) -> Result<String> {
+    let oracle: serde_json::Value = serde_json::from_str(&oracle_json).map_err(harness_error)?;
+    let local: serde_json::Value = serde_json::from_str(&local_json).map_err(harness_error)?;
+    serde_json::to_string(&replies_match(&oracle, &local)).map_err(harness_error)
+}
+
+/// 逐步骤比较并汇总门禁可用性；`steps` 只需 `op` 与是否引用先前光标。
+#[napi]
+pub fn harness_classify_steps(
+    steps_json: String,
+    oracle_json: String,
+    local_json: String,
+    gateable: bool,
+) -> Result<String> {
+    #[derive(serde::Deserialize)]
+    struct Step {
+        op: String,
+        #[serde(default, rename = "cursorFrom")]
+        cursor_from: Option<serde_json::Value>,
+    }
+    let steps: Vec<Step> = serde_json::from_str(&steps_json).map_err(harness_error)?;
+    let oracle: Vec<serde_json::Value> = serde_json::from_str(&oracle_json).map_err(harness_error)?;
+    let local: Vec<serde_json::Value> = serde_json::from_str(&local_json).map_err(harness_error)?;
+    let mut matched = true;
+    let mut gateable = gateable;
+    let mut results = Vec::new();
+    for (index, step) in steps.iter().enumerate() {
+        if step.op == "killCursors" || (step.op == "getMore" && step.cursor_from.is_some()) {
+            gateable = false;
+        }
+        let (Some(oracle_reply), Some(local_reply)) = (oracle.get(index), local.get(index))
+        else {
+            return Err(harness_error("回复数量少于步骤数量"));
+        };
+        let comparison = replies_match(oracle_reply, local_reply);
+        let step_matched = comparison["match"].as_bool().unwrap_or(false);
+        let flags = &comparison["flags"];
+        if ["cursor", "uuid", "oid", "hash", "serverInfo", "timing"]
+            .iter()
+            .any(|flag| flags[*flag].as_bool().unwrap_or(false))
+        {
+            gateable = false;
+        }
+        if !step_matched {
+            matched = false;
+        }
+        results.push(serde_json::json!({
+            "index": index,
+            "match": step_matched,
+            "sameOrder": comparison["sameOrder"],
+            "oracle": comparison["oracle"],
+            "local": comparison["local"],
+            "okSame": ok_encoding(oracle_reply) == ok_encoding(local_reply),
+            "flags": comparison["flags"],
+        }));
+    }
+    serde_json::to_string(&serde_json::json!({
+        "matched": matched,
+        "gateable": matched && gateable,
+        "steps": results,
+    }))
+    .map_err(harness_error)
 }
 
 /// 将报告信封渲染为稳定 JSON 文本。
