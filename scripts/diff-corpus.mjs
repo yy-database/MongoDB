@@ -12,13 +12,14 @@
 //                                [--count 285] [--only <entry-id>]
 //                                [--write] [--emit-cases] [--verify] [--check]
 //
-// `--check` is the regression gate: it verifies the fixed seed, count and corpus
-// digest against the committed baseline before starting any engine, then runs
-// every entry. An observed difference the baseline does not explain fails, a
-// difference whose signal changed fails, and a baseline entry that no longer
-// differs fails as stale. Regenerate with `--write --emit-cases`.
+// `--check` is the regression gate: the `database.harness` ledger verdict
+// (`binding.harnessCheckBaseline`) verifies the fixed seed, count and corpus
+// digest against the committed baseline before starting any engine, then judges
+// every observed difference. An unlisted difference fails, a difference whose
+// signal changed fails, and a baseline entry that no longer differs fails as
+// stale. The host keeps only scenario execution and the independent oracle
+// rerun. Regenerate with `--write --emit-cases`.
 import { createRequire } from 'node:module'
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import net from 'node:net'
@@ -217,8 +218,36 @@ function stable(value) {
     return JSON.stringify(value)
 }
 
-function digest(value) {
-    return createHash('sha256').update(stable(value)).digest('hex')
+// --- harness verdict (single track) ----------------------------------------
+// Identity drift and the known-difference ledger are judged by
+// `database.harness` through `binding.harnessCheckBaseline`; the host keeps
+// only scenario execution, the independent oracle rerun and report emission.
+// `harnessDigest` hashes the same canonical `stable` serialization the
+// committed corpus and baseline digests were produced from.
+const CONTRACT_VERSION = 1
+
+function harnessDigestOf(value) {
+    return binding.harnessDigest(Buffer.from(stable(value)))
+}
+
+function harnessVerdict(baseline, current, observed) {
+    return JSON.parse(binding.harnessCheckBaseline(JSON.stringify(baseline), JSON.stringify(current), JSON.stringify(observed)))
+}
+
+function currentIdentity(regenerated) {
+    return { spec: { version: CONTRACT_VERSION, seed: SEED, count: regenerated.length }, digest: harnessDigestOf(regenerated) }
+}
+
+function corpusIdentityOf(corpus) {
+    return { spec: { version: corpus.version, seed: corpus.seed, count: corpus.count }, digest: corpus.digest }
+}
+
+function baselineIdentityOf(baseline) {
+    return { spec: { version: baseline.version, seed: baseline.seed, count: baseline.count }, digest: baseline.corpusDigest }
+}
+
+function baselineLedger(baseline) {
+    return Object.entries(baseline.knownDifferences ?? {}).map(([key, value]) => ({ key, signal: [value.signal], reason: 'known-difference' }))
 }
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
@@ -2804,37 +2833,19 @@ async function verify() {
     const corpus = readJson(CORPUS_PATH)
     const baseline = readJson(BASELINE_PATH)
     const regenerated = generate(SEED)
-    const problems = corpusIdentityProblems(corpus, baseline, regenerated)
+    const current = currentIdentity(regenerated)
+    const problems = [
+        ...harnessVerdict({ identity: corpusIdentityOf(corpus), entries: [] }, current, []).problems,
+        ...harnessVerdict({ identity: baselineIdentityOf(baseline), entries: [] }, current, []).problems,
+    ]
     console.log(`corpus entries: ${regenerated.length}`)
     console.log(`corpus digest: ${corpus.digest}`)
     console.log(`baseline digest: ${baseline.replyDigest}`)
     if (problems.length > 0) {
-        for (const problem of problems) console.error(`FAIL ${problem}`)
+        for (const problem of problems) console.error(`FAIL ${JSON.stringify(problem)}`)
         process.exit(1)
     }
     console.log('VERIFY OK')
-}
-
-function corpusIdentityProblems(corpus, baseline, regenerated) {
-    const problems = []
-    if (corpus.seed !== SEED) problems.push(`corpus seed ${corpus.seed} != ${SEED}`)
-    if (corpus.count !== undefined && corpus.count !== COUNT) problems.push(`corpus count ${corpus.count} != ${COUNT}`)
-    if (regenerated.length !== COUNT) {
-        problems.push(`generated ${regenerated.length} entries but --count declared ${COUNT}`)
-    }
-    if (stable(regenerated) !== stable(corpus.entries)) problems.push('corpus does not match the generator output for this seed')
-    if (digest(regenerated) !== corpus.digest) problems.push('corpus digest mismatch')
-    if (baseline.seed !== SEED) problems.push(`baseline seed ${baseline.seed} != ${SEED}`)
-    if (baseline.count !== undefined && baseline.count !== COUNT) problems.push(`baseline count ${baseline.count} != ${COUNT}`)
-    if (baseline.corpusDigest !== corpus.digest) problems.push('baseline does not belong to this corpus')
-    if (digest(baseline.replies) !== baseline.replyDigest) problems.push('baseline reply digest mismatch')
-    for (const entry of regenerated) {
-        if (!baseline.replies[entry.id]) problems.push(`baseline misses ${entry.id}`)
-    }
-    for (const id of Object.keys(baseline.replies)) {
-        if (!regenerated.some((entry) => entry.id === id)) problems.push(`baseline has stale entry ${id}`)
-    }
-    return problems
 }
 
 function regenerationCommand() {
@@ -2845,25 +2856,7 @@ function regenerationCommand() {
 /// of every mismatching step. Changing this signal means the difference itself
 /// changed shape.
 function differenceSignal(steps) {
-    return digest(steps.filter((step) => !step.match).map((step) => ({ index: step.index, oracle: step.oracle, local: step.local })))
-}
-
-/// 旧台账规则：逐条观测按输入顺序检查，最后按基线登记顺序补 stale。
-function ledgerProblems(known, observed) {
-    const problems = []
-    for (const [id, signal] of observed) {
-        if (!known[id]) {
-            problems.push(`unexpected difference ${id}; it has no baseline entry (until the corpus labeled it as a known difference)\n  repro: node scripts/diff-corpus.mjs --port ${PORT} --seed ${SEED} --only ${id}`)
-            continue
-        }
-        if (known[id].signal !== signal) {
-            problems.push(`known difference changed shape: ${id}\n  baseline signal ${known[id].signal}\n  current  signal ${signal}`)
-        }
-    }
-    for (const id of Object.keys(known)) {
-        if (!observed.has(id)) problems.push(`stale baseline entry ${id}; the entry no longer differs, remove it from baseline`)
-    }
-    return problems
+    return harnessDigestOf(steps.filter((step) => !step.match).map((step) => ({ index: step.index, oracle: step.oracle, local: step.local })))
 }
 
 async function check() {
@@ -2874,17 +2867,22 @@ async function check() {
     const corpus = readJson(CORPUS_PATH)
     const baseline = readJson(BASELINE_PATH)
     const regenerated = generate(SEED)
-    const problems = corpusIdentityProblems(corpus, baseline, regenerated)
+    const current = currentIdentity(regenerated)
     console.log(`corpus entries: ${regenerated.length}`)
-    console.log(`corpus digest: ${corpus.digest}`)
-    if (problems.length > 0) {
-        for (const problem of problems) console.error(`FAIL ${problem}`)
+    console.log(`corpus digest: ${current.digest}`)
+
+    const identityProblems = [
+        ...harnessVerdict({ identity: corpusIdentityOf(corpus), entries: [] }, current, []).problems,
+        ...harnessVerdict({ identity: baselineIdentityOf(baseline), entries: [] }, current, []).problems,
+    ]
+    if (identityProblems.length > 0) {
+        for (const problem of identityProblems) console.error(`FAIL ${JSON.stringify(problem)}`)
         console.error(`regenerate with: ${regenerationCommand()}`)
         process.exit(1)
     }
 
-    const known = baseline.knownDifferences ?? {}
-    const observed = new Map()
+    const observed = []
+    const unstable = []
     for (const entry of regenerated) {
         const oracleReplies = await runOnOracle(entry)
         const localReplies = runOnLocal(entry)
@@ -2893,136 +2891,25 @@ async function check() {
         const second = await rerunOracle(entry)
         const localSecond = runOnLocal(entry)
         if (!oracleStable(oracleReplies, second) || !oracleStable(localReplies, localSecond)) {
-            problems.push(`unstable difference ${entry.id}; the corpus cannot gate a reply that changes between runs`)
+            unstable.push(entry.id)
             continue
         }
-        observed.set(entry.id, differenceSignal(result.steps))
+        observed.push({ key: entry.id, signal: [differenceSignal(result.steps)], reason: 'known-difference' })
     }
 
-    problems.push(...ledgerProblems(known, observed))
+    const verdict = harnessVerdict({ identity: baselineIdentityOf(baseline), entries: baselineLedger(baseline) }, current, observed)
+    const problems = [
+        ...verdict.problems.map((problem) => JSON.stringify(problem)),
+        ...unstable.map((id) => `unstable difference ${id}; the corpus cannot gate a reply that changes between runs`),
+    ]
 
-    console.log(`match ${regenerated.length - observed.size} known-difference ${observed.size} unexpected ${problems.length}`)
+    console.log(`match ${regenerated.length - observed.length - unstable.length} known-difference ${verdict.matched} unexpected ${problems.length}`)
     if (problems.length > 0) {
         for (const problem of problems) console.error(`FAIL ${problem}`)
         console.error(`regenerate with: ${regenerationCommand()}`)
         process.exit(1)
     }
     console.log('CORPUS CHECK OK')
-}
-
-// 影子模式：只比较纯数据层，引擎启动前退出，不替换既有调用路径。
-if (process.env.HARNESS_SHADOW === '1') {
-    const corpus = readJson(CORPUS_PATH)
-    const baseline = readJson(BASELINE_PATH)
-    const regenerated = generate(SEED)
-    const failures = []
-    const compare = (label, legacy, candidate) => {
-        if (legacy !== candidate) failures.push({ label, legacy, candidate })
-    }
-
-    const nodeDigest = digest(regenerated)
-    const candidateDigest = binding.harnessDigest(Buffer.from(stable(regenerated)))
-    compare('digest/node', nodeDigest, candidateDigest)
-    compare('digest/corpus', corpus.digest, candidateDigest)
-    compare('digest/baseline', baseline.corpusDigest, candidateDigest)
-
-    const known = { ...(baseline.knownDifferences ?? {}), 'shadow/known': { signal: digest(['shadow-known']) } }
-    const entries = Object.entries(known).map(([key, value]) => ({ key, signal: [value.signal], reason: 'known-difference' }))
-    const identity = {
-        spec: { version: baseline.version, seed: baseline.seed, count: baseline.count },
-        digest: baseline.corpusDigest,
-    }
-    const harnessBaseline = { identity, entries }
-
-    const legacyIdentityKinds = (current) => {
-        const kinds = []
-        if (baseline.seed !== current.spec.seed) kinds.push('seed-drift')
-        if (baseline.count !== current.spec.count) kinds.push('count-drift')
-        if (baseline.corpusDigest !== current.digest) kinds.push('digest-drift')
-        return kinds
-    }
-    const legacyLedgerKind = (message) => {
-        if (message.startsWith('unexpected difference')) return 'unlisted'
-        if (message.startsWith('known difference changed shape:')) return 'signal-changed'
-        if (message.startsWith('stale baseline entry')) return 'stale'
-        throw new Error(`unknown ledger problem: ${message}`)
-    }
-
-    const scenario = (label, current, observed) => {
-        const legacyProblems = ledgerProblems(known, observed)
-        const matched = observed.size - legacyProblems.filter((problem) =>
-            problem.startsWith('unexpected difference') || problem.startsWith('known difference changed shape:')).length
-        const verdict = JSON.parse(binding.harnessCheckBaseline(
-            JSON.stringify(harnessBaseline),
-            JSON.stringify(current),
-            JSON.stringify([...observed].map(([key, signal]) => ({ key, signal: [signal], reason: 'known-difference' }))),
-        ))
-        const normalizedLegacy = JSON.stringify({
-            matched,
-            problems: [
-                ...legacyIdentityKinds(current),
-                ...legacyProblems.map(legacyLedgerKind),
-            ],
-        })
-        const normalizedCandidate = JSON.stringify({
-            matched: verdict.matched,
-            problems: verdict.problems.map((problem) => problem.kind),
-        })
-        compare(`ledger/${label}`, normalizedLegacy, normalizedCandidate)
-        return normalizedCandidate
-    }
-
-    const allObserved = () => new Map(Object.entries(known).map(([id, value]) => [id, value.signal]))
-    const cleanRun = scenario('clean', identity, allObserved())
-
-    const unlistedObserved = allObserved()
-    unlistedObserved.set('shadow/unlisted', digest(['shadow-unlisted']))
-    const unlistedRun = scenario('unlisted', identity, unlistedObserved)
-
-    const changedObserved = allObserved()
-    changedObserved.set([...changedObserved.keys()][0], digest(['shadow-extra']))
-    const changedRun = scenario('signal-changed', identity, changedObserved)
-
-    const staleObserved = allObserved()
-    staleObserved.delete([...staleObserved.keys()].at(-1))
-    const staleRun = scenario('stale', identity, staleObserved)
-
-    const driftRun = scenario('identity-drift', {
-        spec: { ...identity.spec, seed: identity.spec.seed + 1 },
-        digest: identity.digest,
-    }, allObserved())
-
-    const legacyReport = {
-        version: 1,
-        command: 'corpus',
-        corpus: {
-            spec: identity.spec,
-            digest: candidateDigest,
-            matched: Object.keys(known).length,
-            problems: [],
-            clean: true,
-        },
-    }
-    const legacyText = `${JSON.stringify(legacyReport, null, 2)}\n`
-    const candidateText = binding.harnessRenderReport(JSON.stringify(legacyReport))
-    compare('report/corpus', legacyText, candidateText)
-
-    console.log(JSON.stringify({
-        digest: nodeDigest,
-        scenarios: {
-            clean: cleanRun,
-            unlisted: unlistedRun,
-            'signal-changed': changedRun,
-            stale: staleRun,
-            'identity-drift': driftRun,
-        },
-        failures,
-    }, null, 2))
-    if (failures.length > 0) {
-        console.error(`harness shadow mismatch: ${failures.length} difference(s)`)
-        process.exit(1)
-    }
-    process.exit(0)
 }
 
 async function main() {
@@ -3157,21 +3044,21 @@ async function main() {
 
     if (WRITE) {
         writeJson(CORPUS_PATH, {
-            version: 1,
+            version: CONTRACT_VERSION,
             seed: SEED,
             count: entries.length,
             mongod: '8.0.9',
             counts: Object.fromEntries(Object.entries(report.clusters).map(([cluster, value]) => [cluster, value.entries])),
-            digest: digest(entries),
+            digest: harnessDigestOf(entries),
             entries
         })
         writeJson(BASELINE_PATH, {
-            version: 1,
+            version: CONTRACT_VERSION,
             seed: SEED,
             count: entries.length,
             mongod: '8.0.9',
-            corpusDigest: digest(entries),
-            replyDigest: digest(baselineReplies),
+            corpusDigest: harnessDigestOf(entries),
+            replyDigest: harnessDigestOf(baselineReplies),
             knownDifferences: baselineKnown,
             replies: baselineReplies
         })
